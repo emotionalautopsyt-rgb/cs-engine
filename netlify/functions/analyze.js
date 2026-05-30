@@ -3,6 +3,8 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
   try {
+    const body = JSON.parse(event.body);
+    body.max_tokens = 1000;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -10,7 +12,7 @@ exports.handler = async (event) => {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: event.body
+      body: JSON.stringify(body)
     });
     const data = await response.json();
     return { statusCode: response.status, body: JSON.stringify(data) };
