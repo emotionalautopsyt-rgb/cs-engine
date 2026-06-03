@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CS ENGINE</title>
+<title>Gênio dos Placares</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -250,8 +250,8 @@ select{cursor:pointer;appearance:none;}
 <!-- HEADER -->
 <div class="hdr">
   <div class="logo">
-    <div class="lbox">CS</div>
-    <div><div class="lname">CS ENGINE</div><div class="lver" id="logo-sub">v6.0</div></div>
+    <div class="lbox">GP</div>
+    <div><div class="lname">GÊNIO DOS PLACARES</div><div class="lver" id="logo-sub">v6.0</div></div>
   </div>
   <div class="hstats">
     <div class="hs"><div class="hsl">STAKE</div>
@@ -268,7 +268,6 @@ select{cursor:pointer;appearance:none;}
 <!-- TABS -->
 <div class="tabs">
   <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
-  <button class="tab" onclick="showTab('live',this)" id="tab-live">🔴 Ao Vivo</button>
   <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
 </div>
 
@@ -1814,12 +1813,10 @@ O Plano B é o seguro — sem ele não há proteção.`;
   S.thinking = true;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
@@ -3411,7 +3408,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     const ls=document.getElementById('logo-sub');
     if(ls) ls.textContent=dn[t.getDay()]+' '+d+'/'+mo+'/'+y+' — v6.0';
-    document.title='CS ENGINE — '+dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
+    document.title='Gênio dos Placares — '+dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
     const rd=document.getElementById('r-d'); if(rd) rd.value=y+'-'+mo+'-'+d;
     const gs=document.getElementById('g-stake'); if(gs) gs.value=S.stake;
     if(S.hist.length) updHdr();
