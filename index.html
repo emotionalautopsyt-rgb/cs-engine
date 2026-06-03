@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gênio dos Placares</title>
+<title>CS ENGINE</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -250,8 +250,8 @@ select{cursor:pointer;appearance:none;}
 <!-- HEADER -->
 <div class="hdr">
   <div class="logo">
-    <div class="lbox">GP</div>
-    <div><div class="lname">GÊNIO DOS PLACARES</div><div class="lver" id="logo-sub">v6.0</div></div>
+    <div class="lbox">CS</div>
+    <div><div class="lname">CS ENGINE</div><div class="lver" id="logo-sub">v6.0</div></div>
   </div>
   <div class="hstats">
     <div class="hs"><div class="hsl">STAKE</div>
@@ -268,7 +268,7 @@ select{cursor:pointer;appearance:none;}
 <!-- TABS -->
 <div class="tabs">
   <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
-
+  <button class="tab" onclick="showTab('live',this)" id="tab-live">🔴 Ao Vivo</button>
   <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
 </div>
 
@@ -351,7 +351,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro Packball</div>
         <div class="ab ab-b" style="margin-bottom:10px;">
           <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO</div>
-          <div class="ab-text">O americano opera qualquer liga se as odds de mercado tiverem vantagem. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
+          <div class="ab-text">O americano opera qualquer liga se as odds de mercado tiverem edge. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
         </div>
         <div class="g3">
           <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
@@ -424,9 +424,112 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div class="dv"></div>
         <div id="cluster-summary"></div>
         <div class="dv"></div>
-        <div style="margin-top:4px;">
+        <div class="g2" style="gap:8px;margin-top:4px;">
+          <button class="btn btn-g btn-full" onclick="irAoVivo()">IR PARA AO VIVO →</button>
           <button class="btn btn-gh btn-full" onclick="resetCluster()">NOVO JOGO</button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AO VIVO ===== -->
+<div class="panel" id="panel-live">
+  <div class="g2">
+    <!-- ESQUERDA: ESTADO -->
+    <div>
+      <div class="card">
+        <div class="card-title">Estado do Jogo</div>
+        <div class="live-box">
+          <div class="live-dot">● LIVE</div>
+          <div class="live-teams" id="l-teams">— vs —</div>
+          <div class="live-score" id="l-sc">0 — 0</div>
+          <div class="live-min" id="l-min">⏱ 0'</div>
+        </div>
+
+        <!-- TIMING BAR -->
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">TIMING DE PROTEÇÃO</span>
+            <span style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700;" id="l-timing-lbl">0' — NÃO PROTEGER</span>
+          </div>
+          <div class="tbar-wrap"><div id="l-tbar" class="tbar" style="width:0%;background:var(--grn);"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:3px;">
+            <span style="font-size:7px;color:var(--txt3);">0'</span>
+            <span style="font-size:7px;color:var(--grn);">45'</span>
+            <span style="font-size:7px;color:var(--ylw);">70'</span>
+            <span style="font-size:7px;color:var(--red);">90'</span>
+          </div>
+        </div>
+
+        <!-- INPUTS -->
+        <div class="g3">
+          <div><label>Gols Casa</label><input id="l-gc" type="number" value="0" min="0" oninput="updLive()"></div>
+          <div><label>Gols Fora</label><input id="l-gf" type="number" value="0" min="0" oninput="updLive()"></div>
+          <div><label>Minuto</label><input id="l-m" type="number" value="0" min="0" max="120" oninput="updLive()"></div>
+        </div>
+
+        <!-- XG -->
+        <div class="xg-wrap">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;margin-bottom:9px;">xG AO VIVO — GUIA DE DECISÃO</div>
+          <div class="xg-row">
+            <span class="xg-label" style="color:var(--acc);">xG Casa</span>
+            <div class="xg-barwrap"><div class="xg-bar" id="xgb-c" style="width:0%;background:var(--acc);"></div></div>
+            <input type="number" step="0.1" id="l-xgc" placeholder="0.0" oninput="updXG()"
+              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--acc);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
+          </div>
+          <div class="xg-row">
+            <span class="xg-label" style="color:var(--ylw);">xG Fora</span>
+            <div class="xg-barwrap"><div class="xg-bar" id="xgb-f" style="width:0%;background:var(--ylw);"></div></div>
+            <input type="number" step="0.1" id="l-xgf" placeholder="0.0" oninput="updXG()"
+              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--ylw);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
+          </div>
+          <div id="xg-msg" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);">Insira xG para análise</div>
+        </div>
+
+        <!-- ODD ATUAL + EVENTO -->
+        <div class="g2">
+          <div><label>Odd back score atual</label><input id="l-odd" type="number" step="0.1" placeholder="ex: 5.5"></div>
+          <div><label>Evento</label>
+            <select id="l-ev" onchange="registrarEvento(this.value)">
+              <option value="">Nenhum</option>
+              <option value="expfav">🟥 Expulsão Favorito</option>
+              <option value="expaz">🟨 Expulsão Adversário</option>
+              <option value="pen">⚽ Pênalti</option>
+              <option value="golfav">⚽ Gol Favorito</option>
+              <option value="golaz">⚽ Gol Adversário</option>
+              <option value="redfav">🟥 Cartão Vermelho — Favorito</option>
+              <option value="redadv">🟥 Cartão Vermelho — Adversário</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2 PERNAS TOGGLE -->
+        <div style="display:flex;align-items:center;gap:10px;background:#0a1520;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+          <input type="checkbox" id="two-legs" onchange="S.twoLegs=this.checked;notify(this.checked?'2 PERNAS ATIVO':'2 PERNAS OFF',this.checked?'Saída antecipada nos últimos 15min':'Gestão padrão',this.checked?'var(--acc)':'var(--txt3)')" style="width:16px;height:16px;accent-color:var(--acc);cursor:pointer;">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--acc);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">JOGO DE 2 PERNAS</div>
+            <div style="font-size:8px;color:var(--txt3);">Copa / Europa / Playoff — saída antecipada nos últimos 15'</div>
+          </div>
+        </div>
+
+        <button class="btn btn-p btn-full" onclick="analisarLive()" style="margin-bottom:10px;">ANALISAR AGORA</button>
+
+        <!-- AÇÕES RÁPIDAS -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+          <button class="btn btn-g btn-sm" onclick="qa('lp')">LAY PARCIAL</button>
+          <button class="btn btn-y btn-sm" onclick="qa('lt')">LAY TOTAL</button>
+          <button class="btn btn-p btn-sm" onclick="qa('zo')">ZERO-OUT HT</button>
+          <button class="btn btn-gh btn-sm" onclick="qa('dm')">DOBRAR MÃO</button>
+          <button class="btn btn-r btn-sm" onclick="qa('co')">CASH OUT</button>
+          <button class="btn btn-gh btn-sm" onclick="qa('ma')">MANTER</button>
+        </div>
+        <!-- CARTÃO VERMELHO -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
+          <button onclick="registrarEvento('redfav')" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.4);border-radius:6px;padding:6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO FAV</button>
+          <button onclick="registrarEvento('redadv')" style="background:rgba(255,184,48,.08);border:1px solid rgba(255,184,48,.3);border-radius:6px;padding:6px;color:var(--ylw);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO ADV</button>
+        </div>
+
         <div class="dv"></div>
         <div style="background:#0a1520;border-radius:8px;padding:10px;">
           <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:7px;">RESULTADO RÁPIDO</div>
@@ -437,10 +540,52 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
       </div>
     </div>
+
+    <!-- DIREITA: DECISÃO -->
+    <div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Decisão da Engine</div>
+          <div id="live-edge"></div>
+        </div>
+        <div id="live-out">
+          <div style="text-align:center;padding:30px;color:var(--txt3);">
+            <div style="font-size:28px;margin-bottom:8px;">🔴</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;">INSIRA O ESTADO E ANALISE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px;">🎯 Scores do Cluster — Entradas Pré-Live</div>
+        <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">Esses são os placares que você já entrou antes do jogo. O score atual fica destacado.</div>
+        <div id="live-cluster-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+          <div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>
+        </div>
+        <div id="live-cluster">
+          <!-- compact list kept for reference -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Lay Sequencial + Timing</div>
+        <div class="mr"><span class="ml">Odd &lt; 3.5</span><span class="mv" style="color:var(--grn)">LAY AGORA</span></div>
+        <div class="mr"><span class="ml">Odd 3.5–6.0</span><span class="mv" style="color:var(--ylw)">AGUARDAR / ORDEM</span></div>
+        <div class="mr"><span class="ml">Odd &gt; 6.0</span><span class="mv" style="color:var(--txt3)">ORDEM @odd×0.60</span></div>
+        <div class="mr"><span class="ml">0-0 HT</span><span class="mv" style="color:var(--acc)">ORDEM LAY @odd×0.75</span></div>
+        <div class="mr"><span class="ml">HT no verde</span><span class="mv" style="color:var(--acc)">ZERO-OUT</span></div>
+        <div class="mr"><span class="ml">70'+ no alvo</span><span class="mv" style="color:var(--org)">COLETAR</span></div>
+        <div class="dv"></div>
+        <div class="mr"><span class="ml">&lt; 30'</span><span class="mv" style="color:var(--txt3)">0%</span></div>
+        <div class="mr"><span class="ml">30–45'</span><span class="mv" style="color:var(--grn)">10–20%</span></div>
+        <div class="mr"><span class="ml">45–60'</span><span class="mv" style="color:var(--ylw)">30–40%</span></div>
+        <div class="mr"><span class="ml">60–70'</span><span class="mv" style="color:var(--org)">50–60%</span></div>
+        <div class="mr"><span class="ml">70–80'</span><span class="mv" style="color:var(--red)">70–80%</span></div>
+        <div class="mr"><span class="ml">80'+</span><span class="mv" style="color:var(--red)">90–100%</span></div>
+      </div>
+    </div>
   </div>
 </div>
-
-
 
 <!-- ===== PERFORMANCE ===== -->
 <div class="panel" id="panel-perf">
@@ -847,7 +992,7 @@ function insertTemplate() {
     'Média marcados fora: X.X | Sofridos fora: X.X',
     'Comportamento fora: [fecha / pressiona]',
     '',
-    'Confrontos diretos últimos 5 (mesma condição):',
+    'H2H últimos 5 (mesma condição):',
     '1. X-X | 2. X-X | 3. X-X | 4. X-X | 5. X-X',
     'Tipo de jogo H2H: [muitos gols / fechado / equilibrado]',
     '',
@@ -868,7 +1013,7 @@ function iniciarLive(id) {
   g.status = 'live';
   S.currentGame = g;
   renderSidebar();
-  showTab('prelive', document.getElementById('tab-prelive'));
+  showTab('live', document.getElementById('tab-live'));
   const lt = document.getElementById('l-teams');
   if(lt) lt.textContent = g.name;
   notify('● LIVE', g.name, 'var(--red)');
@@ -1032,7 +1177,7 @@ function selectSbGame(id) {
 
   // Navigate to tab
   if(S.currentGame.status === 'live') {
-    showTab('prelive', document.getElementById('tab-prelive'));
+    showTab('live', document.getElementById('tab-live'));
     notify(S.currentGame.name, '● AO VIVO', 'var(--red)');
   } else {
     showTab('prelive', document.getElementById('tab-prelive'));
@@ -1085,11 +1230,11 @@ function checkPackball() {
   const perfilBadge = perfil ? `<span style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:4px;padding:2px 6px;font-size:9px;color:var(--acc);margin-left:8px;">${perfil}</span>` : '';
 
   if(fails === 0) {
-    el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ PACKBALL APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | Ambos Marcam @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
+    el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ PACKBALL APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | BTTS @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
   } else if(fails === 1) {
-    el.innerHTML = `<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora${perfilBadge}</div><div class="ab-text">Stake -30%. ${!fO?`Fav @${fav} fora (1.30-2.35).`:''} ${!bO?`Ambos Marcam @${btts} fora (1.65-2.15).`:''} ${!oO?`Over @${over} fora (1.70-2.20).`:''}</div></div>`;
+    el.innerHTML = `<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora${perfilBadge}</div><div class="ab-text">Stake -30%. ${!fO?`Fav @${fav} fora (1.30-2.35).`:''} ${!bO?`BTTS @${btts} fora (1.65-2.15).`:''} ${!oO?`Over @${over} fora (1.70-2.20).`:''}</div></div>`;
   } else {
-    el.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">⛔ RECUSADO — ${fails} critérios fora</div><div class="ab-text">2+ critérios fora = sem vantagem. Não operar.</div></div>`;
+    el.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">⛔ RECUSADO — ${fails} critérios fora</div><div class="ab-text">2+ critérios fora = sem edge. Não operar.</div></div>`;
   }
 }
 
@@ -1203,7 +1348,7 @@ function validScore(s) {
 function calcProbTotal(scores) { return parseFloat(scores.reduce((a,s)=>a+calcProb(s.odd),0).toFixed(1)); }
 
 // ===== SISTEMA PROMPT — COMPLETO — MÉTODO DO AMERICANO =====
-const SP = `Você é o GÊNIO DOS PLACARES — sistema especialista em Correct Score Trading na Betfair. Analise cada jogo seguindo EXATAMENTE estes passos em ordem. Seja direto. Zero rodeios.
+const SP = `Você é o GENIE — sistema de Correct Score Trading na Betfair. Analise cada jogo seguindo EXATAMENTE estes passos em ordem. Seja direto. Zero rodeios.
 
 ═══════════════════════════════════════
 HIERARQUIA DE INFORMAÇÕES
@@ -1265,7 +1410,7 @@ Usar SEMPRE DNA casa (favorito em casa) ou DNA fora (favorito fora). NUNCA globa
 TIMING FAVORITO: declarar obrigatoriamente qual período marca mais.
 TIMING ADVERSÁRIO: quando sofre mais gols.
 0 viradas favorito: reforça plano B quando adversário abre.
-Ambos marcam (H2H): quantas das últimas 4-6 partidas tiveram ambos marcando.
+BTTS H2H: quantas das últimas 4-6 partidas tiveram ambos marcando.
 
 xG AUTOMÁTICO (se texto tiver médias):
   xG_fav = (gols_marc_fav + gols_sofr_adv) / 2
@@ -1274,7 +1419,7 @@ xG AUTOMÁTICO (se texto tiver médias):
   SE só 2 campos → xG_fav=marc_fav, xG_adv=marc_adv → declarar "xG simplificado"
 
 HIERARQUIA DO SCORE ÂNCORA:
-  1. Confronto direto score repetido 2x+ (absoluto — sempre prevalece)
+  1. H2H score repetido 2x+ (absoluto — sempre prevalece)
   2. xG calculado (4 campos)
   3. DNA histórico
   4. Tabela de perfis
@@ -1289,7 +1434,7 @@ AJUSTES POR TEXTO:
   "clássico"/"derby" → +1 score proteção, 7 scores
   "chuva"/"gramado pesado" → xG total × 0.85
   "marca no 2T"/"gols tardios" → declarar: "0-0 HT absolutamente normal"
-  "começa forte"/"gols no 1T" → riscoGolCedo = ALTO
+  "começa forte"/"gols no 1T" → earlyGoalRisk = ALTO
 
 ═══════════════════════════════════════
 PASSO 3 — AS 3 PERGUNTAS
@@ -1299,7 +1444,7 @@ PASSO 3 — AS 3 PERGUNTAS
 3. Adversário vai interferir? → define peso do Plano B.
 
 REGRA DO 1-0:
-  odd 1-0 > @9.0 → stake maior (alavancagem máxima)
+  odd 1-0 > @9.0 → stake maior (leverage máximo)
   odd 1-0 @5.0–9.0 → CAMINHO normal
   odd 1-0 < @5.0 → avaliar 4 condições:
     (1) favorito < @1.45? (2) Over < @1.70? (3) 2-0/2-1 boa liquidez? (4) DNA goleada?
@@ -1312,16 +1457,16 @@ PASSO 4 — CHECKLIST 0-1
 5 perguntas (SIM/NÃO):
 □ Adversário marca fora >50%?
 □ Favorito sofre 1º gol >40%?
-□ Adversário abre no Intervalo fora >30%?
+□ Adversário abre HT fora >30%?
 □ Favorito tem 0 viradas?
-□ Ambos Marcam @1.65–1.85?
+□ BTTS @1.65–1.85?
 
 3+ SIMs → 0-1 entra com stake relevante.
 1-2 SIMs → 0-1 entra com stake pequena.
 0 SIMs → 0-1 simbólico (mas sempre presente).
 
 REGRA BTTS vs 0-1 — RACIOCÍNIO DO AMERICANO:
-SE Ambos Marcam < @1.75:
+SE BTTS < @1.75:
 → Mercado confirma que AMBOS vão marcar.
 → Se adversário abrir 0-1 o favorito quase certamente empata → vira 1-1.
 → O 1-1 JÁ ESTÁ no Plano B e cobre esse cenário.
@@ -1331,11 +1476,11 @@ SE Ambos Marcam < @1.75:
    • 1-2 (se adversário marca 2+ fora frequentemente)
    • Score mais alto do Plano A (ex: 3-1)
 
-SE Ambos Marcam @1.75–1.90:
+SE BTTS @1.75–1.90:
 → 0-1 entra com stake pequena.
 → 1-1 permanece como Plano B principal.
 
-SE Ambos Marcam > @1.90:
+SE BTTS > @1.90:
 → 0-1 entra com stake relevante.
 → Adversário pode segurar o placar sem o favorito empatar.
 → O americano acredita FORTEMENTE no favorito marcando.
@@ -1343,35 +1488,29 @@ SE Ambos Marcam > @1.90:
 
 ═══════════════════════════════════════
 REGRA ABSOLUTA — BTTS FORÇA SCORE:
-SE Ambos Marcam < @1.75 → 2-1 OBRIGATÓRIO nos DESTINOS. Nunca remover. Nunca substituir por 3-0.
+SE BTTS < @1.75 → 2-1 OBRIGATÓRIO nos DESTINOS. Nunca remover. Nunca substituir por 3-0.
 O mercado de BTTS é mais confiável que DNA de pequena amostra.
 3-0 só entra se cluster tiver vaga APÓS incluir o 2-1.
-SE Ambos Marcam @1.75-1.90 → 2-1 ou 3-1 recomendado nos destinos.
-SE Ambos Marcam > @1.90 → scores limpos do favorito têm prioridade.
+SE BTTS @1.75-1.90 → 2-1 ou 3-1 recomendado nos destinos.
+SE BTTS > @1.90 → scores limpos do favorito têm prioridade.
 
 PASSO 5 — QUANTIDADE DE SCORES
 ═══════════════════════════════════════
-5 scores é o PADRÃO. Sempre. Em todos os jogos.
+SEMPRE entre 5 e 7. NUNCA menos de 5. NUNCA mais de 7.
 
-Adiciona 6º score SOMENTE se houver pelo menos 1 razão:
-→ Ambos Marcam < @1.85 justifica 2-2 no cluster
-→ Adversário tem DNA forte fora (marca >50%)
-→ Contexto especial (derby / Copa com histórico de gols)
+5 scores: favorito < @1.45 + Over ≤ @1.65 + BTTS H2H < 2/4
+6 scores: padrão (maioria dos jogos)
+7 scores: favorito @1.65–2.00 + BTTS H2H ≥ 3/4 + Over @1.75–2.00
 
-NUNCA 7 scores. Sem exceção.
-NUNCA adiciona score por "segurança" sem razão concreta nos dados.
-Mais scores = menos stake por score = menos lucro quando acerta.
-O americano usa 5 scores em quase todos os jogos.
-
-Confronto direto score repetido 2x+ → entra obrigatório como DESTINO PRINCIPAL.
+H2H score repetido 2x+ → entra obrigatório como DESTINO PRINCIPAL.
 ROTA: CAMINHO → DESTINO 1 (âncora) → DESTINO 2 → ... → PLANO B
 Scores em cadeia: cada destino = +1 gol a partir do caminho.
 
 REGRA BTTS → SCORES COM AMBOS MARCANDO:
-SE Ambos Marcam < @1.75 → incluir obrigatoriamente score com adversário marcando (ex: 2-1, 3-1).
-SE Ambos Marcam @1.75-1.90 → avaliar pelo DNA. Se adversário marca >50% → incluir 2-1.
-SE Ambos Marcam > @1.90 → plano B leve. Focar em scores limpos do favorito.
-Nunca ignorar Ambos Marcam < @1.75 — é sinal forte que adversário vai marcar.
+SE BTTS < @1.75 → incluir obrigatoriamente score com adversário marcando (ex: 2-1, 3-1).
+SE BTTS @1.75-1.90 → avaliar pelo DNA. Se adversário marca >50% → incluir 2-1.
+SE BTTS > @1.90 → plano B leve. Focar em scores limpos do favorito.
+Nunca ignorar BTTS < @1.75 — é sinal forte que adversário vai marcar.
 
 ═══════════════════════════════════════
 PASSO 5B — MERCADOS ESPECIAIS
@@ -1389,26 +1528,24 @@ PASSO 5B — MERCADOS ESPECIAIS
 PASSO 6 — SCORES ALTOS + VALIDAÇÃO
 ═══════════════════════════════════════
 3-1 entra quando: Over < @1.90 + DNA confirma.
-3-0 entra quando: Over < @1.90 + DNA favorito > 1.5 gols/jogo.
-SE Over > @1.90 → score máximo do Plano A é 2-1 ou 2-0.
-2-2 entra quando: Ambos Marcam < @1.85 E Over < @1.85.
+2-2 entra quando: BTTS < @1.85 E Over < @1.85.
 4-0/4-1: usar mercado GOLEADA (Qualquer Outra Vitória Casa).
 
 Para cada score declarar: DADO SEGURO (frequente) ou LIMITE MÁXIMO (raro) → stake maior/menor.
-Ao incluir scores no cluster, confirme sempre que a odd usada está na mesma linha do score correspondente na tabela Betfair antes de incluir.
+
 ═══════════════════════════════════════
 PASSO 7 — MÉTODO E STAKES
 ═══════════════════════════════════════
 O TRADER DECIDE AS STAKES. O ROBÔ DECIDE OS PLACARES.
 
 MÉTODO — declarar qual usar:
-  DISTRIBUIÇÃO IGUAL: odds parecidas (spread ≤ @2.0) → todos retornam lucro igual.
-  DISTRIBUIÇÃO COM PESO ⭐: 1-2 scores mais prováveis pelo DNA/H2H → recebem mais stake.
+  DUTCH NORMAL: odds parecidas (spread ≤ @2.0) → todos retornam lucro igual.
+  DUTCH COM PESO ⭐: 1-2 scores mais prováveis pelo DNA/H2H → recebem mais stake.
 
 PLANO B:
   1-1 SEMPRE em todos os jogos. NUNCA remover.
-  SE Ambos Marcam < @1.75 → 2-1 ou 3-1 deve estar nos DESTINOS (não só plano B).
-  Stake 1-1 = 5% fixo. Reduz para 2.5% APENAS SE: Ambos marcam (H2H)=0/4 E favorito <@1.30 E Over <@1.55.
+  SE BTTS < @1.75 → 2-1 ou 3-1 deve estar nos DESTINOS (não só plano B).
+  Stake 1-1 = 5% fixo. Reduz para 2.5% APENAS SE: BTTS H2H=0/4 E favorito <@1.30 E Over <@1.55.
   0-1: pelo checklist (Passo 4).
 
 CLASSIFICATIVA: declarar se posição na tabela confirma ou contradiz o perfil.
@@ -1430,84 +1567,64 @@ DECLARAR SEMPRE:
 ═══════════════════════════════════════
 PASSO 8 — SCORE ÂNCORA + NARRATIVA
 ═══════════════════════════════════════
-Declarar SEMPRE, em TODOS os jogos.
-Escreva como um trader experiente explicando para um amigo em 30 segundos.
+Escreve em PROSA CORRIDA — 3 parágrafos + 2 linhas finais.
+NUNCA frases soltas. NUNCA bullets. NUNCA "Estou analisando...".
+Vai direto ao caráter dos times como um trader experiente.
 
-ESTRUTURA OBRIGATÓRIA DA NARRATIVA — TODOS OS JOGOS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARÁGRAFO 1 — O FAVORITO:
+Primeira frase: favorito com seu caráter + dado de forma.
+Segunda frase: "é um time que [como ele GANHA]"
+Transformações obrigatórias:
+❌ "marca 50% dos gols entre 76-90'" → ✅ "decide no final quando o adversário já cansou"
+❌ "venceu 3 dos últimos 5" → ✅ "sabe ganhar sem precisar fazer espetáculo"
+❌ "2.1 gols por jogo" → ✅ "não para de marcar quando entra em ritmo"
 
-O robô escreve SEMPRE em prosa corrida dividida em 3 parágrafos + 2 linhas finais.
-NUNCA frases soltas. NUNCA bullets. NUNCA títulos de seção.
+PARÁGRAFO 2 — ADVERSÁRIO + DINÂMICA:
+Primeira frase: "chega aqui para [passivo] — não para [ativo]"
+Segunda frase: dado comportamental (sequências, H2H, padrão)
+Terceira frase: volume do jogo em UMA palavra:
+"jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 1 — CONTEXTO + FAVORITO + ÂNCORA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Começa SEMPRE com:
-"Estou analisando [Time A] vs [Time B] e [favorito] aparece como favorito [claro/moderado] [em casa/fora] —"
+PARÁGRAFO 3 — SCORE + PLANOS:
+Primeira frase OBRIGATÓRIA:
+"[X-Y] é o placar que esse jogo está pedindo — [favorito 2 palavras], [adversário 2 palavras]."
+Segunda frase: "Plano A em [scores]. Plano B em [scores]."
+Terceira frase: contexto Copa/rival/motivação SE houver. Senão omite.
 
-Depois inclui em 2-3 linhas fluidas:
-→ dado de forma mais relevante do favorito
-→ como ele GANHA (comportamento, não estatística fria)
-→ score âncora esperado
+LINHA EARLY GOAL RISK:
+"Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [time] [comportamento timing]. [SEGURO/ATENÇÃO] nos primeiros 15'."
 
-Exemplo:
-"Estou analisando Wolfsburg vs St. Pauli e Wolfsburg aparece como favorito claro em casa — marcam 25% dos gols nos primeiros 15 minutos e são um time que abre o placar cedo e controla. Espero vitória curta do favorito, algo em torno de 2-1."
+LINHA LATE GOAL:
+"Potencial tardio: [time] decide entre 75-90' — [janela de ouro / atenção para virada]."
+SE sem dados: "Potencial tardio: sem padrão claro — gerir posição normalmente após 70'."
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 2 — H2H + DINÂMICA + VOLUME
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Começa com "Confrontos recentes..." ou "O histórico entre os times..."
+LINHA ALERTA:
+"⚠️ ALERTA: [1 frase com o principal risco do jogo]"
 
-Inclui em 3-4 linhas fluidas:
-→ padrão de scores H2H (citar os scores reais)
-→ característica ofensiva do favorito
-→ comportamento defensivo/ofensivo do adversário
-→ volume esperado: UMA palavra — "jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
+EXEMPLO PERFEITO:
+"Medellín não perde há 3 jogos em casa e marca 8 dos 20 gols entre 76-90'
+— é um time que decide no final quando o adversário já desistiu.
 
-Exemplo:
-"Confrontos recentes apontam para placares de margem mínima como 1-0, 1-1 e 2-1. Wolfsburg tem bursts ofensivos no início enquanto St. Pauli mostra resiliência defensiva mas vulnerabilidade tardia. Os dados indicam jogo moderado — não uma goleada, mas o favorito decide."
+Cúcuta chega aqui para segurar o 0-0 — não para atacar.
+Três empates seguidos fora e nunca vira quando sofre primeiro.
+Com Medellín controlando e Cúcuta sem resposta, esperamos jogo fechado.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 3 — CLUSTER + PLANOS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Sempre 2 linhas. Sempre este formato:
-"Minha seleção inclui Plano A com foco no favorito ([scores do plano A]) protegido pelo Plano B ([scores de proteção]). [Uma frase explicando por que esses scores fazem sentido para esse jogo específico]."
+1-0 é o placar que esse jogo está pedindo — Medellín eficiente, Cúcuta travado.
+Plano A em 1-0, 2-0 e 2-1. Plano B em 1-1 e 0-1.
+Copa deixa o ambiente mais tenso mas não muda quem é superior aqui.
 
-Exemplo:
-"Minha seleção inclui Plano A com foco no favorito (1-0, 2-0 e 2-1) protegido pelo Plano B (1-1 e 0-1). O padrão de jogo fechado com margem mínima justifica esses placares como os mais prováveis."
+Risco de gol cedo: BAIXO — Medellín decide tarde, entrada segura nos primeiros 30'.
+Potencial tardio: janela de ouro entre 76-90' — o gol decisivo sai nesse período.
+⚠️ ALERTA: Cúcuta pode segurar o 0-0 até o intervalo — paciência obrigatória."
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LINHA EARLY GOAL RISK
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Formato exato:
-"Risco de gol cedo: [time] marca [X]% dos gols entre 0-15' — [SEGURO / NÃO SEGURO] para entrada antecipada."
-SE não há dados: "Risco de gol cedo: dados insuficientes — entrada com cautela nos primeiros 15'."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LINHA LATE GOAL POTENTIAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Formato exato:
-"Potencial tardio: [time] concentra [X]% dos gols entre 75-90' — [janela de ouro / atenção para virada tardia / mercado fecha cedo]."
-SE não há dados: "Potencial tardio: sem padrão claro de timing — gerir posição normalmente após 70'."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REGRAS ABSOLUTAS PARA TODOS OS JOGOS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROIBIDO em qualquer parte da narrativa:
-→ Citar odds: "@6.2", "@1.80", "@2.15"
-→ Termos técnicos: "Over 2.5", "BTTS", "DNA confirma", "xG calculado", "dados confirmam"
-→ Frases isoladas sem conexão com a anterior
+PROIBIDO:
+→ "Estou analisando...", "Vou analisar..."
+→ Odds na narrativa: "@6.2", "@1.80"
+→ "Over 2.5", "BTTS", "DNA confirma", "dados confirmam"
 → Mais de 3 parágrafos
-→ Bullets ou listas de qualquer tipo
-
-PERMITIDO e RECOMENDADO:
-→ Percentuais de forma: "25% dos gols"
-→ Sequências: "3 empates seguidos"
-→ Timing: "marca entre 76-90'"
-→ Scores H2H: "1-0, 1-1 e 2-1"
-→ Caráter: "nunca vira", "decide no final"
-→ Copa/contexto especial na última frase do parágrafo 1
-
-Mesmo em Copa — gerar narrativa com dados disponíveis.
+→ Bullets ou listas
+→ Números sem contexto comportamental
 
 ═══════════════════════════════════════
 PASSO 9 — GESTÃO AO VIVO
@@ -1516,7 +1633,7 @@ Gol fav < 30': aguarda. Score pode escalar. LAY parcial só após confirmar.
 Gol fav 30–60': LAY 50% no score atual. Mantém destinos abertos.
 Score ativo após 70': LAY total. Leveraging no próximo.
 Score ativo após 75': compressão máxima. LAY total imediato.
-Intervalo 0-0: normal se DNA confirma time que marca tarde. Aguarda com confiança.
+0-0 HT: normal se DNA confirma time que marca tarde. Aguarda com confiança.
 Gol adversário: redistribuir para plano B ativo.
 Cartão vermelho favorito: LAY tudo imediato.
 Cartão vermelho adversário: reforça destinos. Mais gols prováveis.
@@ -1525,18 +1642,14 @@ Down to zero: automático quando score verde atingir target.
 
 JOGO 2 PERNAS: scores que eliminam favorito no agregado = NÃO cobrir. Sair após 70'.
 
-Você é o Gênio dos Placares.
+Você é o Genie do americano.
 
 ═══════════════════════════════════════
 FORMATO DE RESPOSTA — OBRIGATÓRIO
 ═══════════════════════════════════════
-Processe TODOS os passos 0-9 internamente no seu raciocínio.
-NÃO mostre os passos, cálculos, tabelas ou dados técnicos na resposta.
-O usuário vê APENAS o resultado final — limpo e direto.
-
 Responda SEMPRE em 2 partes exatamente nessa ordem:
 
-PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
+PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
 ##JSON_START##
 {
   "perfil": "OFENSIVO",
@@ -1545,9 +1658,9 @@ PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
   "copa": false,
   "xg_fav": 1.8,
   "xg_adv": 0.9,
-  "narrativa": "Primeiro parágrafo completo — começa com Estou analisando [Time A] vs [Time B]...",
+  "narrativa": "Frase curta de 1-2 linhas sobre o jogo",
   "early_goal_risk": "BAIXO",
-  "janela_de_ouro": "70-90",
+  "leverage_window": "70-90",
   "scores": [
     {"score":"1-0","tipo":"caminho"},
     {"score":"2-1","tipo":"destino"},
@@ -1559,89 +1672,33 @@ PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
 }
 ##JSON_END##
 
-PARTE 2 — NARRATIVA DO JOGO (estilo especialista)
+IMPORTANTE: Use EXATAMENTE ##JSON_START## e ##JSON_END## como delimitadores. Não use marcadores alternativos. Não use outros formatos.
 
-Escreve em prosa corrida. Sem abertura formal.
-Sem "Estou analisando". Sem bullets. Sem títulos.
-Vai direto ao caráter dos times como um trader
-experiente explicando para um amigo.
+PARTE 2 — NARRATIVA LIMPA (exatamente o formato do Passo 8)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 1 — O FAVORITO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Primeira frase: o favorito com seu caráter.
-Segunda frase: o dado que prova esse caráter.
-NÃO é "marca X gols". É comportamento — como ele GANHA.
+Escreve APENAS:
+→ Os 3 parágrafos da narrativa (conforme Passo 8)
+→ Linha Early Goal Risk
+→ Linha Potencial tardio
+→ Linha ⚠️ ALERTA
+→ "✅ X/5 — Confiança [Alta/Média/Baixa]"
+→ "🏆 Copa detectada — stake -20%" SE Copa
 
-Transformações obrigatórias:
-❌ "marca 50% dos gols entre 76-90'"
-✅ "é um time que decide no final — quando o adversário já cansou, o gol sai"
+NÃO escreve NUNCA:
+→ PASSO 0, PASSO 1, PASSO 2... etc.
+→ Tabelas de DNA, médias, percentuais
+→ Distribuição de stakes detalhada
+→ "📊 CLUSTER", "PLANO A —", "PLANO B —"
+→ Gestão ao vivo com minutagens
+→ Raciocínio interno de qualquer tipo
+Todo raciocínio técnico fica no cérebro do robô.
 
-❌ "venceu 3 dos últimos 5 em casa"
-✅ "sabe ganhar em casa sem precisar fazer espetáculo"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 2 — O ADVERSÁRIO + DINÂMICA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Primeira frase SEMPRE: "chega aqui para [passivo] — não para [ativo]"
-Segunda frase: H2H ou padrão que confirma.
-Terceira frase: como o jogo vai se desenrolar + volume em UMA palavra:
-"jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PARÁGRAFO 3 — O SCORE + OS PLANOS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Primeira frase OBRIGATÓRIA:
-"[X-Y] é o placar que esse jogo está pedindo — [favorito em 2 palavras], [adversário em 2 palavras]."
-Segunda frase: "Plano A em [scores], Plano B em [scores proteção]."
-Terceira frase (só se houver contexto): Copa / rival / motivação em 1 linha.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LINHA EARLY GOAL RISK
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [time] [comportamento de timing]. [SEGURO / ATENÇÃO] nos primeiros 15'."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LINHA LATE GOAL POTENTIAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"Potencial tardio: [time] decide entre 75-90' — [janela de ouro / atenção para virada / mercado fecha cedo]."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DEPOIS DAS 2 LINHAS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"[ícone] VALIDAÇÃO: X/5 — Confiança [ALTA/MÉDIA/BAIXA]"
-"[alerta se houver: Copa, rotação, escalação]"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXEMPLO DE SAÍDA PERFEITA:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"Medellín não perde há 3 jogos em casa e marca 8 dos 20 gols entre 76-90' — é um time que decide no final quando o adversário já desistiu.
-
-Cúcuta chega aqui para segurar o 0-0 — não para atacar. Três empates seguidos fora e nunca vira quando sofre primeiro. Com Medellín controlando o ritmo e Cúcuta sem resposta, esperamos jogo fechado.
-
-1-0 é o placar que esse jogo está pedindo — Medellín eficiente, Cúcuta sem resposta. Plano A em 1-0, 2-0 e 2-1. Plano B em 1-1 e 0-1. Copa deixa o ambiente mais tenso mas não muda quem é superior aqui.
-
-Risco de gol cedo: BAIXO — Medellín decide tarde, entrada segura nos primeiros 30'.
-Potencial tardio: janela de ouro entre 76-90' — o gol decisivo sai nesse período."
-
-✅ VALIDAÇÃO: 3/5 — Confiança MÉDIA
-🏆 Copa detectada — stake -20% aplicado
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROIBIDO SEMPRE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-→ "Estou analisando..."
-→ Odds na narrativa
-→ "Over 2.5", "BTTS", "DNA confirma", "dados confirmam"
-→ Números sem contexto comportamental
-→ Mais de 3 parágrafos
-→ Qualquer frase que soe como relatório
-→ Todo raciocínio técnico fica INTERNO
-→ "tipo" deve ser: "caminho", "destino" ou "planb"
-→ "scores" sempre 5 items (6 só com razão concreta)
-→ "ancora" = score mais provável
-→ Nunca incluir 0-0
-→ Odds NÃO vão no JSON
+REGRAS DO JSON:
+- "tipo" deve ser: "caminho", "destino" ou "planb"
+- "scores" sempre tem 5-7 items
+- "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
+- Nunca incluir 0-0
+- Odds NÃO vão no JSON — vêm do campo CS da Betfair
 `;
 
 
@@ -1732,7 +1789,7 @@ async function analisarJogo() {
     ? '\n\nODDS BETFAIR (correct score):\n' + Object.entries(S.csOdds).sort((a,b)=>a[1]-b[1]).map(([sc,od])=>`${sc}: @${od} (prob ${calcProb(od)}%)`).join('\n')
     : '';
 
-  const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
+  const prompt = `Analise este jogo como o Genie do trader americano. Gere a Target Score Formula.
 
 CAMPO 1 — DADOS DO JOGO (Academia das Apostas):
 ${texto}
@@ -1740,7 +1797,7 @@ ${texto}
 CAMPO 2 — ODDS CORRECT SCORE BETFAIR (odds BACK reais):
 ${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use estimativas e indique.'}
 
-PACKBALL: Favorito @${fav} | Ambos Marcam @${btts} | Over 2.5 @${over}
+PACKBALL: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
 STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
 
 Use o Campo 1 para identificar padrão de resultados e contexto.
@@ -1757,11 +1814,15 @@ O Plano B é o seguro — sem ele não há proteção.`;
   S.thinking = true;
 
   try {
-    const resp = await fetch('/.netlify/functions/analyze', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 3000,
         system: SP,
         messages: [{ role:'user', content: prompt }]
@@ -1775,48 +1836,30 @@ O Plano B é o seguro — sem ele não há proteção.`;
 
 
     // Render analysis
-    // Extrai só a narrativa limpa — remove JSON e todo raciocínio técnico
-    const cleanReply = reply.replace(/##JSON_START##[\s\S]*?##JSON_END##\s*/g, '').trim();
-
-    // Formata narrativa com parágrafos limpos
-    const fmt = cleanReply
+    const fmt = reply
+      .replace(/##JSON_START##[\s\S]*?##JSON_END##\s*/g, '')  // strip JSON block from display
       .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--txt)">$1</strong>')
-      .replace(/✅/g, '<span style="color:var(--grn)">✅</span>')
-      .replace(/⚠️/g, '<span style="color:var(--ylw)">⚠️</span>')
-      .replace(/❌/g, '<span style="color:var(--red)">❌</span>')
-      .replace(/⚡/g, '<span style="color:var(--acc)">⚡</span>')
-      .replace(/🔴/g, '<span style="color:var(--red)">🔴</span>')
-      .replace(/🟢/g, '<span style="color:var(--grn)">🟢</span>')
-      .replace(/🟡/g, '<span style="color:var(--ylw)">🟡</span>')
-      .replace(/🏆/g, '<span style="color:var(--ylw)">🏆</span>')
-      .replace(/📖/g, '<span style="color:var(--acc)">📖</span>')
-      // Cada frase vira parágrafo separado
-      .split(/\n/)
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      // Remove linhas com stakes, percentuais de stake e blocos técnicos
-      // Mantém Plano A e Plano B mas sem valores monetários
-      .filter(line => {
-        const l = line.toUpperCase();
-        // Remove blocos técnicos internos
-        if(/CLUSTER DE CORRECT SCORE|📊 CLUSTER|STAKE TOTAL:|RETORNOS ESPERADOS/.test(l)) return false;
-        if(/PLANO [AB][^A-Z]*R\$|PLANO [AB][^A-Z]*%/.test(l)) return false;
-        if(/→\s*R\$\d|=\s*R\$\d/.test(line)) return false;
-        if(/DNA CONFIRMA|XG CALCULADO|VALIDAÇÃO CRUZADA/.test(l)) return false;
-        if(/\|\s*@[\d.]+\s*\|\s*R\$/.test(line)) return false;
-        return true;
-      })
-      // Separa em parágrafos — linha vazia cria novo parágrafo
-      .reduce((acc, line) => {
-        if(acc.length === 0) return [`<p style="margin-bottom:14px;line-height:1.9;">${line}`];
-        const last = acc[acc.length-1];
-        if(last.endsWith('</p>')) return [...acc, `<p style="margin-bottom:14px;line-height:1.9;">${line}`];
-        return [...acc.slice(0,-1), last + ' ' + line];
-      }, [])
-      .map(p => p.endsWith('</p>') ? p : p + '</p>')
-      .join('');
+      .replace(/CLASSIFICAÇÃO:\s*⭐⭐⭐[^\n]*/g, '<strong style="color:var(--ylw)">CLASSIFICAÇÃO: ⭐⭐⭐ ELITE</strong>')
+      .replace(/CLASSIFICAÇÃO:\s*⭐⭐[^\n]*/g, '<strong style="color:var(--ylw)">CLASSIFICAÇÃO: ⭐⭐ BOM</strong>')
+      .replace(/CLASSIFICAÇÃO:\s*⭐[^\n]*/g, '<strong style="color:var(--txt2)">CLASSIFICAÇÃO: ⭐ MODERADO</strong>')
+      .replace(/DEVE OPERAR:\s*SIM/g, 'DEVE OPERAR: <strong style="color:var(--grn)">SIM ✅</strong>')
+      .replace(/DEVE OPERAR:\s*NÃO/g, 'DEVE OPERAR: <strong style="color:var(--red)">NÃO ❌</strong>')
+      .replace(/DEVE OPERAR:\s*CAUTELA/g, 'DEVE OPERAR: <strong style="color:var(--ylw)">CAUTELA ⚠️</strong>')
+      .replace(/NÃO OPERAR/g, '<strong style="color:var(--red)">NÃO OPERAR</strong>')
+      .replace(/MOTIVAÇÃO FAVORITO:\s*(MÁXIMA|ALTA)/g, 'MOTIVAÇÃO FAVORITO: <strong style="color:var(--grn)">$1</strong>')
+      .replace(/MOTIVAÇÃO FAVORITO:\s*(NORMAL)/g, 'MOTIVAÇÃO FAVORITO: <span style="color:var(--ylw)">$1</span>')
+      .replace(/MOTIVAÇÃO FAVORITO:\s*(BAIXA|TANTO FAZ)/g, 'MOTIVAÇÃO FAVORITO: <span style="color:var(--txt3)">$1</span>')
+      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(MÁXIMA|ALTA)/g, 'MOTIVAÇÃO ADVERSÁRIO: <strong style="color:var(--red)">$1</strong>')
+      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(NORMAL)/g, 'MOTIVAÇÃO ADVERSÁRIO: <span style="color:var(--ylw)">$1</span>')
+      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(BAIXA|TANTO FAZ)/g, 'MOTIVAÇÃO ADVERSÁRIO: <span style="color:var(--grn)">$1</span>')
+      .replace(/ESTILO ADVERSÁRIO:\s*FECHADO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--org)">🔒 FECHADO</span>')
+      .replace(/ESTILO ADVERSÁRIO:\s*ABERTO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--red)">🔓 ABERTO</span>')
+      .replace(/ESTILO ADVERSÁRIO:\s*EQUILIBRADO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--ylw)">⚖️ EQUILIBRADO</span>')
+      .replace(/MÉTODO:\s*Split/g, 'MÉTODO: <strong style="color:var(--acc)">Split</strong>')
+      .replace(/MÉTODO:\s*Dutch/g, 'MÉTODO: <strong style="color:var(--pur)">Dutch</strong>')
+      .replace(/\n/g, '<br>');
 
-    if(out) out.innerHTML = `<div style="font-size:13px;line-height:1.9;color:var(--txt);padding:8px 0;">${fmt}</div>`;
+    if(out) out.innerHTML = `<div style="font-size:11px;line-height:1.85;color:var(--txt2);">${fmt}</div>`;
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
@@ -1941,19 +1984,27 @@ O Plano B é o seguro — sem ele não há proteção.`;
     // Extract and render cluster
     const cluster = extractCluster(reply, stake);
 
+    // Extract ALERTA DO GÊNIO from reply
+    const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
+    const alertaText = alertaMatch ? alertaMatch[1].trim() : null;
+
     // Copa/early season + validation cross-check banners
     let contextWarnings = '';
-    // Validation cross-check banner (always show)
+    // ALERTA DO GÊNIO — destaque dourado
+    if(alertaText) contextWarnings += `<div style="background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.3);border-radius:9px;padding:10px 14px;margin-bottom:8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--ylw);margin-bottom:4px;">⚠️ ALERTA DO GÊNIO</div>
+      <div style="font-size:11px;color:var(--txt2);">${alertaText}</div>
+    </div>`;
+    // Validation cross-check banner
     contextWarnings += `<div style="background:#0a1520;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:'Space Mono',monospace;font-size:8px;">
       <span style="color:${confidence.color};font-weight:700;">${confidence.icon} VALIDAÇÃO: ${crossScore.toFixed(1)}/5 — CONFIANÇA ${confidence.level}</span><br>
       <span style="color:var(--txt3);">xG:${ind1?'✅':'❌'} DNA:${ind2?'✅':'❌'} Over:${ind3===1?'✅':ind3===0.5?'⚠️':'❌'} BTTS:${ind4===1?'✅':ind4===0.5?'⚠️':'❌'} CS:${ind5?'✅':'❌'}</span>
-      ${xGscore ? `<br><span style="color:var(--acc);">📊 xG âncora: ${xGscore}</span>` : ''}
     </div>`;
     if(isCopa) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
-      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">⚠️ COPA DETECTADA — estatística de liga não se aplica.<br>Confirme padrões específicos desta copa antes de operar.</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — stake -20% aplicado.</div>
     </div>`;
     if(isEarlySeason) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
-      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">⚠️ DADO LIMITADO — menos de 8 rodadas. Cluster conservador. Stake -10%.</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">⚠️ DADO LIMITADO — menos de 8 rodadas. Cluster conservador.</div>
     </div>`;
     if(cluster.length >= 1) {
       S.currentCluster = cluster;
@@ -1961,6 +2012,8 @@ O Plano B é o seguro — sem ele não há proteção.`;
         S.currentGame.cluster = cluster;
         S.currentGame.stake = stake;
         S.currentGame.csOdds = {...S.csOdds};
+        // Save ancora from JSON for PLACAR PROJETADO highlight
+        try { const jd = JSON.parse(jsonStr||'{}'); S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
         renderSidebar();
       }
@@ -2230,44 +2283,32 @@ function calcStakes(cluster, stake, analysisText) {
     }
   }
 
-  // ── STEP 2.5: 1-0 VALUE RULE — avaliação contextual ─────────────────
-  // Só avalia se 1-0 odd < @5.0. Acima disso = entra normalmente.
+  // ── STEP 2.5: 1-0 VALUE RULE — regra conservadora ───────────────────
+  // 1-0 SEMPRE entra no cluster. Só remove em goleada clara e confirmada.
   const score10 = cluster.find(s => s.score === '1-0' && s.tipo === 'caminho');
   const score01 = cluster.find(s => s.score === '0-1' && s.tipo === 'caminho');
   const caminhoScore = score10 || score01;
 
   // High odd 1-0 gets boosted weight (>@9.0 = max leverage)
   if(caminhoScore && caminhoScore.odd > 9.0) {
-    caminhoScore._highLeverage = true; // boost to 40% in pyramid
+    caminhoScore._highLeverage = true;
   }
-  if(caminhoScore && caminhoScore.odd > 0 && caminhoScore.odd < 5.0) {
+  // 1-0 só é removido quando perfil GOLEADA explícita no texto da análise
+  // Condição muito restrita — exige TODOS: fav < 1.40, over < 1.65, palavra GOLEADA
+  if(caminhoScore) {
     const textCtx = (analysisText||'').toUpperCase();
     const favOdd  = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
     const overOdd = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
-
-    // 4 contextual conditions
-    const cond1 = favOdd < 1.45;                                   // favorito muito curto
-    const cond2 = overOdd < 1.70;                                  // volume alto esperado
-    const cond3 = (S.csOdds['2-0'] > 0 && S.csOdds['2-1'] > 0);  // destinos com liquidez
-    const cond4 = /GOLEADA|DNA.*GOLEADA|GOLEADA.*DNA|3-0.*FREQUENTE|FREQUENTE.*3-0|4-\d|5-\d/i.test(textCtx); // DNA goleada
-
-    const condCount = [cond1, cond2, cond3, cond4].filter(Boolean).length;
-
-    if(condCount >= 3) {
-      // Remove 1-0 — low operational value
+    const isGoleadaExplicita = /GOLEADA/i.test(textCtx) && favOdd < 1.40 && overOdd < 1.65;
+    if(isGoleadaExplicita) {
       const removed10Score = caminhoScore.score;
       cluster.splice(cluster.indexOf(caminhoScore), 1);
       const nextDest = cluster.find(s => s.tipo === 'destino' &&
-        (s.score==='2-0'||s.score==='0-2'||s.score==='2-1'||s.score==='0-1'));
-      if(nextDest) {
-        nextDest.tipo = 'caminho';
-        nextDest._operacional = true; // SCORE OPERACIONAL (1-0 = TEÓRICO)
-      }
-      cluster._removed10 = removed10Score; // for display: CAMINHO TEÓRICO
-    } else {
-      // Keep 1-0 as weak bridge — cap at 10% of stake via Dutch weight
-      caminhoScore._weakBridge = true;
+        (s.score==='2-0'||s.score==='0-2'||s.score==='3-0'));
+      if(nextDest) { nextDest.tipo = 'caminho'; nextDest._operacional = true; }
+      cluster._removed10 = removed10Score;
     }
+    // Caso contrário: 1-0 fica sempre, sem weakBridge
   }
 
   // ── STEP 3: DUTCH vs PIRÂMIDE — decisão automática ───────────────────
@@ -2507,13 +2548,13 @@ function renderCluster(cluster, stake) {
   const expStr    = nExp > 0 ? ` + ${nExp} expansão simbólica` : '';
 
   if(total <= 3) {
-    explWhy = `<strong style="color:var(--acc);">3 SCORES — MÁXIMA CONVICÇÃO:</strong> Narrativa cristalina, score principal concentra a vantagem. Mais stake por score = mais green quando acertar.`;
+    explWhy = `<strong style="color:var(--acc);">3 SCORES — MÁXIMA CONVICÇÃO:</strong> Narrativa cristalina, score principal concentra o edge. Mais stake por score = mais green quando acertar.`;
   } else if(total === 4) {
     explWhy = `<strong style="color:var(--acc);">4 SCORES — STANDARD:</strong> ${planoAStr}${planoBStr}. Narrativa clara com proteção adequada.`;
   } else if(total === 5) {
     explWhy = `<strong style="color:var(--acc);">5 SCORES — COBERTURA DUPLA:</strong> ${planoAStr}${planoBStr}. Favorito curto — cluster concentrado.`;
   } else if(total === 6) {
-    explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Distribuição cobre tudo.`;
+    explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
   } else {
     explWhy = `<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> ${planoAStr}${planoBStr}. Jogo aberto com ambos os lados cobertos.`;
   }
@@ -2533,13 +2574,15 @@ function renderCluster(cluster, stake) {
   scoresEl.innerHTML = cluster.map((s,idx) => {
     const col = colors[s.tipo] || colors.destino;
 
-    // ⭐ Anchor score — declared in bot text as "Score âncora: X-Y" or ⭐ marker
-    const anchorMatch = (S.currentGame?.savedAnTexto||'').match(/Score\s+[âa]ncora[:\s]+(\d{1,2}-\d{1,2})/i);
-    const anchorScore = anchorMatch ? anchorMatch[1] : null;
-    const isAnchor = anchorScore && s.score === anchorScore;
-    // Also check if bot marked ⭐ near this score
-    const starNearScore = new RegExp('⭐[^\\n]*' + s.score.replace('-','\\-') + '|' + s.score.replace('-','\\-') + '[^\\n]*⭐', 'i');
-    const hasStar = isAnchor || starNearScore.test(S.currentGame?.savedAnTexto||'');
+    // ⭐ Anchor = score from JSON "ancora" field
+    const jsonAncora = S.currentGame?.lastAncora || null;
+    const isAnchor = (s._h2hOverride) || (jsonAncora && s.score === jsonAncora);
+
+    // Override col for anchor — golden border
+    const cardCol = isAnchor ? {
+      bg:'rgba(255,214,0,.12)', border:'var(--ylw)',
+      label:'PLACAR PROJETADO', badge:'bdg-y', bar:'var(--ylw)'
+    } : col;
 
     // Special market label for Any Other Win scores
     const specialMarket = (() => {
@@ -2567,8 +2610,8 @@ function renderCluster(cluster, stake) {
 
     return `
     <div style="
-      background:${col.bg};
-      border:2px solid ${col.border};
+      background:${cardCol.bg};
+      border:2px solid ${isAnchor ? 'var(--ylw)' : cardCol.border};
       border-radius:12px;
       padding:16px 12px;
       text-align:center;
@@ -2576,32 +2619,32 @@ function renderCluster(cluster, stake) {
       cursor:default;
       transition:transform .15s;
       min-width:120px;
+      ${isAnchor ? 'box-shadow:0 0 18px rgba(255,214,0,.25);' : ''}
     " onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
       ${edgeBadge}
       <!-- Type badge -->
       <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);">
-        <span class="bdg ${col.badge}" style="font-size:7px;letter-spacing:1.5px;">${col.label}</span>
+        <span class="bdg ${cardCol.badge}" style="font-size:7px;letter-spacing:1.5px;">${cardCol.label}</span>
       </div>
       <!-- Score — very big -->
       <div style="
         font-family:'Barlow Condensed',sans-serif;
-        font-size:42px;
         font-weight:900;
         letter-spacing:4px;
-        color:${specialMarket ? specialMarket.color : col.border};
+        color:${specialMarket ? specialMarket.color : cardCol.border};
         margin-top:22px;
         margin-bottom:4px;
         line-height:1;
         font-size:${specialMarket ? '11px' : '24px'};
-      ">${hasStar ? '⭐ ' : ''}${displayScore}</div>
+      ">${displayScore}</div>
       ${specialMarket ? `<div style="font-size:7px;color:var(--txt3);margin-bottom:2px;">${specialMarket.covers}</div>` : ''}
       <!-- Odd -->
       <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--txt);margin-bottom:6px;font-weight:700;">@ ${s.odd>0?s.odd:'?'}</div>
       <!-- Prob bar -->
       <div style="background:var(--border);border-radius:3px;height:4px;margin:0 8px 4px;overflow:hidden;">
-        <div style="width:${Math.min(s.prob*1.8,100)}%;height:100%;background:${col.bar};border-radius:3px;"></div>
+        <div style="width:${Math.min(s.prob*1.8,100)}%;height:100%;background:${cardCol.bar};border-radius:3px;"></div>
       </div>
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:${col.bar};margin-bottom:8px;">${s.prob}% implícita</div>
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:${cardCol.bar};margin-bottom:8px;">${s.prob}% implícita</div>
       <!-- Post-goal odd -->
       ${s.oddPG>0?`<div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @${s.oddPG} pós-gol</div>`:''}
     </div>`;
@@ -2615,7 +2658,7 @@ function renderCluster(cluster, stake) {
       const anchor = ancM ? ancM[1] : null;
       const earlyM = txt.match(/Early\s+goal\s+risk[:\s]+([^\n]+)/i);
       const earlyRisk = earlyM ? earlyM[1].trim() : null;
-      const levM   = txt.match(/Janela de ouro[:\s]+([^\n]+)/i);
+      const levM   = txt.match(/Leverage\s+window[:\s]+([^\n]+)/i);
       const levWin = levM ? levM[1].trim() : null;
       const narrM  = txt.match(/Narrativa[:\s]*\n([^\n]+(?:\n[^\n]+){0,2})/i);
       const narr   = narrM ? narrM[1].replace(/\n/g,' ').trim() : null;
@@ -2623,8 +2666,8 @@ function renderCluster(cluster, stake) {
       return `<div style="background:#0a1520;border-radius:8px;padding:10px;margin-bottom:10px;text-align:left;">
         ${anchor ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--acc);font-weight:700;margin-bottom:4px;">⭐ SCORE ÂNCORA: ${anchor}</div>` : ''}
         ${narr ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt2);margin-bottom:6px;">${narr}</div>` : ''}
-        ${earlyRisk ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--ylw);">⚠️ Risco de gol cedo: ${earlyRisk}</div>` : ''}
-        ${levWin ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--grn);">⚡ Janela de ouro: ${levWin}</div>` : ''}
+        ${earlyRisk ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--ylw);">⚠️ Early goal risk: ${earlyRisk}</div>` : ''}
+        ${levWin ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--grn);">⚡ Leverage window: ${levWin}</div>` : ''}
       </div>`;
     })()}
 
@@ -2800,7 +2843,7 @@ function addGameToBar(game) {
 function irAoVivo() {
   const lt = document.getElementById('l-teams');
   if(lt && S.currentGame) lt.textContent = S.currentGame.name;
-  showTab('prelive', document.getElementById('tab-prelive'));
+  showTab('live', document.getElementById('tab-live'));
   notify('INDO PARA AO VIVO', 'Cluster travado', 'var(--acc)');
 }
 
@@ -3367,8 +3410,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const t=new Date(), y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
     const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     const ls=document.getElementById('logo-sub');
-    if(ls) ls.textContent=dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
-    document.title='Gênio dos Placares — '+dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
+    if(ls) ls.textContent=dn[t.getDay()]+' '+d+'/'+mo+'/'+y+' — v6.0';
+    document.title='CS ENGINE — '+dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
     const rd=document.getElementById('r-d'); if(rd) rd.value=y+'-'+mo+'-'+d;
     const gs=document.getElementById('g-stake'); if(gs) gs.value=S.stake;
     if(S.hist.length) updHdr();
