@@ -1241,11 +1241,29 @@ function checkPackball() {
 
 // ===== BETFAIR PARSER =====
 function parseCS() {
-  const text = document.getElementById('cs-paste')?.value || '';
+  let rawText = document.getElementById('cs-paste')?.value || '';
   const status = document.getElementById('cs-status');
-  if(!text.trim()) { if(status) status.textContent=''; return; }
+  if(!rawText.trim()) { if(status) status.textContent=''; return; }
 
   S.csOdds = {};
+
+  // PASSO 1: extrair e REMOVER mercados especiais ANTES de parsear scores
+  const otherHome = rawText.match(/QUALQUER OUTRA VIT[ÓO]RIA EM CASA[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+  const otherAway = rawText.match(/QUALQUER OUTRA VIT[ÓO]RIA DE VISITANTE[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+  const otherDraw = rawText.match(/QUALQUER OUTRO EMPATE[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+
+  // Remove mercados especiais do texto para não confundir o parser
+  let text = rawText;
+  if(otherHome) text = text.replace(/QUALQUER OUTRA VIT[ÓO]RIA EM CASA[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+  if(otherAway) text = text.replace(/QUALQUER OUTRA VIT[ÓO]RIA DE VISITANTE[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+  if(otherDraw) text = text.replace(/QUALQUER OUTRO EMPATE[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+
+  // Salvar mercados especiais nas csOdds com chaves especiais
+  if(otherHome) { const v=parseFloat(otherHome[1].replace(',','.')); if(v>1) S.csOdds['any_other_home']=v; }
+  if(otherAway) { const v=parseFloat(otherAway[1].replace(',','.')); if(v>1) S.csOdds['any_other_away']=v; }
+  if(otherDraw) { const v=parseFloat(otherDraw[1].replace(',','.')); if(v>1) S.csOdds['any_other_draw']=v; }
+
+  // PASSO 2: parsear scores normais no texto limpo
   const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
   let i=0, count=0;
 
@@ -1256,16 +1274,14 @@ function parseCS() {
     const sm = line.match(/(\d{1,2})\s*[-x]\s*(\d{1,2})/i);
     if(sm) {
       const score = sm[1]+'-'+sm[2];
-      const withRS = [];   // BACK odds — number attached before R$
-      const standalone = []; // could be LAY (big) or BACK (small)
+      const withRS = [];
+      const standalone = [];
 
       for(let j=i+1; j<Math.min(i+8,lines.length); j++) {
         const nx = lines[j].trim();
-        // Stop at next score
         if(/^\d{1,2}-\d{1,2}$/.test(nx)) break;
         if(/^\d{1,2}x\d{1,2}$/i.test(nx)) break;
 
-        // Pattern: "8.6R$ 495.71" — BACK odd is the number before R$
         const mR = nx.match(/^(\d{1,3}(?:[.,]\d{1,2})?)R\$/);
         if(mR) {
           const v = parseFloat(mR[1].replace(',','.'));
@@ -1273,7 +1289,6 @@ function parseCS() {
           continue;
         }
 
-        // Pattern: standalone number like "53,20" or "44.6"
         const mS = nx.match(/^(-?\d{1,3}(?:[.,]\d{1,2})?)$/);
         if(mS) {
           const v = parseFloat(mS[1].replace(',','.'));
@@ -1281,9 +1296,6 @@ function parseCS() {
         }
       }
 
-      // BACK odd priority:
-      // 1. withRS (number before R$) = always BACK on Betfair format
-      // 2. min standalone (fallback when no R$ format)
       let backOdd = null;
       if(withRS.length > 0) {
         backOdd = Math.min(...withRS);
