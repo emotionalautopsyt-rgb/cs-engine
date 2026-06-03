@@ -1441,8 +1441,6 @@ NUNCA frases soltas. NUNCA bullets. NUNCA títulos de seção.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PARÁGRAFO 1 — CONTEXTO + FAVORITO + ÂNCORA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ATENÇÃO: A primeira palavra da PARTE 2 DEVE ser "Estou" — sem exceção. Se não começar com "Estou" a resposta está errada e deve ser refeita.
-
 Começa SEMPRE com:
 "Estou analisando [Time A] vs [Time B] e [favorito] aparece como favorito [claro/moderado] [em casa/fora] —"
 
@@ -1561,49 +1559,89 @@ PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
 }
 ##JSON_END##
 
-PARTE 2 — NARRATIVA LIMPA (máximo 8 linhas visíveis)
+PARTE 2 — NARRATIVA DO JOGO (estilo especialista)
 
-Escreva APENAS:
-→ Narrativa 5 blocos (conforme Passo 8)
-→ Uma linha de validação: "✅ X/5 — Confiança [Alta/Média/Baixa]"
-→ Uma linha de alerta se houver (Copa, rotação, etc.)
+Escreve em prosa corrida. Sem abertura formal.
+Sem "Estou analisando". Sem bullets. Sem títulos.
+Vai direto ao caráter dos times como um trader
+experiente explicando para um amigo.
 
-NÃO escreva:
-→ PASSO 0, PASSO 1, PASSO 2... etc.
-→ Tabelas de DNA, médias, timings
-→ Distribuição de stakes detalhada
-→ xG simplificado com números
-→ Gestão ao vivo com minutagens
-→ Raciocínio interno de qualquer tipo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARÁGRAFO 1 — O FAVORITO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primeira frase: o favorito com seu caráter.
+Segunda frase: o dado que prova esse caráter.
+NÃO é "marca X gols". É comportamento — como ele GANHA.
 
-Todo o raciocínio técnico fica no cérebro do robô.
-O usuário vê apenas a narrativa + o cluster.
+Transformações obrigatórias:
+❌ "marca 50% dos gols entre 76-90'"
+✅ "é um time que decide no final — quando o adversário já cansou, o gol sai"
 
-📖 [BLOCO 1 — O favorito em 1 frase]
-[BLOCO 2 — O adversário em 1 frase]
-[BLOCO 3 — O jogo em 1 frase]
-[BLOCO 4 — O score mais provável em 1 frase]
-[BLOCO 5 — A confiança em 1 frase]
+❌ "venceu 3 dos últimos 5 em casa"
+✅ "sabe ganhar em casa sem precisar fazer espetáculo"
 
-[ícone] VALIDAÇÃO: X/5 — Confiança [ALTA/MÉDIA/BAIXA]
-[alertas se houver: copa, escalação, risco de gol cedo, janela de ouro]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARÁGRAFO 2 — O ADVERSÁRIO + DINÂMICA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primeira frase SEMPRE: "chega aqui para [passivo] — não para [ativo]"
+Segunda frase: H2H ou padrão que confirma.
+Terceira frase: como o jogo vai se desenrolar + volume em UMA palavra:
+"jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
 
-EXEMPLO DE SAÍDA CORRETA:
-📖 Östersunds joga em casa e está marcando bem. Örebro não marca fora e quase nunca vira. Esperamos jogo de gols com favorito controlando. 2-1 é o placar mais provável — Örebro aparece mas não segura. Dados confirmam. Confiança alta.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARÁGRAFO 3 — O SCORE + OS PLANOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primeira frase OBRIGATÓRIA:
+"[X-Y] é o placar que esse jogo está pedindo — [favorito em 2 palavras], [adversário em 2 palavras]."
+Segunda frase: "Plano A em [scores], Plano B em [scores proteção]."
+Terceira frase (só se houver contexto): Copa / rival / motivação em 1 linha.
 
-✅ VALIDAÇÃO: 4/5 — Confiança ALTA
-⚡ Janela de ouro: 70-85'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LINHA EARLY GOAL RISK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [time] [comportamento de timing]. [SEGURO / ATENÇÃO] nos primeiros 15'."
 
-REGRAS:
-- NUNCA mostrar PASSO 0, PASSO 1, PASSO 2... na resposta
-- NUNCA mostrar tabelas, DNA, xG, médias ou cálculos
-- NUNCA mostrar "FILTRO APROVADO", "META CS", "PERFIL"
-- Todo raciocínio técnico fica INTERNO — só o resultado aparece
-- "tipo" deve ser: "caminho", "destino" ou "planb"
-- "scores" sempre tem 5-7 items
-- "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
-- Nunca incluir 0-0
-- Odds NÃO vão no JSON — vêm do campo CS da Betfair
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LINHA LATE GOAL POTENTIAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Potencial tardio: [time] decide entre 75-90' — [janela de ouro / atenção para virada / mercado fecha cedo]."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEPOIS DAS 2 LINHAS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"[ícone] VALIDAÇÃO: X/5 — Confiança [ALTA/MÉDIA/BAIXA]"
+"[alerta se houver: Copa, rotação, escalação]"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXEMPLO DE SAÍDA PERFEITA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Medellín não perde há 3 jogos em casa e marca 8 dos 20 gols entre 76-90' — é um time que decide no final quando o adversário já desistiu.
+
+Cúcuta chega aqui para segurar o 0-0 — não para atacar. Três empates seguidos fora e nunca vira quando sofre primeiro. Com Medellín controlando o ritmo e Cúcuta sem resposta, esperamos jogo fechado.
+
+1-0 é o placar que esse jogo está pedindo — Medellín eficiente, Cúcuta sem resposta. Plano A em 1-0, 2-0 e 2-1. Plano B em 1-1 e 0-1. Copa deixa o ambiente mais tenso mas não muda quem é superior aqui.
+
+Risco de gol cedo: BAIXO — Medellín decide tarde, entrada segura nos primeiros 30'.
+Potencial tardio: janela de ouro entre 76-90' — o gol decisivo sai nesse período."
+
+✅ VALIDAÇÃO: 3/5 — Confiança MÉDIA
+🏆 Copa detectada — stake -20% aplicado
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROIBIDO SEMPRE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ "Estou analisando..."
+→ Odds na narrativa
+→ "Over 2.5", "BTTS", "DNA confirma", "dados confirmam"
+→ Números sem contexto comportamental
+→ Mais de 3 parágrafos
+→ Qualquer frase que soe como relatório
+→ Todo raciocínio técnico fica INTERNO
+→ "tipo" deve ser: "caminho", "destino" ou "planb"
+→ "scores" sempre 5 items (6 só com razão concreta)
+→ "ancora" = score mais provável
+→ Nunca incluir 0-0
+→ Odds NÃO vão no JSON
 `;
 
 
