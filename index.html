@@ -1627,7 +1627,10 @@ Potencial tardio: janela de ouro entre 76-90' — o gol decisivo sai nesse perí
 
 PROIBIDO:
 → "Estou analisando...", "Vou analisar..."
-→ Odds na narrativa: "@6.2", "@1.80"
+→ Odds em qualquer lugar da narrativa: "@6.2", "@1.80", "@2.12", "@1.75"
+→ "BTTS @X.XX" ou "BTTS acima de @X.XX" — substituir por linguagem humana:
+   ✅ "o mercado não está convicto que ambos marcam"
+   ✅ "adversário dificilmente marca aqui"
 → "Over 2.5", "BTTS", "DNA confirma", "dados confirmam"
 → Mais de 3 parágrafos
 → Bullets ou listas
@@ -2038,7 +2041,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
     const cluster = extractCluster(reply, stake);
 
     // Extract ALERTA DO GÊNIO from reply
-    const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
+    const alertaMatch = reply.match(/(?:⚠️\s*ALERTA|[-•]\s*Gestão ao vivo)[:\s]+([^\n]+)/i);
     const alertaText = alertaMatch ? alertaMatch[1].trim() : null;
 
     // Copa/early season + validation cross-check banners
