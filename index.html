@@ -1263,6 +1263,13 @@ function parseCS() {
   if(otherAway) { const v=parseFloat(otherAway[1].replace(',','.')); if(v>1) S.csOdds['any_other_away']=v; }
   if(otherDraw) { const v=parseFloat(otherDraw[1].replace(',','.')); if(v>1) S.csOdds['any_other_draw']=v; }
 
+  // Fix bug: substituir mercados especiais (texto + número) antes de parsear
+  // Evita que a odd do mercado especial seja associada ao score anterior (ex: 3-3 @4.6)
+  text = text
+    .replace(/Qualquer Outro Empate\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_EMPATE ')
+    .replace(/Qualquer Outra Vit[oó]ria em Casa\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_CASA ')
+    .replace(/Qualquer Outra Vit[oó]ria de Visitante\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_VISIT ');
+
   // PASSO 2: parsear scores normais no texto limpo
   const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
   let i=0, count=0;
