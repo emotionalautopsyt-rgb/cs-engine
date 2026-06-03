@@ -1263,6 +1263,13 @@ function parseCS() {
   if(otherAway) { const v=parseFloat(otherAway[1].replace(',','.')); if(v>1) S.csOdds['any_other_away']=v; }
   if(otherDraw) { const v=parseFloat(otherDraw[1].replace(',','.')); if(v>1) S.csOdds['any_other_draw']=v; }
 
+  // FIX CRÍTICO: substituir mercados especiais ANTES de parsear
+  // Remove o número junto com o texto para não confundir com score anterior
+  text = text
+    .replace(/Qualquer Outro Empate\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_EMPATE ')
+    .replace(/Qualquer Outra Vit[oó]ria em Casa\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_CASA ')
+    .replace(/Qualquer Outra Vit[oó]ria de Visitante\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_VISIT ');
+
   // PASSO 2: parsear scores normais no texto limpo
   const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
   let i=0, count=0;
@@ -2181,6 +2188,15 @@ function extractCluster(text, stake) {
         if(a._h2hOverride && !b._h2hOverride) return -1;
         if(!a._h2hOverride && b._h2hOverride) return 1;
         return b.prob - a.prob;
+      });
+
+      // FIX 5: Filtrar odds suspeitas — score com 4+ gols não pode ter odd < @20
+      cluster.forEach(s => {
+        const parts = s.score.split('-').map(Number);
+        const totalGols = parts[0] + parts[1];
+        if(totalGols >= 4 && s.odd > 0 && s.odd < 20) {
+          s.odd = 0; s.prob = 0; // invalidar — odd de outro mercado
+        }
       });
 
       if(cluster.length > 0) calcStakes(cluster, stake, text);
