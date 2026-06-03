@@ -1704,6 +1704,109 @@ REGRAS DO JSON:
 
 
 // ===== ANALISAR JOGO =====
+function formatarNarrativa(texto) {
+  if(!texto || texto.length < 10) return texto;
+
+  let t = texto.replace(/⚠️\s*ALERTA[^\n]*/gi, '').trim();
+  const linhas = t.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
+
+  let html = '<div style="font-size:13px;line-height:1.9;color:var(--txt2);">';
+
+  linhas.forEach(linha => {
+
+    // SCORE ÂNCORA — destaque máximo
+    if(/é o placar que esse jogo está pedindo/i.test(linha)) {
+      const scoreMatch = linha.match(/(\d{1,2}-\d{1,2})/);
+      const scoreStr = scoreMatch ? scoreMatch[1] : '';
+      const resto = scoreStr ? linha.replace(scoreStr, '').replace('—','').trim() : linha;
+      html += \`
+        <div style="
+          background:rgba(0,212,255,.06);
+          border:1px solid rgba(0,212,255,.25);
+          border-left:4px solid var(--acc);
+          border-radius:10px;
+          padding:14px 18px;
+          margin:14px 0;
+          text-align:center;
+        ">
+          \${scoreStr ? \`<div style="
+            font-family:'Barlow Condensed',sans-serif;
+            font-size:52px;
+            font-weight:900;
+            letter-spacing:6px;
+            color:var(--acc);
+            line-height:1;
+            margin-bottom:6px;
+          ">\${scoreStr}</div>\` : ''}
+          <div style="
+            font-family:'Barlow Condensed',sans-serif;
+            font-size:13px;
+            font-weight:700;
+            letter-spacing:2px;
+            color:var(--txt);
+            text-transform:uppercase;
+          ">\${resto}</div>
+        </div>\`;
+      return;
+    }
+
+    // Early Goal Risk — badge
+    if(/Risco de gol cedo/i.test(linha)) {
+      const isAlto = /ALTO/i.test(linha);
+      const isMedio = /MÉDIO|MEDIO/i.test(linha);
+      const cor = isAlto ? 'var(--red)' : isMedio ? 'var(--ylw)' : 'var(--grn)';
+      const bg = isAlto ? 'rgba(255,77,106,.08)' : isMedio ? 'rgba(255,214,0,.08)' : 'rgba(0,201,110,.08)';
+      html += \`<div style="
+        display:inline-flex;align-items:center;gap:8px;
+        background:\${bg};border:1px solid \${cor};
+        border-radius:20px;padding:5px 12px;
+        margin:4px 4px 4px 0;font-size:11px;color:\${cor};
+        font-family:'Space Mono',monospace;font-weight:700;
+      ">⚡ \${linha}</div>\`;
+      return;
+    }
+
+    // Potencial tardio — badge
+    if(/Potencial tardio/i.test(linha)) {
+      html += \`<div style="
+        display:inline-flex;align-items:center;gap:8px;
+        background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.3);
+        border-radius:20px;padding:5px 12px;
+        margin:4px 4px 8px 0;font-size:11px;color:var(--pur);
+        font-family:'Space Mono',monospace;font-weight:700;
+      ">🎯 \${linha}</div><br>\`;
+      return;
+    }
+
+    // Validação — já aparece no box dedicado
+    if(/VALIDAÇÃO|Confiança/i.test(linha) && /\d\/\d/.test(linha)) return;
+
+    // Favorito — destaque verde
+    if(/é um time que/i.test(linha)) {
+      html += \`<p style="margin:0 0 12px;color:var(--txt);border-left:2px solid var(--grn);padding-left:10px;">\${linha}</p>\`;
+      return;
+    }
+
+    // Adversário — destaque amarelo
+    if(/chega aqui para|não para atacar/i.test(linha)) {
+      html += \`<p style="margin:0 0 12px;color:var(--txt);border-left:2px solid var(--ylw);padding-left:10px;">\${linha}</p>\`;
+      return;
+    }
+
+    // Plano A/B — fonte mono pequena
+    if(/Plano A em|Plano B em/i.test(linha)) {
+      html += \`<p style="margin:0 0 6px;font-family:'Space Mono',monospace;font-size:10px;color:var(--txt3);">\${linha}</p>\`;
+      return;
+    }
+
+    // Parágrafo normal
+    html += \`<p style="margin:0 0 12px;">\${linha}</p>\`;
+  });
+
+  html += '</div>';
+  return html;
+}
+
 async function analisarJogo() {
   if(S.thinking) return;
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
@@ -2015,7 +2118,9 @@ O Plano B é o seguro — sem ele não há proteção.`;
         renderSidebar();
       }
       // Show analysis text + context warnings above cluster
-      if(out) out.innerHTML = (fmt||'') + contextWarnings;
+      // Formatar narrativa com hierarquia visual
+      const narrativaFormatada = formatarNarrativa(fmt||'');
+      if(out) out.innerHTML = narrativaFormatada + contextWarnings;
       renderCluster(cluster, stake);
       notify('CLUSTER GERADO', cluster.length+' scores — R$'+stake, 'var(--grn)');
     } else {
