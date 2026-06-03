@@ -207,7 +207,8 @@ select{cursor:pointer;appearance:none;}
 /* HISTORY ROWS */
 .hist-row{display:flex;align-items:center;justify-content:space-between;padding:9px;background:#0a1520;border-radius:7px;margin-bottom:5px;}
 
-#resultado-out{text-transform:none!important;text-align:left!important;font-size:14px;line-height:1.85;padding:24px;}
+#resultado-out,
+#resultado-out *{text-transform:none!important;text-align:left!important;font-size:14px;line-height:1.85;font-weight:400;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 @media(max-width:720px){.g2,.g3,.g4{grid-template-columns:1fr;}.main{padding:11px;}}
@@ -1588,22 +1589,25 @@ Terceira frase: volume do jogo em UMA palavra:
 
 PARÁGRAFO 3 — SCORES + PLANOS (formato exato):
 
-Escrever EXATAMENTE assim:
+Escrever EXATAMENTE neste formato:
 
-"Com base nisso, minha Fórmula de Placares para este jogo será:
+"Com base nisso, minha fórmula de placares para este jogo será:
 [score 1]
 [score 2]
 [score 3]
 [score 4]
 [score 5]
 
-Minha seleção inclui o Plano A (placares do favorito como [scores A]) junto com o Plano B (proteção via [scores B]). [1 frase conectando ao contexto do jogo]."
+Minha seleção inclui o Plano A (placares do favorito como [scores A]) junto com o Plano B (proteção via [scores B]). [1 frase de contexto].
 
-• Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [comportamento de timing]. [SEGURO/ATENÇÃO] nos primeiros 15'.
-• Potencial tardio: [time] concentra gols entre 75-90' — [janela de ouro / atenção para virada].
-• Gestão ao vivo: [1 dica prática sobre quando agir no mercado].
+- Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [comportamento timing].
+- Potencial tardio: [time] concentra gols entre 75-90' — [janela/atenção].
+- Gestão ao vivo: [1 dica prática sobre quando agir].
 
-Essa é minha leitura para este jogo.
+Essa é minha leitura para este jogo."
+
+NUNCA omitir "Essa é minha leitura para este jogo."
+NUNCA listar scores em linha — sempre UM por linha.
 
 EXEMPLO PERFEITO:
 "Medellín não perde há 3 jogos em casa e marca 8 dos 20 gols entre 76-90'
@@ -1899,31 +1903,16 @@ O Plano B é o seguro — sem ele não há proteção.`;
 
 
 
-    // Render analysis
+    // Render analysis — clean narrative only
     const fmt = reply
-      .replace(/##JSON_START##[\s\S]*?##JSON_END##\s*/g, '')  // strip JSON block from display
+      .replace(/##JSON_START##[\s\S]*?##JSON_END##\s*/g, '')  // strip JSON
+      .replace(/^[\s\S]*?\n\n/, '')  // remove any leading artifact lines
+      .replace(/^\s*\d{1,2}-\d{1,2}\s*\n/m, '')  // remove lone score at top
+      .replace(/^\s*[-─═]{2,}\s*\n/m, '')  // remove leading dashes
       .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--txt)">$1</strong>')
-      .replace(/CLASSIFICAÇÃO:\s*⭐⭐⭐[^\n]*/g, '<strong style="color:var(--ylw)">CLASSIFICAÇÃO: ⭐⭐⭐ ELITE</strong>')
-      .replace(/CLASSIFICAÇÃO:\s*⭐⭐[^\n]*/g, '<strong style="color:var(--ylw)">CLASSIFICAÇÃO: ⭐⭐ BOM</strong>')
-      .replace(/CLASSIFICAÇÃO:\s*⭐[^\n]*/g, '<strong style="color:var(--txt2)">CLASSIFICAÇÃO: ⭐ MODERADO</strong>')
-      .replace(/DEVE OPERAR:\s*SIM/g, 'DEVE OPERAR: <strong style="color:var(--grn)">SIM ✅</strong>')
-      .replace(/DEVE OPERAR:\s*NÃO/g, 'DEVE OPERAR: <strong style="color:var(--red)">NÃO ❌</strong>')
-      .replace(/DEVE OPERAR:\s*CAUTELA/g, 'DEVE OPERAR: <strong style="color:var(--ylw)">CAUTELA ⚠️</strong>')
-      .replace(/NÃO OPERAR/g, '<strong style="color:var(--red)">NÃO OPERAR</strong>')
-      .replace(/MOTIVAÇÃO FAVORITO:\s*(MÁXIMA|ALTA)/g, 'MOTIVAÇÃO FAVORITO: <strong style="color:var(--grn)">$1</strong>')
-      .replace(/MOTIVAÇÃO FAVORITO:\s*(NORMAL)/g, 'MOTIVAÇÃO FAVORITO: <span style="color:var(--ylw)">$1</span>')
-      .replace(/MOTIVAÇÃO FAVORITO:\s*(BAIXA|TANTO FAZ)/g, 'MOTIVAÇÃO FAVORITO: <span style="color:var(--txt3)">$1</span>')
-      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(MÁXIMA|ALTA)/g, 'MOTIVAÇÃO ADVERSÁRIO: <strong style="color:var(--red)">$1</strong>')
-      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(NORMAL)/g, 'MOTIVAÇÃO ADVERSÁRIO: <span style="color:var(--ylw)">$1</span>')
-      .replace(/MOTIVAÇÃO ADVERSÁRIO:\s*(BAIXA|TANTO FAZ)/g, 'MOTIVAÇÃO ADVERSÁRIO: <span style="color:var(--grn)">$1</span>')
-      .replace(/ESTILO ADVERSÁRIO:\s*FECHADO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--org)">🔒 FECHADO</span>')
-      .replace(/ESTILO ADVERSÁRIO:\s*ABERTO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--red)">🔓 ABERTO</span>')
-      .replace(/ESTILO ADVERSÁRIO:\s*EQUILIBRADO/g, 'ESTILO ADVERSÁRIO: <span style="color:var(--ylw)">⚖️ EQUILIBRADO</span>')
-      .replace(/MÉTODO:\s*Split/g, 'MÉTODO: <strong style="color:var(--acc)">Split</strong>')
-      .replace(/MÉTODO:\s*Dutch/g, 'MÉTODO: <strong style="color:var(--pur)">Dutch</strong>')
-      .replace(/\n/g, '<br>');
+      .trim();
 
-    if(out) out.innerHTML = `<div style="font-size:11px;line-height:1.85;color:var(--txt2);">${fmt}</div>`;
+    if(out) out.innerHTML = formatarNarrativa(fmt);
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
