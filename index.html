@@ -1599,10 +1599,11 @@ Segunda frase: dado comportamental (sequências, H2H, padrão)
 Terceira frase: volume do jogo em UMA palavra:
 "jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
 
-PARÁGRAFO 3 — SCORES + PLANOS (formato exato):
+PARÁGRAFO 3 — REGRAS ABSOLUTAS:
 
-O PARÁGRAFO 3 deve listar OS SCORES EXATAMENTE como aparecem no cluster JSON
-incluindo caminho + todos os destinos + plano B. Nenhum score pode ficar de fora.
+A lista de scores DEVE conter EXATAMENTE os mesmos scores do JSON scores[].
+Nenhum score do JSON pode ficar fora da lista.
+Nenhum score fora do JSON pode entrar na lista.
 
 Escrever EXATAMENTE neste formato:
 
@@ -1610,47 +1611,30 @@ Escrever EXATAMENTE neste formato:
 [score caminho]
 [score destino 1]
 [score destino 2]
-[score destino 3]
 [score planb 1]
 [score planb 2]
 
-Minha seleção inclui o Plano A (placares do favorito como [caminho + destinos]) junto com o Plano B (proteção via [todos os planb]). [1 frase de contexto].
-
-REGRA PLANO B: Plano B = apenas scores de empate ou vitória do adversário (ex: 1-1, 0-1, 0-2).
-1-0 NUNCA é Plano B — é sempre Caminho. Jamais citar 1-0 como proteção.
+Minha seleção inclui o Plano A
+(placares do favorito como [scores tipo caminho + destino])
+junto com o Plano B
+(proteção via [scores tipo planb]).
+[1 frase de contexto].
 
 - Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [comportamento timing].
 - Potencial tardio: [time] concentra gols entre 75-90' — [janela/atenção].
 - Gestão ao vivo: [1 dica prática sobre quando agir].
 - ⚠️ ALERTA: [1 frase sobre o principal risco DO JOGO — contexto, não instrução de lay].
-  Ex: "Amistoso pode reduzir intensidade no 2T — atualizar se jogo travar após 75'."
-  Ex: "Copa deixa jogo fechado — paciência se 0-0 até o intervalo."
-  NUNCA repetir instrução de lay ou gestão que já aparece na linha anterior.
 
 Essa é minha leitura para este jogo."
 
-REGRA ABSOLUTA: os scores listados devem ser EXATAMENTE os mesmos do JSON scores[].
-Nenhum a mais, nenhum a menos. Um por linha. Sem odds. Sem percentuais.
-NUNCA omitir o score de menor odd (mais provável) — ele é o mais importante da lista.
-Se o cluster tem 2-0, 2-1, 3-0, 3-1, 1-1 — TODOS devem aparecer na lista vertical.
-NUNCA omitir "Essa é minha leitura para este jogo."
-NUNCA listar scores em linha — sempre UM por linha.
+REGRA DO PLANO B:
+Plano B = APENAS scores de empate ou vitória do adversário.
+1-0, 2-0, 3-0 NUNCA são Plano B. São Caminho e Destino.
 
-EXEMPLO PERFEITO:
-"Medellín não perde há 3 jogos em casa e marca 8 dos 20 gols entre 76-90'
-— é um time que decide no final quando o adversário já desistiu.
-
-Cúcuta chega aqui para segurar o 0-0 — não para atacar.
-Três empates seguidos fora e nunca vira quando sofre primeiro.
-Com Medellín controlando e Cúcuta sem resposta, esperamos jogo fechado.
-
-1-0 é o placar que esse jogo está pedindo — Medellín eficiente, Cúcuta travado.
-Plano A em 1-0, 2-0 e 2-1. Plano B em 1-1 e 0-1.
-Copa deixa o ambiente mais tenso mas não muda quem é superior aqui.
-
-Risco de gol cedo: BAIXO — Medellín decide tarde, entrada segura nos primeiros 30'.
-Potencial tardio: janela de ouro entre 76-90' — o gol decisivo sai nesse período.
-⚠️ ALERTA: Amistoso pode reduzir intensidade no segundo tempo — atualizar posição se jogo travar após 75'."
+REGRA DO ALERTA:
+A linha ⚠️ ALERTA deve descrever o principal risco DO JOGO em si.
+Exemplo correto: "Amistoso pode reduzir intensidade no 2T — padrão da Holanda é definir no 1T, não no final."
+NUNCA repetir instrução de lay ou gestão ao vivo no ALERTA.
 
 PROIBIDO:
 → "Estou analisando...", "Vou analisar..."
