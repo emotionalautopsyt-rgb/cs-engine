@@ -351,7 +351,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro Packball</div>
         <div class="ab ab-b" style="margin-bottom:10px;">
           <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO</div>
-          <div class="ab-text">O Gênio dos Placares opera qualquer liga se as odds de mercado tiverem vantagem. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
+          <div class="ab-text">O americano opera qualquer liga se as odds de mercado tiverem vantagem. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
         </div>
         <div class="g3">
           <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
@@ -1338,7 +1338,7 @@ SE Ambos Marcam @1.75–1.90:
 SE Ambos Marcam > @1.90:
 → 0-1 entra com stake relevante.
 → Adversário pode segurar o placar sem o favorito empatar.
-→ Quando BTTS é alto, 0-1 representa risco real não coberto pelo 1-1.
+→ O americano acredita FORTEMENTE no favorito marcando.
    Quando BTTS é alto, 0-1 representa risco real não coberto pelo 1-1.
 
 ═══════════════════════════════════════
@@ -1361,7 +1361,7 @@ Adiciona 6º score SOMENTE se houver pelo menos 1 razão:
 NUNCA 7 scores. Sem exceção.
 NUNCA adiciona score por "segurança" sem razão concreta nos dados.
 Mais scores = menos stake por score = menos lucro quando acerta.
-5 scores é o padrão em quase todos os jogos.
+O americano usa 5 scores em quase todos os jogos.
 
 Confronto direto score repetido 2x+ → entra obrigatório como DESTINO PRINCIPAL.
 ROTA: CAMINHO → DESTINO 1 (âncora) → DESTINO 2 → ... → PLANO B
@@ -1794,10 +1794,29 @@ O Plano B é o seguro — sem ele não há proteção.`;
       .split(/\n/)
       .map(line => line.trim())
       .filter(line => line.length > 0)
-      .map(line => `<p style="margin-bottom:10px;">${line}</p>`)
+      // Remove linhas com stakes, percentuais de stake e blocos técnicos
+      // Mantém Plano A e Plano B mas sem valores monetários
+      .filter(line => {
+        const l = line.toUpperCase();
+        // Remove blocos técnicos internos
+        if(/CLUSTER DE CORRECT SCORE|📊 CLUSTER|STAKE TOTAL:|RETORNOS ESPERADOS/.test(l)) return false;
+        if(/PLANO [AB][^A-Z]*R\$|PLANO [AB][^A-Z]*%/.test(l)) return false;
+        if(/→\s*R\$\d|=\s*R\$\d/.test(line)) return false;
+        if(/DNA CONFIRMA|XG CALCULADO|VALIDAÇÃO CRUZADA/.test(l)) return false;
+        if(/\|\s*@[\d.]+\s*\|\s*R\$/.test(line)) return false;
+        return true;
+      })
+      // Separa em parágrafos — linha vazia cria novo parágrafo
+      .reduce((acc, line) => {
+        if(acc.length === 0) return [`<p style="margin-bottom:14px;line-height:1.9;">${line}`];
+        const last = acc[acc.length-1];
+        if(last.endsWith('</p>')) return [...acc, `<p style="margin-bottom:14px;line-height:1.9;">${line}`];
+        return [...acc.slice(0,-1), last + ' ' + line];
+      }, [])
+      .map(p => p.endsWith('</p>') ? p : p + '</p>')
       .join('');
 
-    if(out) out.innerHTML = `<div style="font-size:13px;line-height:1.8;color:var(--txt);padding:8px 0;">${fmt}</div>`;
+    if(out) out.innerHTML = `<div style="font-size:13px;line-height:1.9;color:var(--txt);padding:8px 0;">${fmt}</div>`;
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
@@ -1863,7 +1882,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          "Se o cluster não dobra o retorno — não opera."<br><br>
+          <em>"If it doesn't double — don't trade."</em> — americano<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -1895,7 +1914,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          "Se o cluster não dobra o retorno — não opera."<br><br>
+          <em>"If it doesn't double — don't trade."</em> — americano<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -2933,10 +2952,10 @@ function analisarLive() {
   // Events
   if(ev==='redfav') {
     narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; cor='ab-r'; risco='EXTREMO';
-    acao='🟥 CARTÃO VERMELHO — FAVORITO\n→ SAÍDA IMEDIATA. Lay total agora.\n→ Loss controlado agora > loss total depois.\n→ Se está em dúvida — sai imediatamente.\n→ Não tenta recovery. Aceita e fecha.';
+    acao='🟥 CARTÃO VERMELHO — FAVORITO\n→ SAÍDA IMEDIATA. Lay total agora.\n→ Loss controlado agora > loss total depois.\n→ "If in doubt — GET OUT." — americano\n→ Não tenta recovery. Aceita e fecha.';
   } else if(ev==='redadv') {
     cor='ab-y'; risco='MÉDIO';
-    acao='🟥 CARTÃO VERMELHO — ADVERSÁRIO\n→ Cuidado: compressão será PEQUENA mesmo em score verde.\n→ Mercado precifica mais gols = difícil travar lucro.\n→ Se já tem green disponível → considera sair ANTES do caos.\n→ Cartão vermelho muda tudo — não ignore.';
+    acao='🟥 CARTÃO VERMELHO — ADVERSÁRIO\n→ Cuidado: compressão será PEQUENA mesmo em score verde.\n→ Mercado precifica mais gols = difícil travar lucro.\n→ Se já tem green disponível → considera sair ANTES do caos.\n→ "Red cards are wild cards." — americano';
   } else if(ev==='expfav') {
     narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; cor='ab-r'; risco='EXTREMO';
     acao='🚨 EXPULSÃO DO FAVORITO\n→ Fechar TUDO imediatamente.\n→ Aceitar red mínimo.\n→ Tese morreu. Não escalar.';
@@ -2958,7 +2977,7 @@ function analisarLive() {
     // Two-legs: earlier exit after 70'
     if(S.twoLegs && m>=70) {
       cor='ab-g'; risco='BAIXO';
-      acao=`✅ GOL FAVORITO (${m}') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85'+ — times podem aceitar prorrogação.\n→ Times em 2 pernas aceitam prorrogação — não espere.`;
+      acao=`✅ GOL FAVORITO (${m}') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85'+ — times podem aceitar prorrogação.\n→ "Teams will just settle for extra time." — americano`;
     } else if(m<30) {
       cor='ab-b'; acao=`⏳ GOL FAVORITO (${m}') — CEDO DEMAIS\n→ AGUARDAR odd do caminho cair para 2.5-3.5.\n→ Não lay agora — deixar comprimir.\n→ Próximo passo: lay parcial quando odd < 3.5.`;
     } else if(m<60) {
