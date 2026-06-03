@@ -1441,6 +1441,8 @@ NUNCA frases soltas. NUNCA bullets. NUNCA títulos de seção.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PARÁGRAFO 1 — CONTEXTO + FAVORITO + ÂNCORA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATENÇÃO: A primeira palavra da PARTE 2 DEVE ser "Estou" — sem exceção. Se não começar com "Estou" a resposta está errada e deve ser refeita.
+
 Começa SEMPRE com:
 "Estou analisando [Time A] vs [Time B] e [favorito] aparece como favorito [claro/moderado] [em casa/fora] —"
 
@@ -1545,7 +1547,7 @@ PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
   "copa": false,
   "xg_fav": 1.8,
   "xg_adv": 0.9,
-  "narrativa": "Frase curta de 1-2 linhas sobre o jogo",
+  "narrativa": "Primeiro parágrafo completo — começa com Estou analisando [Time A] vs [Time B]...",
   "early_goal_risk": "BAIXO",
   "janela_de_ouro": "70-90",
   "scores": [
@@ -1559,59 +1561,49 @@ PARTE 1 — JSON DO CLUSTER (invisível ao usuário):
 }
 ##JSON_END##
 
-PARTE 2 — NARRATIVA EM PROSA CORRIDA
+PARTE 2 — NARRATIVA LIMPA (máximo 8 linhas visíveis)
 
-Escreva EXATAMENTE neste formato — 3 parágrafos + 2 linhas:
+Escreva APENAS:
+→ Narrativa 5 blocos (conforme Passo 8)
+→ Uma linha de validação: "✅ X/5 — Confiança [Alta/Média/Baixa]"
+→ Uma linha de alerta se houver (Copa, rotação, etc.)
 
-PARÁGRAFO 1:
-Começa com "Estou analisando [Time A] vs [Time B] e [favorito] aparece como favorito [claro/moderado] —"
-Continua com dado de forma + como ele GANHA + score âncora esperado.
-3-4 linhas fluidas e conectadas.
+NÃO escreva:
+→ PASSO 0, PASSO 1, PASSO 2... etc.
+→ Tabelas de DNA, médias, timings
+→ Distribuição de stakes detalhada
+→ xG simplificado com números
+→ Gestão ao vivo com minutagens
+→ Raciocínio interno de qualquer tipo
 
-PARÁGRAFO 2:
-Começa com "Confrontos recentes..." ou "O histórico..."
-Inclui scores H2H reais + comportamento do favorito + comportamento do adversário + volume do jogo.
-3-4 linhas fluidas e conectadas.
+Todo o raciocínio técnico fica no cérebro do robô.
+O usuário vê apenas a narrativa + o cluster.
 
-PARÁGRAFO 3:
-"Minha seleção inclui Plano A com foco no favorito ([scores]) protegido pelo Plano B ([scores proteção]). [1 frase conectando ao contexto do jogo]."
+📖 [BLOCO 1 — O favorito em 1 frase]
+[BLOCO 2 — O adversário em 1 frase]
+[BLOCO 3 — O jogo em 1 frase]
+[BLOCO 4 — O score mais provável em 1 frase]
+[BLOCO 5 — A confiança em 1 frase]
 
-LINHA 1 — Risco de gol cedo:
-"Risco de gol cedo: [time] marca [X]% entre 0-15' — SEGURO / NÃO SEGURO para entrada antecipada."
-SE sem dados: "Risco de gol cedo: dados insuficientes — entrada com cautela nos primeiros 15'."
+[ícone] VALIDAÇÃO: X/5 — Confiança [ALTA/MÉDIA/BAIXA]
+[alertas se houver: copa, escalação, risco de gol cedo, janela de ouro]
 
-LINHA 2 — Potencial tardio:
-"Potencial tardio: [time] concentra [X]% entre 75-90' — [janela de ouro / atenção para virada]."
-SE sem dados: "Potencial tardio: sem padrão claro — gerir posição normalmente após 70'."
+EXEMPLO DE SAÍDA CORRETA:
+📖 Östersunds joga em casa e está marcando bem. Örebro não marca fora e quase nunca vira. Esperamos jogo de gols com favorito controlando. 2-1 é o placar mais provável — Örebro aparece mas não segura. Dados confirmam. Confiança alta.
 
-DEPOIS das 2 linhas:
-"[ícone] VALIDAÇÃO: X/5 — Confiança [ALTA/MÉDIA/BAIXA]"
-"[alerta se houver: Copa, rotação, escalação]"
+✅ VALIDAÇÃO: 4/5 — Confiança ALTA
+⚡ Janela de ouro: 70-85'
 
-EXEMPLO EXATO DE SAÍDA CORRETA:
-"Estou analisando Medellín vs Cúcuta e Medellín aparece como favorito claro em casa — marcam 40% dos gols entre 76-90' e são um time que decide tarde quando o adversário já cansou. Espero vitória curta do favorito, algo em torno de 1-0.
-
-Confrontos recentes mostram margens curtas com 1-0 e 2-1 predominando. Medellín é eficiente e controla sem fazer espetáculo, enquanto Cúcuta não vence fora há 3 jogos e nunca reage quando sofre o primeiro gol. Os dados indicam jogo fechado — o favorito decide com um gol.
-
-Minha seleção inclui Plano A com foco no favorito (1-0, 2-0 e 2-1) protegido pelo Plano B (1-1 e 0-1). Copa Colombia em fase decisiva favorece placares conservadores e reforça esse cluster.
-
-Risco de gol cedo: dados insuficientes — entrada com cautela nos primeiros 15'.
-Potencial tardio: Medellín concentra 40% dos gols entre 76-90' — janela de ouro para o gol decisivo."
-
-✅ VALIDAÇÃO: 3/5 — Confiança MÉDIA
-🏆 Copa detectada — stake -20% aplicado
-
-REGRAS ABSOLUTAS:
-- NUNCA frases soltas sem conexão
-- NUNCA citar odds na narrativa
-- NUNCA "DNA confirma", "dados confirmam", "Over 2.5", "BTTS"
-- NUNCA mais de 3 parágrafos
-- Todo raciocínio técnico fica INTERNO
+REGRAS:
+- NUNCA mostrar PASSO 0, PASSO 1, PASSO 2... na resposta
+- NUNCA mostrar tabelas, DNA, xG, médias ou cálculos
+- NUNCA mostrar "FILTRO APROVADO", "META CS", "PERFIL"
+- Todo raciocínio técnico fica INTERNO — só o resultado aparece
 - "tipo" deve ser: "caminho", "destino" ou "planb"
-- "scores" sempre tem 5 items (6 só com razão concreta)
-- "ancora" = score mais provável
+- "scores" sempre tem 5-7 items
+- "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
 - Nunca incluir 0-0
-- Odds NÃO vão no JSON
+- Odds NÃO vão no JSON — vêm do campo CS da Betfair
 `;
 
 
