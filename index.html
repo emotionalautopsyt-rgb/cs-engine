@@ -1725,7 +1725,8 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     {"score":"3-1","tipo":"destino"},
     {"score":"1-1","tipo":"planb"},
     {"score":"0-1","tipo":"planb"}
-  ]
+  ],
+  "expansao": null
 ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
 - favorito em casa: h>a = caminho/destino | h<=a = planb
 - favorito fora: a>h = caminho/destino | a<=h = planb
@@ -1770,6 +1771,14 @@ REGRAS DO JSON:
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
 - 0-0 NUNCA incluir
 - Odds NÃO vão no JSON — vêm do campo CS da Betfair
+- "expansao" segue esta regra:
+  → Se cluster tem 6 scores: expansao = null
+  → Se cluster tem 5 scores: avaliar justificativa:
+    • Ambos Marcam < @1.85 → sugerir 2-2 ou 3-1
+    • Over < @1.75 → sugerir score mais alto
+    • H2H score histórico repetido → sugerir ele
+    • Sem justificativa → expansao = null
+  Formato quando há justificativa: {"score":"3-1","motivo":"Over baixo confirma volume"}
 `;
 
 
@@ -2217,6 +2226,13 @@ function extractCluster(text, stake) {
           s.prob = parseFloat((100/s.odd).toFixed(1));
         }
       });
+
+      // Store expansao for optional card display
+      if(data.expansao && data.expansao.score) {
+        cluster._expansao = data.expansao;
+      } else {
+        cluster._expansao = null;
+      }
 
       // Ensure 1-1 present
       if(!cluster.some(s=>s.score==='1-1') && S.csOdds['1-1']>0) {
