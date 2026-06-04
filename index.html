@@ -1956,6 +1956,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 3000,
+        temperature: 0.3,
         system: SP,
         messages: [{ role:'user', content: prompt }]
       })
