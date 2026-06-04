@@ -1777,6 +1777,78 @@ REGRAS DO JSON:
 
 // ===== ANALISAR JOGO =====
 
+
+// ===== CS ENGINE — MOTOR DETERMINÍSTICO =====
+// Scores, âncora e pirâmide calculados por código. IA só escreve a narrativa.
+function analyzeCSGame(fav, over, btts) {
+  // ── PERFIL ──────────────────────────────────────────────
+  let profileId, profileLabel;
+  if(fav <= 1.64 && over < 1.70)       { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
+  else if(fav <= 1.64 && over <= 1.85) { profileId='OFENSIVO';             profileLabel='Favorito forte com rota ofensiva'; }
+  else if(fav <= 1.80 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
+  else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
+  else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
+  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — stake reduzida'; }
+
+  // ── SCORES PLANO A ────────────────────────────────────────
+  let mainScores = [];
+  if(profileId === 'GOLEADA') {
+    mainScores = ['2-0','3-0','3-1','2-1'];
+    if(btts <= 2.00) mainScores.push('2-1'); // já está mas confirma peso
+  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    mainScores = ['1-0','2-0','2-1','3-1'];
+  } else if(profileId === 'ABERTO_BTTS') {
+    mainScores = ['1-0','2-0','2-1','3-1'];
+  } else {
+    mainScores = ['1-0','2-0','2-1'];
+  }
+  // Remover duplicatas
+  mainScores = [...new Set(mainScores)];
+
+  // ── PLANO B ───────────────────────────────────────────────
+  let protection = ['1-1','0-1'];
+  if(profileId === 'ABERTO_BTTS' && btts < 1.85) protection = ['2-2','1-1','0-1'];
+  if(profileId === 'ALTO_RISCO') protection = ['0-1','1-1','1-2'];
+
+  // ── ÂNCORA (PLACAR PROJETADO) — calculado por código ─────
+  let ancora = '';
+  if(profileId === 'GOLEADA') {
+    ancora = btts > 1.90 ? '3-0' : '2-1';
+  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    ancora = btts < 1.85 ? '2-1' : '2-0';
+  } else if(profileId === 'ABERTO_BTTS') {
+    ancora = '2-1';
+  } else if(profileId === 'EQUILIBRADO') {
+    ancora = '2-0';
+  } else {
+    ancora = '1-0';
+  }
+
+  // ── PIRÂMIDE ──────────────────────────────────────────────
+  let pyramidType = 'NORMAL';
+  if(over < 1.70) pyramidType = 'INVERTIDA';
+  else if(over > 1.90) pyramidType = 'CONSERVADORA';
+
+  // ── 1-0 posição ───────────────────────────────────────────
+  // GOLEADA → 1-0 no final como ponte fraca
+  // Outros → 1-0 no início como caminho
+  if(profileId !== 'GOLEADA') {
+    mainScores = mainScores.filter(s => s !== '1-0');
+    mainScores.unshift('1-0');
+  }
+
+  const retornoSimples = Math.round((fav - 1) * 100);
+
+  return {
+    profileId, profileLabel, mainScores, protection,
+    ancora, pyramidType, retornoSimples,
+    metaCS: retornoSimples * 2,
+    caminhoPeso: (profileId === 'GOLEADA') ? 'fraco' : 'normal',
+    high01: btts < 1.85
+  };
+}
+
 async function analisarJogo() {
   if(S.thinking) return;
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
@@ -1861,7 +1933,10 @@ async function analisarJogo() {
     ? '\n\nODDS BETFAIR (correct score):\n' + Object.entries(S.csOdds).sort((a,b)=>a[1]-b[1]).map(([sc,od])=>`${sc}: @${od} (prob ${calcProb(od)}%)`).join('\n')
     : '';
 
-  const prompt = `Analise este jogo como o Genie do trader americano. Gere a Target Score Formula.
+  // ── Motor determinístico — calcular scores por código ──────
+  const engine = analyzeCSGame(fav, over, btts);
+
+  const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
 
 CAMPO 1 — DADOS DO JOGO (Academia das Apostas):
 ${texto}
@@ -1874,9 +1949,1965 @@ STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)
 
 Use o Campo 1 para identificar padrão de resultados e contexto.
 Use o Campo 2 para calcular stakes com as odds reais.
-Gere SEMPRE no formato do sistema com PLANO A + PLANO B obrigatório.
-O 2-2 deve entrar quando Over @1.70-1.85 + BTTS esperado.
-O Plano B é o seguro — sem ele não há proteção.`;
+
+SCORES CALCULADOS PELO MOTOR (USAR EXATAMENTE ESSES):\nPerfil: ${engine.profileId} — ${engine.profileLabel}\nPlano A: ${engine.mainScores.join(', ')}\nPlano B: ${engine.protection.join(', ')}\nÂncora (PLACAR PROJETADO): ${engine.ancora}\nPirâmide: ${engine.pyramidType}\n\nREGRA ABSOLUTA: coloque EXATAMENTE esses scores no JSON. Não adicione. Não remova. Não mude o ancora.\nSua única tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.iewport" content="width=device-width, initial-scale=1.0">
+<title>Gênio dos Placares</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#070c12;--card:#0f1a24;--border:#1a2a38;--acc:#00d4ff;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffd600;--org:#ff7a35;--pur:#7c5cfc;--txt:#ddeeff;--txt2:#6b8ba4;--txt3:#3a5570;}
+body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-size:13px;min-height:100vh;}
+
+/* HEADER */
+.hdr{background:#060b11;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.lbox{width:32px;height:32px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:#000;}
+.lname{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:3px;}
+.lver{font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);letter-spacing:1px;margin-top:1px;}
+.hstats{display:flex;gap:16px;align-items:center;}
+.hs{text-align:center;}
+.hsl{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:2px;}
+.hsv{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;}
+
+/* TABS */
+.tabs{background:#060b11;border-bottom:1px solid var(--border);display:flex;padding:0 16px;gap:2px;}
+.tab{padding:11px 14px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--txt3);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;white-space:nowrap;text-transform:uppercase;transition:all .15s;}
+.tab.act{color:var(--acc);border-bottom-color:var(--acc);}
+
+/* LAYOUT */
+.app-body{display:flex;min-height:calc(100vh - 52px - 48px);}
+
+/* SIDEBAR */
+.sidebar{width:220px;flex-shrink:0;background:#060b11;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:100px;height:calc(100vh - 100px);overflow:hidden;}
+.sb-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.sb-title{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;}
+.sb-date{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);}
+.sb-section{padding:8px 12px 4px;font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.sb-scroll{flex:1;overflow-y:auto;padding:6px 8px;}
+.sb-game{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;transition:all .15s;position:relative;}
+.sb-game:hover{background:#0a1520;border-color:var(--border);}
+.sb-game.act{background:rgba(0,212,255,.06);border-color:var(--acc);}
+.sb-game.live{border-color:var(--red);}
+.sb-game.done{opacity:.6;}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:2px;}
+.sb-dot.pre{background:var(--ylw);}
+.sb-dot.live{background:var(--red);box-shadow:0 0 5px var(--red);animation:blink 1.5s infinite;}
+.sb-dot.done{background:var(--txt3);}
+.sb-dot.win{background:var(--grn);}
+.sb-dot.loss{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,201,110,.4);}50%{box-shadow:0 0 0 8px rgba(0,201,110,.0);}}
+.sb-name{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-info{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:2px;}
+.sb-cluster{font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-result{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;margin-top:2px;}
+.sb-badge{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:1px;display:inline-block;}
+.sb-footer{padding:8px 12px;border-top:1px solid var(--border);}
+.sb-hist-btn{width:100%;padding:6px;border-radius:6px;background:#0a1520;border:1px solid var(--border);color:var(--txt2);font-family:'Barlow Condensed',sans-serif;font-size:8px;font-weight:700;letter-spacing:1px;cursor:pointer;text-align:center;}
+.sb-hist-btn:hover{border-color:var(--acc);color:var(--acc);}
+
+/* HIST MODAL */
+.hist-modal{display:none;position:fixed;inset:0;background:rgba(5,9,14,.92);z-index:600;align-items:flex-start;justify-content:flex-end;}
+.hist-modal.show{display:flex;}
+.hist-panel{background:var(--card);border-left:1px solid var(--border);width:320px;height:100vh;overflow-y:auto;padding:16px;}
+.hist-close{float:right;background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--txt3);cursor:pointer;font-size:10px;font-family:'Barlow Condensed',sans-serif;}
+
+/* MAIN */
+.main{flex:1;padding:16px;overflow-y:auto;min-width:0;}
+.panel{display:none;}.panel.act{display:block;animation:fi .2s ease;}
+@keyframes fi{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+@media(max-width:900px){.sidebar{display:none;}}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+.card-title{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;margin-bottom:12px;}
+.card-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+
+/* FORMS */
+label{font-family:'Space Mono',monospace;font-size:7px;letter-spacing:1.5px;color:var(--txt3);text-transform:uppercase;display:block;margin-bottom:5px;}
+input,select,textarea{width:100%;background:#0a1520;border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--txt);font-family:'Space Mono',monospace;font-size:11px;outline:none;margin-bottom:11px;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);}
+textarea{resize:vertical;font-size:11px;line-height:1.7;}
+select{cursor:pointer;appearance:none;}
+
+/* BUTTONS */
+.btn{padding:9px 16px;border-radius:7px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;transition:all .15s;}
+.btn-p{background:linear-gradient(135deg,var(--acc),#0096bb);color:#000;}
+.btn-g{background:linear-gradient(135deg,var(--grn),#008f4d);color:#000;}
+.btn-r{background:linear-gradient(135deg,var(--red),#cc2244);color:#fff;}
+.btn-y{background:linear-gradient(135deg,var(--ylw),#cc9900);color:#000;}
+.btn-gh{background:transparent;border:1px solid var(--border);color:var(--txt2);}
+.btn-full{width:100%;}
+.btn-sm{padding:5px 10px;font-size:8px;}
+
+/* BADGES */
+.bdg{padding:3px 8px;border-radius:20px;font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;letter-spacing:1px;text-transform:uppercase;display:inline-block;}
+.bdg-g{background:rgba(0,201,110,.1);color:var(--grn);border:1px solid rgba(0,201,110,.25);}
+.bdg-r{background:rgba(255,77,106,.1);color:var(--red);border:1px solid rgba(255,77,106,.25);}
+.bdg-y{background:rgba(255,214,0,.1);color:var(--ylw);border:1px solid rgba(255,214,0,.25);}
+.bdg-b{background:rgba(0,212,255,.1);color:var(--acc);border:1px solid rgba(0,212,255,.25);}
+.bdg-o{background:rgba(255,122,53,.1);color:var(--org);border:1px solid rgba(255,122,53,.25);}
+
+/* ALERT BOXES */
+.ab{border-radius:9px;padding:12px;margin-bottom:10px;border-left:3px solid;}
+.ab-g{background:rgba(0,201,110,.04);border-color:var(--grn);}
+.ab-r{background:rgba(255,77,106,.04);border-color:var(--red);}
+.ab-y{background:rgba(255,214,0,.04);border-color:var(--ylw);}
+.ab-b{background:rgba(0,212,255,.04);border-color:var(--acc);}
+.ab-o{background:rgba(255,122,53,.04);border-color:var(--org);}
+.ab-p{background:rgba(124,92,252,.04);border-color:var(--pur);}
+.ab-title{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;}
+.ab-text{font-size:11px;color:var(--txt2);line-height:1.65;}
+
+/* SCORE CARDS */
+.score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+.score-card{background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;position:relative;overflow:hidden;}
+.score-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.score-card.caminho::before{background:var(--acc);}
+.score-card.destino::before{background:var(--grn);}
+.score-card.planb::before{background:var(--ylw);}
+.score-card.expansao::before{background:var(--org);}
+.sc-tipo{font-family:'Barlow Condensed',sans-serif;font-size:8px;font-weight:700;letter-spacing:1px;margin-bottom:5px;display:inline-block;}
+.sc-score{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;letter-spacing:3px;line-height:1;margin-bottom:3px;}
+.sc-odd{font-family:'Space Mono',monospace;font-size:9px;color:var(--acc);margin-bottom:2px;}
+.sc-stake{font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);margin-bottom:2px;}
+.sc-prob{display:flex;flex-direction:column;gap:2px;margin:4px 0;}
+.prob-bar-wrap{background:var(--border);border-radius:2px;height:4px;overflow:hidden;}
+.prob-bar-fill{height:100%;border-radius:2px;}
+.sc-lucro{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;margin-top:3px;}
+
+/* CHAT */
+.chat-wrap{display:flex;flex-direction:column;height:560px;border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+.chat-hdr{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.chat-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--acc);}
+.chat-msgs{flex:1;overflow-y:auto;padding:14px;background:#080f16;}
+.msg{display:flex;gap:8px;margin-bottom:14px;}
+.msg.usr{flex-direction:row-reverse;}
+.mav{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;flex-shrink:0;}
+.mav.eng{background:linear-gradient(135deg,var(--acc),var(--pur));color:#000;}
+.mav.usr{background:#1a2a3a;border:1px solid var(--border);color:var(--txt2);}
+.mbub{max-width:82%;padding:10px 13px;border-radius:10px;font-size:11px;line-height:1.75;}
+.mbub.eng{background:#111d29;border:1px solid var(--border);color:var(--txt);}
+.mbub.usr{background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.2);color:var(--txt);}
+.mtime{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;}
+.typing{display:none;padding:9px 14px;background:#080f16;border-top:1px solid var(--border);}
+.typing.show{display:flex;align-items:center;gap:7px;font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;}
+.dots{display:flex;gap:3px;}
+.dot{width:4px;height:4px;border-radius:50%;background:var(--acc);animation:td 1.4s infinite;}
+.dot:nth-child(2){animation-delay:.2s;}.dot:nth-child(3){animation-delay:.4s;}
+@keyframes td{0%,60%,100%{transform:scale(.7);opacity:.4;}30%{transform:scale(1);opacity:1;}}
+.chat-input-area{background:var(--card);border-top:1px solid var(--border);padding:11px;}
+.quick-btns{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
+.qbtn{padding:4px 9px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--txt3);font-family:'Barlow Condensed',sans-serif;font-size:8px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .15s;}
+.qbtn:hover{border-color:var(--acc);color:var(--acc);}
+.input-row{display:flex;gap:7px;align-items:flex-end;}
+.chat-inp{flex:1;background:#0a1520;border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--txt);font-size:12px;outline:none;resize:none;min-height:40px;max-height:100px;line-height:1.5;margin:0;font-family:'Barlow',sans-serif;}
+.chat-inp:focus{border-color:var(--acc);}
+.send-btn{width:40px;height:40px;border-radius:7px;border:none;background:linear-gradient(135deg,var(--acc),#0096bb);color:#000;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* LIVE */
+.live-box{background:linear-gradient(135deg,#0a1520,#0f1e2c);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center;margin-bottom:14px;position:relative;}
+.live-dot{position:absolute;top:10px;right:12px;font-family:'Space Mono',monospace;font-size:7px;letter-spacing:2px;color:var(--red);animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+.live-teams{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;color:var(--txt2);margin-bottom:7px;}
+.live-score{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:900;letter-spacing:10px;line-height:1;margin-bottom:5px;}
+.live-min{font-family:'Space Mono',monospace;font-size:10px;color:var(--grn);letter-spacing:2px;}
+.narr-box{border-radius:9px;padding:12px;text-align:center;margin-bottom:12px;border:2px solid;}
+.narr-box.viva{background:rgba(0,201,110,.05);border-color:var(--grn);}
+.narr-box.fraca{background:rgba(255,214,0,.05);border-color:var(--ylw);}
+.narr-box.morta{background:rgba(255,77,106,.05);border-color:var(--red);}
+.narr-label{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;margin-bottom:4px;}
+.narr-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;}
+.tbar-wrap{background:#0a1520;border-radius:3px;height:5px;overflow:hidden;margin:4px 0;}
+.tbar{height:100%;border-radius:3px;transition:all .3s;}
+.xg-wrap{background:#0a1520;border-radius:9px;padding:12px;margin-bottom:12px;}
+.xg-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.xg-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;min-width:60px;}
+.xg-barwrap{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.xg-bar{height:100%;border-radius:3px;transition:width .4s;}
+.xg-val{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;min-width:32px;text-align:right;}
+
+/* DIVIDER */
+.dv{height:1px;background:var(--border);margin:11px 0;}
+.mr{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);}
+.mr:last-child{border-bottom:none;}
+.ml{font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;}
+.mv{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;}
+
+/* NOTIFY */
+.notif{position:fixed;top:60px;right:16px;background:#111d29;border:1px solid var(--border);border-radius:10px;padding:10px 14px;z-index:400;transform:translateX(220%);transition:transform .3s;max-width:240px;box-shadow:0 4px 20px rgba(0,0,0,.4);}
+.notif.show{transform:translateX(0);}
+.notif-t{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;margin-bottom:3px;}
+.notif-b{font-size:10px;color:var(--txt2);}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(5,9,14,.88);z-index:500;align-items:center;justify-content:center;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:420px;width:92%;}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;color:var(--acc);margin-bottom:16px;}
+
+/* STAR RATING */
+.stars{display:flex;gap:3px;font-size:14px;margin:5px 0;}
+
+/* HISTORY ROWS */
+.hist-row{display:flex;align-items:center;justify-content:space-between;padding:9px;background:#0a1520;border-radius:7px;margin-bottom:5px;}
+
+#resultado-out,
+#resultado-out *{text-transform:none!important;text-align:left!important;font-size:14px;line-height:1.85;font-weight:400;}
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+@media(max-width:720px){.g2,.g3,.g4{grid-template-columns:1fr;}.main{padding:11px;}}
+</style>
+</head>
+<body>
+
+<!-- NOTIFY -->
+<div class="notif" id="notif">
+  <div class="notif-t" id="nt"></div>
+  <div class="notif-b" id="nb"></div>
+</div>
+
+<!-- MODAL NOVO JOGO -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-title">NOVO JOGO</div>
+    <div class="g2" style="gap:10px;">
+      <div><label>Time Casa</label><input id="nj-c" placeholder="ex: Bahia"></div>
+      <div><label>Time Fora</label><input id="nj-f" placeholder="ex: Cruzeiro"></div>
+    </div>
+    <div class="g2" style="gap:10px;">
+      <div><label>Stake R$</label><input id="nj-s" type="number" placeholder="40"></div>
+      <div><label>Horário</label><input id="nj-h" type="time" placeholder="16:00"></div>
+    </div>
+    <div>
+      <label>Data do Jogo</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+        <button class="btn btn-gh btn-sm" id="btn-hoje" onclick="setGameDate('hoje')" style="border-color:var(--acc);color:var(--acc);">📋 HOJE</button>
+        <button class="btn btn-gh btn-sm" id="btn-tmr" onclick="setGameDate('amanha')">📅 AMANHÃ</button>
+      </div>
+      <input id="nj-data" type="hidden">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-gh btn-sm" onclick="closeModal()">CANCELAR</button>
+      <button class="btn btn-p btn-full btn-sm" onclick="criarJogo()">CRIAR JOGO</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo">
+    <div class="lbox">GP</div>
+    <div><div class="lname">GÊNIO DOS PLACARES</div><div class="lver" id="logo-sub">v6.0</div></div>
+  </div>
+  <div class="hstats">
+    <div class="hs"><div class="hsl">STAKE</div>
+      <input id="g-stake" type="number" value="40" onchange="applyStake(this.value)"
+        style="width:55px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--ylw);font-size:11px;font-weight:700;text-align:center;margin:0;font-family:'Space Mono',monospace;">
+    </div>
+    <div class="hs"><div class="hsl">HOJE</div><div class="hsv" id="h-hoje" style="color:var(--grn)">R$0</div></div>
+    <div class="hs"><div class="hsl">SALDO</div><div class="hsv" id="h-saldo" style="color:var(--grn)">R$0</div></div>
+    <div class="hs"><div class="hsl">WINRATE</div><div class="hsv" id="h-wr" style="color:var(--ylw)">0%</div></div>
+    <button class="btn btn-p btn-sm" onclick="openModal()">+ JOGO</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
+  <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
+</div>
+
+<!-- HIST MODAL -->
+<div class="hist-modal" id="hist-modal">
+  <div class="hist-panel">
+    <button class="hist-close" onclick="closeHistModal()">✕ FECHAR</button>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;color:var(--acc);margin-bottom:14px;">HISTÓRICO DE JOGOS</div>
+    <div id="hist-modal-content"></div>
+  </div>
+</div>
+
+<div class="app-body">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-header">
+    <div>
+      <div class="sb-title">Jogos do Dia</div>
+      <div class="sb-date" id="sb-date"></div>
+    </div>
+    <button class="btn btn-p btn-sm" onclick="openModal()" style="padding:3px 8px;font-size:8px;">+</button>
+  </div>
+  <div class="sb-section" id="sb-live-label" style="display:none;">🔴 AO VIVO</div>
+  <div id="sb-live-list"></div>
+  <div class="sb-section">📋 HOJE</div>
+  <div class="sb-scroll" id="sb-today-list">
+    <div style="text-align:center;padding:20px;color:var(--txt3);font-family:'Space Mono',monospace;font-size:8px;">
+      Nenhum jogo.<br>Cole uma análise<br>para começar.
+    </div>
+  </div>
+  <div class="sb-section" id="sb-tmr-label" style="display:none;">📅 AMANHÃ</div>
+  <div id="sb-tmr-list"></div>
+  <div class="sb-footer">
+    <button class="sb-hist-btn" onclick="openHistModal()">📅 HISTÓRICO DE DIAS</button>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ===== PRÉ-LIVE ===== -->
+<div class="panel act" id="panel-prelive">
+  <div class="g2">
+    <!-- ESQUERDA: ANÁLISE -->
+    <div>
+      <div class="card">
+        <div class="card-title">🔍 Análise do Jogo</div>
+
+        <div class="ab ab-b" style="margin-bottom:14px;">
+          <div class="ab-title" style="color:var(--acc);">UM CAMPO — COLE TUDO AQUI</div>
+          <div class="ab-text">
+            Cole a análise completa — Academia das Apostas, SofaScore, qualquer site.<br>
+            Inclua <strong style="color:var(--txt);">histórico de placares recentes, artilheiro, escalação, contexto da competição.</strong><br>
+            Quanto mais contexto, mais precisa será a rota.
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label>📋 Análise completa — Academia das Apostas</label>
+            <button onclick="insertTemplate()" style="background:rgba(0,212,255,.1);border:1px solid var(--acc);border-radius:6px;padding:3px 10px;color:var(--acc);font-size:9px;cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:1px;">📋 TEMPLATE</button>
+          </div>
+          <textarea id="an-texto" style="min-height:280px;"
+            placeholder="Cole aqui TUDO da Academia das Apostas:
+
+• Análise completa do jogo (texto da preview)
+• Forma recente de cada time (últimos 10 jogos)
+• H2H — confrontos diretos recentes
+• Tabela de classificação (posição, pontos)
+• Estatísticas: gols, BTTS, Over/Under
+• Escalação confirmada e lesionados
+• Momento e motivação de cada time
+
+💡 Use o botão TEMPLATE para estruturar os dados
+e garantir que o DNA seja lido corretamente."></textarea>
+        </div>
+
+        <!-- ODDS PACKBALL -->
+        <div class="dv"></div>
+        <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro Packball</div>
+        <div class="ab ab-b" style="margin-bottom:10px;">
+          <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO</div>
+          <div class="ab-text">O americano opera qualquer liga se as odds de mercado tiverem edge. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
+        </div>
+        <div class="g3">
+          <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
+          <div><label>BTTS Sim</label><input id="pk-btts" type="number" step="0.01" placeholder="1.90" oninput="checkPackball()"></div>
+          <div><label>Over 2.5</label><input id="pk-over" type="number" step="0.01" placeholder="1.95" oninput="checkPackball()"></div>
+        </div>
+        <div id="pk-status"></div>
+        <div id="liga-status"></div>
+
+<!-- ODDS CORRECT SCORE - campo separado obrigatório -->
+        <div class="dv"></div>
+        <div class="card-title" style="margin-bottom:10px;">💹 Odds Correct Score — Betfair</div>
+        <div class="ab ab-b" style="margin-bottom:9px;">
+          <div class="ab-title" style="color:var(--acc);">CAMPO OBRIGATÓRIO — ODDS DO MERCADO CS</div>
+          <div class="ab-text">
+            Cole aqui as odds de Correct Score direto da Betfair.<br>
+            <strong style="color:var(--txt);">Estas são as odds PRÉ-LIVE reais do mercado</strong> — o app extrai as odds BACK automaticamente e usa para calcular stakes e probabilidades.<br>
+            <small style="color:var(--txt3);">Formato: cole o texto do mercado CS da Betfair (back e lay juntos — o app separa automaticamente).</small>
+          </div>
+        </div>
+        <div>
+          <label>📊 Odds CS da Betfair (cole o mercado completo)</label>
+          <textarea id="cs-paste" style="min-height:100px;" placeholder="Cole aqui as odds do Correct Score da Betfair:
+
+0-1
+53,20
+8.6R$ 495.71
+9.0R$ 11.50k
+0-2
+44,60
+8.6R$ 371.78
+..." oninput="parseCS()"></textarea>
+        </div>
+        <div id="cs-status" style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:8px;"></div>
+
+        <button class="btn btn-p btn-full" onclick="analisarJogo()" style="margin-top:4px;padding:12px;">
+          🧠 ANALISAR E GERAR CLUSTER
+        </button>
+      </div>
+    </div>
+
+    <!-- DIREITA: RESULTADO -->
+    <div>
+      <div class="card" id="resultado-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">🎯 Cluster Gerado</div>
+          <div id="res-badge"></div>
+        </div>
+        <div id="resultado-out">
+          <div style="text-align:center;padding:50px 20px;color:var(--txt3);">
+            <div style="font-size:36px;margin-bottom:12px;">🧠</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;margin-bottom:10px;">AGUARDANDO ANÁLISE</div>
+            <div style="font-size:10px;line-height:2.0;color:var(--txt3);">
+              1. Cole a análise do jogo<br>
+              2. Informe as odds Packball<br>
+              3. Cole as odds da Betfair<br>
+              4. Clique ANALISAR
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLUSTER TRAVADO -->
+      <div class="card" id="cluster-card" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">✅ Cluster Aprovado</div>
+          <div id="cluster-stats"></div>
+        </div>
+        <div id="cluster-scores" class="score-grid"></div>
+        <div class="dv"></div>
+        <div id="cluster-summary"></div>
+        <div class="dv"></div>
+        <div class="g2" style="gap:8px;margin-top:4px;">
+          <button class="btn btn-g btn-full" onclick="irAoVivo()">IR PARA AO VIVO →</button>
+          <button class="btn btn-gh btn-full" onclick="resetCluster()">NOVO JOGO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AO VIVO ===== -->
+<div class="panel" id="panel-live">
+  <div class="g2">
+    <!-- ESQUERDA: ESTADO -->
+    <div>
+      <div class="card">
+        <div class="card-title">Estado do Jogo</div>
+        <div class="live-box">
+          <div class="live-dot">● LIVE</div>
+          <div class="live-teams" id="l-teams">— vs —</div>
+          <div class="live-score" id="l-sc">0 — 0</div>
+          <div class="live-min" id="l-min">⏱ 0'</div>
+        </div>
+
+        <!-- TIMING BAR -->
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">TIMING DE PROTEÇÃO</span>
+            <span style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700;" id="l-timing-lbl">0' — NÃO PROTEGER</span>
+          </div>
+          <div class="tbar-wrap"><div id="l-tbar" class="tbar" style="width:0%;background:var(--grn);"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:3px;">
+            <span style="font-size:7px;color:var(--txt3);">0'</span>
+            <span style="font-size:7px;color:var(--grn);">45'</span>
+            <span style="font-size:7px;color:var(--ylw);">70'</span>
+            <span style="font-size:7px;color:var(--red);">90'</span>
+          </div>
+        </div>
+
+        <!-- INPUTS -->
+        <div class="g3">
+          <div><label>Gols Casa</label><input id="l-gc" type="number" value="0" min="0" oninput="updLive()"></div>
+          <div><label>Gols Fora</label><input id="l-gf" type="number" value="0" min="0" oninput="updLive()"></div>
+          <div><label>Minuto</label><input id="l-m" type="number" value="0" min="0" max="120" oninput="updLive()"></div>
+        </div>
+
+        <!-- XG -->
+        <div class="xg-wrap">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;margin-bottom:9px;">xG AO VIVO — GUIA DE DECISÃO</div>
+          <div class="xg-row">
+            <span class="xg-label" style="color:var(--acc);">xG Casa</span>
+            <div class="xg-barwrap"><div class="xg-bar" id="xgb-c" style="width:0%;background:var(--acc);"></div></div>
+            <input type="number" step="0.1" id="l-xgc" placeholder="0.0" oninput="updXG()"
+              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--acc);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
+          </div>
+          <div class="xg-row">
+            <span class="xg-label" style="color:var(--ylw);">xG Fora</span>
+            <div class="xg-barwrap"><div class="xg-bar" id="xgb-f" style="width:0%;background:var(--ylw);"></div></div>
+            <input type="number" step="0.1" id="l-xgf" placeholder="0.0" oninput="updXG()"
+              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--ylw);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
+          </div>
+          <div id="xg-msg" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);">Insira xG para análise</div>
+        </div>
+
+        <!-- ODD ATUAL + EVENTO -->
+        <div class="g2">
+          <div><label>Odd back score atual</label><input id="l-odd" type="number" step="0.1" placeholder="ex: 5.5"></div>
+          <div><label>Evento</label>
+            <select id="l-ev" onchange="registrarEvento(this.value)">
+              <option value="">Nenhum</option>
+              <option value="expfav">🟥 Expulsão Favorito</option>
+              <option value="expaz">🟨 Expulsão Adversário</option>
+              <option value="pen">⚽ Pênalti</option>
+              <option value="golfav">⚽ Gol Favorito</option>
+              <option value="golaz">⚽ Gol Adversário</option>
+              <option value="redfav">🟥 Cartão Vermelho — Favorito</option>
+              <option value="redadv">🟥 Cartão Vermelho — Adversário</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2 PERNAS TOGGLE -->
+        <div style="display:flex;align-items:center;gap:10px;background:#0a1520;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+          <input type="checkbox" id="two-legs" onchange="S.twoLegs=this.checked;notify(this.checked?'2 PERNAS ATIVO':'2 PERNAS OFF',this.checked?'Saída antecipada nos últimos 15min':'Gestão padrão',this.checked?'var(--acc)':'var(--txt3)')" style="width:16px;height:16px;accent-color:var(--acc);cursor:pointer;">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--acc);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">JOGO DE 2 PERNAS</div>
+            <div style="font-size:8px;color:var(--txt3);">Copa / Europa / Playoff — saída antecipada nos últimos 15'</div>
+          </div>
+        </div>
+
+        <button class="btn btn-p btn-full" onclick="analisarLive()" style="margin-bottom:10px;">ANALISAR AGORA</button>
+
+        <!-- AÇÕES RÁPIDAS -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+          <button class="btn btn-g btn-sm" onclick="qa('lp')">LAY PARCIAL</button>
+          <button class="btn btn-y btn-sm" onclick="qa('lt')">LAY TOTAL</button>
+          <button class="btn btn-p btn-sm" onclick="qa('zo')">ZERO-OUT HT</button>
+          <button class="btn btn-gh btn-sm" onclick="qa('dm')">DOBRAR MÃO</button>
+          <button class="btn btn-r btn-sm" onclick="qa('co')">CASH OUT</button>
+          <button class="btn btn-gh btn-sm" onclick="qa('ma')">MANTER</button>
+        </div>
+        <!-- CARTÃO VERMELHO -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
+          <button onclick="registrarEvento('redfav')" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.4);border-radius:6px;padding:6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO FAV</button>
+          <button onclick="registrarEvento('redadv')" style="background:rgba(255,184,48,.08);border:1px solid rgba(255,184,48,.3);border-radius:6px;padding:6px;color:var(--ylw);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO ADV</button>
+        </div>
+
+        <div class="dv"></div>
+        <div style="background:#0a1520;border-radius:8px;padding:10px;">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:7px;">RESULTADO RÁPIDO</div>
+          <div style="display:flex;gap:6px;">
+            <input id="l-rv" type="number" placeholder="+48 ou -36" step="0.01" style="flex:1;margin:0;">
+            <button class="btn btn-g btn-sm" onclick="regRapido()">✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIREITA: DECISÃO -->
+    <div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Decisão da Engine</div>
+          <div id="live-edge"></div>
+        </div>
+        <div id="live-out">
+          <div style="text-align:center;padding:30px;color:var(--txt3);">
+            <div style="font-size:28px;margin-bottom:8px;">🔴</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;">INSIRA O ESTADO E ANALISE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px;">🎯 Scores do Cluster — Entradas Pré-Live</div>
+        <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">Esses são os placares que você já entrou antes do jogo. O score atual fica destacado.</div>
+        <div id="live-cluster-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+          <div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>
+        </div>
+        <div id="live-cluster">
+          <!-- compact list kept for reference -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Lay Sequencial + Timing</div>
+        <div class="mr"><span class="ml">Odd &lt; 3.5</span><span class="mv" style="color:var(--grn)">LAY AGORA</span></div>
+        <div class="mr"><span class="ml">Odd 3.5–6.0</span><span class="mv" style="color:var(--ylw)">AGUARDAR / ORDEM</span></div>
+        <div class="mr"><span class="ml">Odd &gt; 6.0</span><span class="mv" style="color:var(--txt3)">ORDEM @odd×0.60</span></div>
+        <div class="mr"><span class="ml">0-0 HT</span><span class="mv" style="color:var(--acc)">ORDEM LAY @odd×0.75</span></div>
+        <div class="mr"><span class="ml">HT no verde</span><span class="mv" style="color:var(--acc)">ZERO-OUT</span></div>
+        <div class="mr"><span class="ml">70'+ no alvo</span><span class="mv" style="color:var(--org)">COLETAR</span></div>
+        <div class="dv"></div>
+        <div class="mr"><span class="ml">&lt; 30'</span><span class="mv" style="color:var(--txt3)">0%</span></div>
+        <div class="mr"><span class="ml">30–45'</span><span class="mv" style="color:var(--grn)">10–20%</span></div>
+        <div class="mr"><span class="ml">45–60'</span><span class="mv" style="color:var(--ylw)">30–40%</span></div>
+        <div class="mr"><span class="ml">60–70'</span><span class="mv" style="color:var(--org)">50–60%</span></div>
+        <div class="mr"><span class="ml">70–80'</span><span class="mv" style="color:var(--red)">70–80%</span></div>
+        <div class="mr"><span class="ml">80'+</span><span class="mv" style="color:var(--red)">90–100%</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERFORMANCE ===== -->
+<div class="panel" id="panel-perf">
+
+  <!-- CALIBRAÇÃO 30 TRADES -->
+  <div class="card" style="margin-bottom:14px;border-color:rgba(0,212,255,.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">🎯 Calibração do Sistema</div>
+      <div id="cal-badge" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">META: 30 TRADES</div>
+    </div>
+    <div id="cal-bar-wrap" style="background:#0a1520;border-radius:6px;height:8px;margin-bottom:10px;overflow:hidden;">
+      <div id="cal-bar" style="height:100%;background:var(--acc);border-radius:6px;width:0%;transition:width .3s;"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+      <div style="background:#0a1520;border-radius:8px;padding:8px;">
+        <div id="cal-total" style="font-size:20px;font-weight:700;color:var(--acc);">0</div>
+        <div style="font-size:8px;color:var(--txt3);">TRADES</div>
+      </div>
+      <div style="background:#0a1520;border-radius:8px;padding:8px;">
+        <div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div>
+        <div style="font-size:8px;color:var(--txt3);">COBERTOS</div>
+      </div>
+      <div style="background:#0a1520;border-radius:8px;padding:8px;">
+        <div id="cal-roi" style="font-size:20px;font-weight:700;">0%</div>
+        <div style="font-size:8px;color:var(--txt3);">ROI</div>
+      </div>
+      <div style="background:#0a1520;border-radius:8px;padding:8px;">
+        <div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">EM CALIBRAÇÃO</div>
+        <div style="font-size:8px;color:var(--txt3);">STATUS</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace;text-align:center;">
+      Mínimo para lucro: 45% cobertura | Confiável após 30 trades
+    </div>
+  </div>
+
+  <!-- REGISTRO DE RESULTADO -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-title">⚡ Registro de Resultado</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end;">
+      <div><label>Jogo</label><input id="r-j" placeholder="Bahia vs Cruzeiro" style="margin:0;"></div>
+      <div><label>Stake R$</label><input id="r-s" type="number" placeholder="40" style="margin:0;"></div>
+      <div><label>Resultado R$</label><input id="r-v" type="number" step="0.01" placeholder="+48 ou -36" style="margin:0;"></div>
+      <div><label>Score Final</label><input id="r-sc" placeholder="2-1" style="margin:0;"></div>
+      <button class="btn btn-p btn-sm" style="height:36px;margin-top:14px;" onclick="regResult()">SALVAR</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
+      <div><label>Competição</label><input id="r-c" placeholder="Brasileirão" style="margin:0;"></div>
+      <div><label>Resultado</label>
+        <select id="r-r" style="margin:0;">
+          <option value="lucro">✅ Lucro</option>
+          <option value="loss">❌ Loss</option>
+          <option value="be">➡️ Break Even</option>
+          <option value="void">⚪ Void</option>
+        </select>
+      </div>
+      <div><label>Data</label><input id="r-d" type="date" style="margin:0;"></div>
+    </div>
+  </div>
+
+  <!-- NÃO OPERADO TRACKER -->
+  <div class="card" style="margin-bottom:14px;border-color:rgba(255,184,48,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="card-title" style="margin:0;color:var(--ylw);">🚫 Não Operado</div>
+      <div id="nao-count" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">0 registros</div>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 2fr auto;gap:8px;align-items:end;margin-bottom:8px;">
+      <div><label>Jogo</label><input id="nao-j" placeholder="Arsenal vs Chelsea" style="margin:0;"></div>
+      <div><label>Motivo</label>
+        <select id="nao-m" style="margin:0;">
+          <option value="filtro">Filtro não passou</option>
+          <option value="rotacao">Rotação detectada</option>
+          <option value="escalacao">Escalação não confirmada</option>
+          <option value="motivacao">Motivação baixa</option>
+          <option value="liquidez">Sem liquidez CS</option>
+          <option value="valor">Meta CS não atingida</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <button class="btn btn-y btn-sm" style="height:36px;margin-top:14px;" onclick="regNaoOperado()">SALVAR</button>
+    </div>
+    <div><label>Score real do jogo (preencher depois)</label><input id="nao-sc" placeholder="ex: 2-1 (preencha após o jogo)" style="margin:0;width:100%;"></div>
+    <div id="nao-list" style="margin-top:10px;max-height:120px;overflow-y:auto;"></div>
+  </div>
+
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="card" style="text-align:center;padding:16px;">
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">HOJE</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;" id="p-hoje">R$ 0</div>
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-hojej">0 jogos</div>
+    </div>
+    <div class="card" style="text-align:center;padding:16px;">
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">SALDO</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;" id="p-saldo">R$ 0</div>
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-total">0 jogos</div>
+    </div>
+    <div class="card" style="text-align:center;padding:16px;">
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">WINRATE</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--ylw);" id="p-wr">0%</div>
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-wrd">0W / 0L</div>
+    </div>
+    <div class="card" style="text-align:center;padding:16px;">
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">ROI</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--acc);" id="p-roi">0%</div>
+      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-stake-t">Stake R$0</div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Histórico</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-gh btn-sm" onclick="exportCSV()">📥 CSV</button>
+            <button class="btn btn-gh btn-sm" style="color:var(--red);" onclick="limparHist()">LIMPAR</button>
+          </div>
+        </div>
+        <div id="hist-list"><div style="color:var(--txt3);text-align:center;padding:14px;font-size:11px;">Nenhum resultado</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title">Estatísticas</div>
+        <div class="mr"><span class="ml">Vencedores</span><span class="mv" style="color:var(--grn);" id="s-w">0</span></div>
+        <div class="mr"><span class="ml">Perdedores</span><span class="mv" style="color:var(--red);" id="s-l">0</span></div>
+        <div class="mr"><span class="ml">Maior Lucro</span><span class="mv" style="color:var(--grn);" id="s-mw">R$ 0</span></div>
+        <div class="mr"><span class="ml">Maior Loss</span><span class="mv" style="color:var(--red);" id="s-ml">R$ 0</span></div>
+        <div class="mr"><span class="ml">Média/Jogo</span><span class="mv" id="s-avg">R$ 0</span></div>
+        <div class="mr"><span class="ml">Stake Total</span><span class="mv" id="s-st">R$ 0</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title" id="week-t">Esta Semana</div>
+        <div id="week-out"><div style="color:var(--txt3);text-align:center;padding:11px;font-size:11px;">Sem dados</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ===== STATE =====
+const S = {
+  games: JSON.parse(localStorage.getItem('cs_v6g') || '[]'),
+  hist: JSON.parse(localStorage.getItem('cs_v6h') || '[]'),
+  currentGame: null,
+  currentCluster: [],
+  stake: parseFloat(localStorage.getItem('cs_stake')) || 40,
+  twoLegs: false,
+  thinking: false,
+  chatHistory: [],
+  csOdds: {}
+};
+function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
+function saveGames() { localStorage.setItem('cs_v6g', JSON.stringify(S.games)); }
+function td() {
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function tmr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+}
+function fd(d) { if(!d) return 'Hoje'; try { const [y,m,day]=d.split('-'); return day+'/'+m+'/'+y; } catch(e) { return d; } }
+function gt() { const n=new Date(); return n.getHours()+':'+String(n.getMinutes()).padStart(2,'0'); }
+
+function notify(t, b, c='var(--acc)') {
+  try {
+    const el=document.getElementById('notif');
+    const nt=document.getElementById('nt'), nb=document.getElementById('nb');
+    if(nt) { nt.textContent=t; nt.style.color=c; }
+    if(nb) nb.textContent=b;
+    if(el) { el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 3000); }
+  } catch(e) {}
+}
+
+function showTab(t, el) {
+  try {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('act'));
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('act'));
+    const p = document.getElementById('panel-'+t);
+    if(p) p.classList.add('act');
+    if(el) el.classList.add('act');
+    if(t === 'perf') renderPerf();
+  } catch(e) {}
+}
+
+// ===== MODAL =====
+function openModal() {
+  try {
+    const s=document.getElementById('nj-s');
+    if(s) s.value = S.stake;
+    const m=document.getElementById('modal');
+    if(m) m.classList.add('show');
+    const c=document.getElementById('nj-c');
+    if(c) { c.value=''; c.focus(); }
+    const f=document.getElementById('nj-f');
+    if(f) f.value='';
+    const h=document.getElementById('nj-h');
+    if(h) h.value='';
+    setGameDate('hoje'); // default today
+  } catch(e) {}
+}
+function closeModal() {
+  try { document.getElementById('modal')?.classList.remove('show'); } catch(e) {}
+}
+function setGameDate(when) {
+  const dataEl = document.getElementById('nj-data');
+  const btnHoje = document.getElementById('btn-hoje');
+  const btnTmr  = document.getElementById('btn-tmr');
+  if(!dataEl) return;
+  if(when === 'amanha') {
+    dataEl.value = tmr();
+    if(btnHoje) { btnHoje.style.borderColor='var(--border)'; btnHoje.style.color='var(--txt2)'; }
+    if(btnTmr)  { btnTmr.style.borderColor='var(--acc)'; btnTmr.style.color='var(--acc)'; }
+  } else {
+    dataEl.value = td();
+    if(btnHoje) { btnHoje.style.borderColor='var(--acc)'; btnHoje.style.color='var(--acc)'; }
+    if(btnTmr)  { btnTmr.style.borderColor='var(--border)'; btnTmr.style.color='var(--txt2)'; }
+  }
+}
+function criarJogo() {
+  try {
+    const c = document.getElementById('nj-c')?.value?.trim() || '';
+    const f = document.getElementById('nj-f')?.value?.trim() || '';
+    if(!c && !f) { notify('ERRO', 'Preencha ao menos um time', 'var(--red)'); return; }
+    const sk = parseFloat(document.getElementById('nj-s')?.value) || S.stake;
+    const hora = document.getElementById('nj-h')?.value || '';
+    const dataVal = document.getElementById('nj-data')?.value || td();
+    const game = {
+      id: Date.now().toString(),
+      name: (c||'Casa')+' vs '+(f||'Fora'),
+      casa: c, fora: f, comp: '', hora: hora, stake: sk,
+      placar: '0-0', min: 0, cluster: [], status: 'pre',
+      data: dataVal, resultado: 0
+    };
+    S.games.push(game);
+    S.currentGame = game;
+    saveGames();
+    // Sync live display
+    const lt=document.getElementById('l-teams');
+    if(lt) lt.textContent=S.currentGame.name;
+    applyStake(sk);
+    closeModal();
+    renderSidebar();
+    notify('JOGO CRIADO', S.currentGame.name, 'var(--grn)');
+  } catch(e) { notify('ERRO', e.message, 'var(--red)'); }
+}
+
+// ===== SIDEBAR RENDER =====
+function renderSidebar() {
+  const today = td();
+  const tomorrow = tmr();
+  const sbDate = document.getElementById('sb-date');
+  if(sbDate) {
+    const now = new Date();
+    const dn = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    sbDate.textContent = dn[now.getDay()]+' '+String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0');
+  }
+
+  const allGames = S.games || [];
+  const liveGames  = allGames.filter(g => g.data === today && g.status === 'live');
+  const preGames   = allGames.filter(g => g.data === today && g.status !== 'live' && g.status !== 'enc');
+  const doneGames  = allGames.filter(g => g.data === today && g.status === 'enc');
+  const tmrGames   = allGames.filter(g => g.data === tomorrow);
+
+  // Live section
+  const liveLabel = document.getElementById('sb-live-label');
+  const liveList  = document.getElementById('sb-live-list');
+  if(liveLabel && liveList) {
+    if(liveGames.length > 0) {
+      liveLabel.style.display = 'block';
+      liveList.innerHTML = liveGames.map(g => sbGameCard(g)).join('');
+    } else {
+      liveLabel.style.display = 'none';
+      liveList.innerHTML = '';
+    }
+  }
+
+  // Today list (pre + done)
+  const todayList = document.getElementById('sb-today-list');
+  if(todayList) {
+    const all = [...preGames, ...doneGames];
+    if(all.length === 0) {
+      todayList.innerHTML = `<div style="text-align:center;padding:20px;color:var(--txt3);font-family:'Space Mono',monospace;font-size:8px;">Nenhum jogo.<br>Cole uma análise<br>para começar.</div>`;
+    } else {
+      todayList.innerHTML = all.map(g => sbGameCard(g)).join('');
+    }
+  }
+
+  // Tomorrow section
+  const tmrLabel = document.getElementById('sb-tmr-label');
+  const tmrList  = document.getElementById('sb-tmr-list');
+  if(tmrLabel && tmrList) {
+    if(tmrGames.length > 0) {
+      tmrLabel.style.display = 'block';
+      tmrList.style.padding = '6px 8px';
+      tmrList.innerHTML = tmrGames.map(g => sbGameCard(g)).join('');
+    } else {
+      tmrLabel.style.display = 'none';
+      tmrList.innerHTML = '';
+    }
+  }
+}
+
+function sbGameCard(g) {
+  const isAct = S.currentGame && S.currentGame.id === g.id;
+  const statusDot = {
+    'pre': '<div class="sb-dot pre"></div>',
+    'live': '<div class="sb-dot live"></div>',
+    'enc': g.resultado > 0 ? '<div class="sb-dot win"></div>' : g.resultado < 0 ? '<div class="sb-dot loss"></div>' : '<div class="sb-dot done"></div>'
+  }[g.status] || '<div class="sb-dot pre"></div>';
+
+  const statusBadge = {
+    'pre': `<span class="sb-badge" style="background:rgba(255,214,0,.1);color:var(--ylw);">PRÉ</span>`,
+    'live': `<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">● LIVE</span>`,
+    'enc': g.resultado > 0
+      ? `<span class="sb-badge" style="background:rgba(0,201,110,.1);color:var(--grn);">+R$${g.resultado.toFixed(0)}</span>`
+      : g.resultado < 0
+      ? `<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">-R$${Math.abs(g.resultado).toFixed(0)}</span>`
+      : `<span class="sb-badge" style="background:rgba(58,85,112,.2);color:var(--txt3);">ENC</span>`
+  }[g.status] || '';
+
+  const clusterInfo = g.cluster && g.cluster.length > 0
+    ? `<div class="sb-cluster">${g.cluster.map(s=>s.score).join('→')}</div>`
+    : '';
+
+  const placarInfo = g.status === 'live' || g.status === 'enc'
+    ? `<span style="color:var(--ylw);font-size:8px;font-family:'Space Mono',monospace;">${g.placar}</span> `
+    : '';
+
+  return `<div class="sb-game ${isAct?'act':''} ${g.status}" onclick="selectSbGame('${g.id}')">
+    <div style="display:flex;gap:6px;align-items:flex-start;">
+      ${statusDot}
+      <div style="flex:1;min-width:0;">
+        <div class="sb-name">${g.name}</div>
+        <div class="sb-info">${g.comp||'CS Trading'} ${g.hora?'• '+g.hora:''}</div>
+        ${clusterInfo}
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">
+          <div>${placarInfo}${statusBadge}</div>
+          <div style="display:flex;gap:3px;">
+            ${g.status === 'live' ? `<button onclick="event.stopPropagation();encerrarJogo('${g.id}')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;">FIM</button>` : ''}
+            ${g.status === 'pre' ? `<button onclick="event.stopPropagation();iniciarLive('${g.id}')" style="background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.2);border-radius:4px;padding:1px 5px;color:var(--red);font-size:7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;">▶ LIVE</button>` : ''}
+            <button onclick="event.stopPropagation();deleteGame('${g.id}')" style="background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.15);border-radius:4px;padding:1px 6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;" title="Remover jogo">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function deleteGame(id) {
+  const g = S.games.find(x => x.id === id);
+  if(!g) return;
+  S.games = S.games.filter(x => x.id !== id);
+  if(S.currentGame?.id === id) {
+    S.currentGame = null;
+    S.currentCluster = [];
+    S.csOdds = {};
+    S.chatHistory = [];
+    const cc = document.getElementById('cluster-card');
+    if(cc) cc.style.display = 'none';
+    const out = document.getElementById('resultado-out');
+    if(out) out.innerHTML = '';
+    const lc = document.getElementById('live-cluster-cards');
+    if(lc) lc.innerHTML = '<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>';
+  }
+  saveGames();
+  renderSidebar();
+  notify('✓ Removido', g.name, 'var(--txt3)');
+}
+
+
+function insertTemplate() {
+  const el = document.getElementById('an-texto');
+  if(!el) return;
+  const name = S.currentGame?.name || 'Casa vs Fora';
+  const parts = name.split(' vs ');
+  const casa = parts[0]||'Time Casa', fora = parts[1]||'Time Fora';
+  const lines = [
+    '=== ESTRUTURA DE DNA — ' + name + ' ===',
+    '',
+    'CASA: ' + casa,
+    'Últimos 5 em casa (mesma liga):',
+    '1. X-X vs [adversário] — [data]',
+    '2. X-X vs [adversário] — [data]',
+    '3. X-X vs [adversário] — [data]',
+    '4. X-X vs [adversário] — [data]',
+    '5. X-X vs [adversário] — [data]',
+    'Média marcados: X.X | Sofridos: X.X',
+    '0 viradas quando sofre primeiro: SIM / NÃO',
+    'Timing de gols: principalmente [0-45 / 45-90]',
+    '',
+    'FORA: ' + fora,
+    'Últimos 5 fora (mesma liga):',
+    '1. X-X vs [adversário] — [data]',
+    '2. X-X vs [adversário] — [data]',
+    '3. X-X vs [adversário] — [data]',
+    '4. X-X vs [adversário] — [data]',
+    '5. X-X vs [adversário] — [data]',
+    'Marca fora: X/5 jogos | Abre marcador fora: X/5',
+    'Média marcados fora: X.X | Sofridos fora: X.X',
+    'Comportamento fora: [fecha / pressiona]',
+    '',
+    'H2H últimos 5 (mesma condição):',
+    '1. X-X | 2. X-X | 3. X-X | 4. X-X | 5. X-X',
+    'Tipo de jogo H2H: [muitos gols / fechado / equilibrado]',
+    '',
+    'CONTEXTO:',
+    'Posição na tabela: [Casa Xo | Fora Xo]',
+    'Motivação: [título / rebaixamento / playoff / nenhuma]',
+    'Desfalques importantes: [sim/não]',
+    '',
+    '=== COLE A ANÁLISE DA ACADEMIA ABAIXO ==='
+  ];
+  el.value = lines.join('\n');
+  el.focus();
+}
+
+function iniciarLive(id) {
+  const g = S.games.find(x => x.id === id);
+  if(!g) return;
+  g.status = 'live';
+  S.currentGame = g;
+  renderSidebar();
+  showTab('live', document.getElementById('tab-live'));
+  const lt = document.getElementById('l-teams');
+  if(lt) lt.textContent = g.name;
+  notify('● LIVE', g.name, 'var(--red)');
+}
+
+function encerrarJogo(id) {
+  const g = S.games.find(x => x.id === id);
+  if(!g) return;
+  // Show result input in a toast-style overlay since prompt() is blocked in iframes
+  const existing = document.getElementById('enc-overlay');
+  if(existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'enc-overlay';
+  div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0d1f2d;border:1px solid var(--acc);border-radius:12px;padding:20px;z-index:9999;min-width:260px;font-family:"Space Mono",monospace;';
+  div.innerHTML = `
+    <div style="font-size:10px;color:var(--acc);margin-bottom:8px;letter-spacing:1px;">ENCERRAR JOGO</div>
+    <div style="font-size:9px;color:var(--txt2);margin-bottom:12px;">${g.name}</div>
+    <input id="enc-val" type="number" step="0.01" placeholder="ex: 48 ou -36" style="width:100%;margin-bottom:12px;text-align:center;font-size:16px;">
+    <div style="display:flex;gap:8px;">
+      <button onclick="document.getElementById('enc-overlay').remove()" style="flex:1;background:#0a1520;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--txt3);cursor:pointer;font-family:inherit;font-size:9px;">CANCELAR</button>
+      <button onclick="confirmarEncerrar('${id}')" style="flex:2;background:rgba(0,212,255,.1);border:1px solid var(--acc);border-radius:6px;padding:8px;color:var(--acc);cursor:pointer;font-family:inherit;font-size:9px;font-weight:700;">CONFIRMAR</button>
+    </div>
+  `;
+  document.body.appendChild(div);
+  setTimeout(() => document.getElementById('enc-val')?.focus(), 100);
+}
+
+function confirmarEncerrar(id) {
+  const g = S.games.find(x => x.id === id);
+  if(!g) return;
+  const v = document.getElementById('enc-val')?.value;
+  document.getElementById('enc-overlay')?.remove();
+  const val = parseFloat(v);
+  g.status = 'enc';
+  g.resultado = isNaN(val) ? 0 : val;
+  if(!isNaN(val) && val !== 0) {
+    S.hist.push({
+      j: g.name, c: g.comp||'', d: g.data||td(),
+      s: g.stake||S.stake, r: val>0?'lucro':val<0?'loss':'be',
+      v: val, sc: g.placar||'', ob: 'Encerrado via sidebar', ts: Date.now()
+    });
+    save();
+  }
+  renderSidebar();
+  updHdr();
+  notify('ENCERRADO', g.name+' — '+(val>=0?'+':'')+' R$'+val.toFixed(2), val>=0?'var(--grn)':'var(--red)');
+}
+
+function openHistModal() {
+  const modal = document.getElementById('hist-modal');
+  const content = document.getElementById('hist-modal-content');
+  if(!modal || !content) return;
+
+  // Group games by date
+  const allGames = S.games;
+  const byDate = {};
+  allGames.forEach(g => {
+    const d = g.data || td();
+    if(!byDate[d]) byDate[d] = [];
+    byDate[d].push(g);
+  });
+
+  const sortedDates = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
+
+  if(sortedDates.length === 0) {
+    content.innerHTML = '<div style="color:var(--txt3);text-align:center;padding:20px;font-size:11px;">Nenhum histórico ainda.</div>';
+  } else {
+    content.innerHTML = sortedDates.map(d => {
+      const games = byDate[d];
+      const total = games.reduce((a,g) => a+(g.resultado||0), 0);
+      const wins = games.filter(g=>g.resultado>0).length;
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;">${fd(d)}</div>
+            <div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${total>=0?'var(--grn)':'var(--red)'};">${total>=0?'+':''}R$${total.toFixed(2)}</div>
+          </div>
+          ${games.map(g => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;background:#0a1520;border-radius:6px;margin-bottom:4px;">
+              <div>
+                <div style="font-size:11px;font-weight:500;">${g.name}</div>
+                <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">${g.comp||''} ${g.placar?'• '+g.placar:''}</div>
+                ${g.cluster?.length?`<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);">${g.cluster.map(s=>s.score).join('→')}</div>`:''}
+              </div>
+              <div style="text-align:right;">
+                <div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${(g.resultado||0)>0?'var(--grn)':(g.resultado||0)<0?'var(--red)':'var(--txt3)'};">${(g.resultado||0)!==0?((g.resultado||0)>0?'+':'')+' R$'+(g.resultado||0).toFixed(2):'—'}</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:7px;color:var(--txt3);">${g.status==='enc'?'ENC':g.status==='live'?'LIVE':'PRÉ'}</div>
+              </div>
+            </div>`).join('')}
+          <div style="height:1px;background:var(--border);margin-top:8px;"></div>
+        </div>`;
+    }).join('');
+  }
+
+  modal.classList.add('show');
+}
+
+function closeHistModal() {
+  const modal = document.getElementById('hist-modal');
+  if(modal) modal.classList.remove('show');
+}
+
+function selectGameBar(idx) {
+  if(!S.games || !S.games[idx]) return;
+  selectSbGame(S.games[idx].id);
+}
+
+function selectSbGame(id) {
+  S.currentGame = S.games.find(g => g.id === id);
+  if(!S.currentGame) return;
+
+  // Full state reset
+  S.currentCluster = [];
+  S.csOdds = {};
+  S.chatHistory = [];
+
+  // Clear UI
+  const clCard = document.getElementById('cluster-card');
+  if(clCard) clCard.style.display = 'none';
+  const out = document.getElementById('resultado-out');
+  if(out) out.innerHTML = '';
+  const liveCards = document.getElementById('live-cluster-cards');
+  if(liveCards) liveCards.innerHTML = '<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>';
+  const liveList = document.getElementById('live-cluster');
+  if(liveList) liveList.innerHTML = '';
+
+  // Clear inputs only if no saved state
+  if(!S.currentGame.savedAnTexto) {
+    ['an-texto','cs-paste'].forEach(fid => { const el=document.getElementById(fid); if(el) el.value=''; });
+  }
+
+  // Restore game state
+  if(S.currentGame.cluster?.length > 0) S.currentCluster = S.currentGame.cluster;
+  if(S.currentGame.csOdds) S.csOdds = {...S.currentGame.csOdds};
+  if(S.currentGame.chatHistory?.length > 0) S.chatHistory = S.currentGame.chatHistory;
+
+  // Restore text fields
+  const anEl = document.getElementById('an-texto'); if(anEl) anEl.value = S.currentGame.savedAnTexto || '';
+  const csEl = document.getElementById('cs-paste'); if(csEl) csEl.value = S.currentGame.savedCsPaste || '';
+  const pfEl = document.getElementById('pk-fav');   if(pfEl) pfEl.value = S.currentGame.savedPkFav || '';
+  const pbEl = document.getElementById('pk-btts');  if(pbEl) pbEl.value = S.currentGame.savedPkBtts || '';
+  const poEl = document.getElementById('pk-over');  if(poEl) poEl.value = S.currentGame.savedPkOver || '';
+
+  // Restore analysis HTML
+  const outEl = document.getElementById('resultado-out');
+  if(outEl && S.currentGame.savedResultadoHtml) outEl.innerHTML = S.currentGame.savedResultadoHtml;
+
+  // Update live fields
+  const lt = document.getElementById('l-teams'); if(lt) lt.textContent = S.currentGame.name;
+  const lgc = document.getElementById('l-gc'); if(lgc) lgc.value = S.currentGame.placar?.split('-')[0]||0;
+  const lgf = document.getElementById('l-gf'); if(lgf) lgf.value = S.currentGame.placar?.split('-')[1]||0;
+  const lm  = document.getElementById('l-m');  if(lm)  lm.value  = S.currentGame.min||0;
+
+  // Render cluster if available
+  if(S.currentCluster.length > 0) {
+    renderCluster(S.currentCluster, S.currentGame.stake || S.stake);
+    renderLiveCluster();
+  }
+
+  renderSidebar();
+
+  // Navigate to tab
+  if(S.currentGame.status === 'live') {
+    showTab('live', document.getElementById('tab-live'));
+    notify(S.currentGame.name, '● AO VIVO', 'var(--red)');
+  } else {
+    showTab('prelive', document.getElementById('tab-prelive'));
+    notify(S.currentGame.name,
+      S.currentCluster.length > 0 ? S.currentCluster.length+' scores carregados' : 'Cole a análise e clique ANALISAR',
+      'var(--acc)');
+  }
+}
+
+
+function applyStake(v) {
+  const val = parseFloat(v) || 45;
+  S.stake = val;
+  localStorage.setItem('cs_stake', val);
+  const gs = document.getElementById('g-stake');
+  if(gs) gs.value = val;
+  notify('STAKE', 'R$ '+val, 'var(--ylw)');
+}
+
+// ===== PACKBALL CHECK =====
+function checkPackball() {
+  const fav = parseFloat(document.getElementById('pk-fav')?.value);
+  const btts = parseFloat(document.getElementById('pk-btts')?.value);
+  const over = parseFloat(document.getElementById('pk-over')?.value);
+  const el = document.getElementById('pk-status');
+  if(!el) return;
+  if(!fav || !btts || !over) return;
+
+  const fO = fav>=1.25&&fav<=2.35;  // expanded to 1.25
+  const bO = btts>=1.65&&btts<=2.15;
+  const oO = over>=1.40&&over<=2.20;
+  const pass = fO && bO && oO;
+  const fails = [!fO,!bO,!oO].filter(Boolean).length;
+
+  // Detect profile
+  let perfil = '', piramide = '';
+  if(over>=1.40&&over<1.70)                        { perfil='GOLEADA';              piramide='INVERTIDA'; } // Over baixo = goleada sempre
+  else if(fav>=1.25&&fav<=1.50&&over<1.70)        { perfil='GOLEADA';              piramide='INVERTIDA'; }
+  else if(fav>=1.25&&fav<=1.50&&over<=1.85)       { perfil='OFENSIVO';             piramide='NORMAL'; }
+  else if(fav>1.50&&fav<=1.65&&over<1.70)         { perfil='GOLEADA';              piramide='INVERTIDA'; }
+  else if(fav>1.50&&fav<=1.65&&over<=1.85)        { perfil='OFENSIVO';             piramide='NORMAL'; }
+  else if(fav>1.50&&fav<=1.65&&over<=2.20)        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
+  else if(fav>=1.65&&fav<=1.80&&over<=1.85)       { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
+  else if(fav>=1.65&&fav<=1.80&&over<=2.00)       { perfil='EQUILIBRADO';          piramide='NORMAL'; }
+  else if(fav>=1.80&&fav<=2.00&&over<=1.85)       { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
+  else if(fav>=1.80&&fav<=2.00&&over<=2.20)       { perfil='CONSERVADOR';          piramide='CONSERVADORA'; }
+  else if(fav>=2.00&&fav<=2.35)                   { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
+  else                                             { perfil='INDEFINIDO';           piramide='NORMAL'; }
+
+  const perfilBadge = perfil ? `<span style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:4px;padding:2px 6px;font-size:9px;color:var(--acc);margin-left:8px;">${perfil}</span>` : '';
+
+  if(fails === 0) {
+    el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ PACKBALL APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | BTTS @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
+  } else if(fails === 1) {
+    el.innerHTML = `<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora${perfilBadge}</div><div class="ab-text">Stake -30%. ${!fO?`Fav @${fav} fora (1.30-2.35).`:''} ${!bO?`BTTS @${btts} fora (1.65-2.15).`:''} ${!oO?`Over @${over} fora (1.70-2.20).`:''}</div></div>`;
+  } else {
+    el.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">⛔ RECUSADO — ${fails} critérios fora</div><div class="ab-text">2+ critérios fora = sem edge. Não operar.</div></div>`;
+  }
+}
+
+// ===== BETFAIR PARSER =====
+function parseCS() {
+  let rawText = document.getElementById('cs-paste')?.value || '';
+  const status = document.getElementById('cs-status');
+  if(!rawText.trim()) { if(status) status.textContent=''; return; }
+
+  S.csOdds = {};
+
+  // PASSO 1: extrair e REMOVER mercados especiais ANTES de parsear scores
+  const otherHome = rawText.match(/QUALQUER OUTRA VIT[ÓO]RIA EM CASA[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+  const otherAway = rawText.match(/QUALQUER OUTRA VIT[ÓO]RIA DE VISITANTE[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+  const otherDraw = rawText.match(/QUALQUER OUTRO EMPATE[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
+
+  // Remove mercados especiais do texto para não confundir o parser
+  let text = rawText;
+  if(otherHome) text = text.replace(/QUALQUER OUTRA VIT[ÓO]RIA EM CASA[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+  if(otherAway) text = text.replace(/QUALQUER OUTRA VIT[ÓO]RIA DE VISITANTE[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+  if(otherDraw) text = text.replace(/QUALQUER OUTRO EMPATE[\s\S]{0,50}?(\d+(?:[.,]\d+)?)/i, ' ');
+
+  // Salvar mercados especiais nas csOdds com chaves especiais
+  if(otherHome) { const v=parseFloat(otherHome[1].replace(',','.')); if(v>1) S.csOdds['any_other_home']=v; }
+  if(otherAway) { const v=parseFloat(otherAway[1].replace(',','.')); if(v>1) S.csOdds['any_other_away']=v; }
+  if(otherDraw) { const v=parseFloat(otherDraw[1].replace(',','.')); if(v>1) S.csOdds['any_other_draw']=v; }
+
+  // FIX CRÍTICO: substituir mercados especiais ANTES de parsear
+  // Remove o número junto com o texto para não confundir com score anterior
+  text = text
+    .replace(/Qualquer Outro Empate\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_EMPATE ')
+    .replace(/Qualquer Outra Vit[oó]ria em Casa\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_CASA ')
+    .replace(/Qualquer Outra Vit[oó]ria de Visitante\s+[\d.,]+/gi, 'MERCADO_ESPECIAL_VISIT ');
+
+  // PASSO 2: parsear scores normais no texto limpo
+  const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  let i=0, count=0;
+
+  while(i<lines.length) {
+    const line = lines[i];
+    if(/[a-zA-ZÀ-ú]{4,}/.test(line) && !/\d{1,2}\s*[-x]\s*\d{1,2}/.test(line)) { i++; continue; }
+
+    const sm = line.match(/(\d{1,2})\s*[-x]\s*(\d{1,2})/i);
+    if(sm) {
+      const score = sm[1]+'-'+sm[2];
+      const withRS = [];
+      const standalone = [];
+
+      for(let j=i+1; j<Math.min(i+8,lines.length); j++) {
+        const nx = lines[j].trim();
+        if(/^\d{1,2}-\d{1,2}$/.test(nx)) break;
+        if(/^\d{1,2}x\d{1,2}$/i.test(nx)) break;
+
+        const mR = nx.match(/^(\d{1,3}(?:[.,]\d{1,2})?)R\$/);
+        if(mR) {
+          const v = parseFloat(mR[1].replace(',','.'));
+          if(v>=1.01&&v<=500) withRS.push(v);
+          continue;
+        }
+
+        const mS = nx.match(/^(-?\d{1,3}(?:[.,]\d{1,2})?)$/);
+        if(mS) {
+          const v = parseFloat(mS[1].replace(',','.'));
+          if(v>=1.01&&v<=500) standalone.push(v);
+        }
+      }
+
+      let backOdd = null;
+      if(withRS.length > 0) {
+        backOdd = Math.min(...withRS);
+      } else if(standalone.length > 0) {
+        backOdd = Math.min(...standalone);
+      }
+
+      if(backOdd && backOdd >= 4.0 && !S.csOdds[score]) {
+        S.csOdds[score] = backOdd;
+        count++;
+      }
+    }
+    i++;
+  }
+
+  // Fallback: inline "0-1: 8.6" or "0-1 8.6"
+  if(!count) {
+    const cl = text.replace(/R\$[\s]?\d+[\.,]?\d*[Kk]?/gi,'');
+    const re = /(\d{1,2})\s*[-x]\s*(\d{1,2})\s*[:\s]+(\d{1,3}(?:[.,]\d{1,2})?)/g;
+    let m;
+    while((m=re.exec(cl))!==null) {
+      const sc=m[1]+'-'+m[2], od=parseFloat(m[3].replace(',','.'));
+      if(od>=4.0&&od<=500&&!S.csOdds[sc]) { S.csOdds[sc]=od; count++; }
+    }
+  }
+
+  if(status) {
+    if(count>0) {
+      const high = Object.entries(S.csOdds).filter(([_,v])=>v>30);
+      if(high.length>0) {
+        status.textContent = `⚠️ Verifique: ${high.map(([s,v])=>s+'@'+v).join(', ')} — parecem odds LAY`;
+        status.style.color='var(--ylw)';
+      } else {
+        status.textContent = `✅ ${count} scores BACK detectados`;
+        status.style.color='var(--grn)';
+      }
+    } else {
+      status.textContent='⚠️ Não reconhecido — cole direto da Betfair';
+      status.style.color='var(--ylw)';
+    }
+  }
+}
+
+// ===== FÓRMULA DE PROBABILIDADE =====
+function calcProb(odd) { return odd>0 ? parseFloat(((1/odd)*100).toFixed(1)) : 0; }
+
+// Validates a score string — rejects timing strings like "31-45", "76-90"
+// Valid scores: each side must be single digit 0-9 (max 9 goals per team)
+function validScore(s) {
+  if(s === '0-0') return false; // 0-0 NUNCA entra no cluster
+  if(!s) return false;
+  const parts = s.split('-');
+  if(parts.length !== 2) return false;
+  const h = parseInt(parts[0]), a = parseInt(parts[1]);
+  // Each side must be 0-9 (single digit)
+  if(isNaN(h) || isNaN(a)) return false;
+  if(h > 9 || a > 9) return false;          // rejects 31-45, 76-90, 10-0 etc
+  if(h < 0 || a < 0) return false;
+  if(h === 0 && a === 0) return true;       // 0-0 valid
+  if(h + a > 12) return false;             // sanity check: max 12 total goals
+  return true;
+}
+function calcProbTotal(scores) { return parseFloat(scores.reduce((a,s)=>a+calcProb(s.odd),0).toFixed(1)); }
+
+// ===== SISTEMA PROMPT — COMPLETO — MÉTODO DO AMERICANO =====
+const SP = `Você é o GENIE — sistema de Correct Score Trading na Betfair. Analise cada jogo seguindo EXATAMENTE estes passos em ordem. Seja direto. Zero rodeios.
+
+═══════════════════════════════════════
+HIERARQUIA DE INFORMAÇÕES
+═══════════════════════════════════════
+Odds: SEMPRE as que o usuário informar da Betfair. NUNCA odds da Academia.
+Academia: usar APENAS DNA (gols por período, H2H, médias de gols, desfalques, fase do time).
+Betfair CS: odds dos placares → calcular stakes e probabilidades.
+
+═══════════════════════════════════════
+PASSO 0 — PRÉ-ANÁLISE (antes de tudo)
+═══════════════════════════════════════
+Verificar obrigatoriamente:
+→ ESCALAÇÃO: confirmada? SE não → stake -20%
+→ ROTAÇÃO: suspeita? SE sim → NÃO OPERA
+→ MOTIVAÇÃO: alta/média/baixa → impacta confiança do DNA
+→ CONTEXTO: jogo 2 pernas? Copa? Clássico? Início de temporada (<8 rodadas)?
+→ COPA/ELIMINATÓRIO: confiança MÉDIA máxima + stake -20% + +1 score proteção
+  Copa NÃO bloqueia DNA nem H2H — apenas xG❌. DNA/H2H com dados disponíveis = usar.
+
+═══════════════════════════════════════
+PASSO 1 — FILTRO PACKBALL
+═══════════════════════════════════════
+Favorito: @1.25–2.35 ✅
+BTTS:     até @2.15  ✅
+Over 2.5: @1.40–2.20 ✅
+
+2+ critérios fora → FILTRO RECUSADO → NÃO OPERA. Encerrar análise.
+1 critério fora → CAUTELA (declarar, continuar).
+
+═══════════════════════════════════════
+PASSO 1B — PERFIL + META CS
+═══════════════════════════════════════
+PERFIL pela tabela (odd favorito + Over 2.5):
+
+| Odd Fav    | Over 2.5   | Perfil               |
+|------------|------------|----------------------|
+| 1.25–1.50  | < 1.70     | GOLEADA              |
+| 1.25–1.50  | 1.70–1.85  | OFENSIVO             |
+| 1.51–1.65  | < 1.70     | GOLEADA              |
+| 1.51–1.65  | 1.70–1.85  | OFENSIVO             |
+| 1.51–1.65  | 1.86–2.20  | EQUILIBRADO OFENSIVO |
+| 1.65–1.80  | 1.70–1.85  | EQUILIBRADO OFENSIVO |
+| 1.65–1.80  | 1.86–2.00  | EQUILIBRADO          |
+| 1.80–2.00  | 1.70–1.85  | ABERTO/BTTS          |
+| 1.80–2.00  | 1.86–2.20  | CONSERVADOR          |
+| 2.00–2.35  | qualquer   | ALTO RISCO           |
+
+Over @1.40–1.69 = GOLEADA CANDIDATA → confirmar com DNA (3+ gols/jogo OU 3-0/3-1 frequente).
+SE não confirma → usar perfil pela odd do favorito normalmente.
+
+META CS: retorno_simples = (odd_fav - 1) × 100. Meta = retorno × 2.
+SE cluster não atinge meta → NÃO OPERA. Declarar motivo.
+
+═══════════════════════════════════════
+PASSO 2 — DNA + xG
+═══════════════════════════════════════
+Usar SEMPRE DNA casa (favorito em casa) ou DNA fora (favorito fora). NUNCA global.
+
+TIMING FAVORITO: declarar obrigatoriamente qual período marca mais.
+TIMING ADVERSÁRIO: quando sofre mais gols.
+0 viradas favorito: reforça plano B quando adversário abre.
+BTTS H2H: quantas das últimas 4-6 partidas tiveram ambos marcando.
+
+xG AUTOMÁTICO (se texto tiver médias):
+  xG_fav = (gols_marc_fav + gols_sofr_adv) / 2
+  xG_adv = (gols_marc_adv + gols_sofr_fav) / 2
+  Score âncora xG = round(xG_fav)-round(xG_adv)
+  SE só 2 campos → xG_fav=marc_fav, xG_adv=marc_adv → declarar "xG simplificado"
+
+HIERARQUIA DO SCORE ÂNCORA:
+  1. H2H score repetido 2x+ (absoluto — sempre prevalece)
+  2. xG calculado (4 campos)
+  3. DNA histórico
+  4. Tabela de perfis
+
+AJUSTES POR TEXTO:
+  "já classificado"/"sem objetivo"/"nada a perder" → ⚠️ Motivação reduzida. Stake -15%. Score âncora conservador. NÃO bloquear.
+  "má fase"/"derrotas seguidas" → DNA -20% confiança
+  "desfalque atacante fav" → xG_fav × 0.80, stake -20%
+  "desfalque defensor fav" → xG_adv × 1.15, plano B reforçado
+  "desfalque adversário" → xG_adv × 0.85
+  "jogo decisivo"/"precisa vencer" → xG_fav × 1.10
+  "clássico"/"derby" → +1 score proteção, 7 scores
+  "chuva"/"gramado pesado" → xG total × 0.85
+  "marca no 2T"/"gols tardios" → declarar: "0-0 HT absolutamente normal"
+  "começa forte"/"gols no 1T" → earlyGoalRisk = ALTO
+
+═══════════════════════════════════════
+PASSO 3 — AS 3 PERGUNTAS
+═══════════════════════════════════════
+1. Favorito é óbvio? (contexto confirma?)
+2. Qual é a rota? CAMINHO = SEMPRE 1-0 (casa) ou 0-1 (fora).
+3. Adversário vai interferir? → define peso do Plano B.
+
+REGRA DO 1-0:
+  odd 1-0 > @9.0 → stake maior (leverage máximo)
+  odd 1-0 @5.0–9.0 → CAMINHO normal
+  odd 1-0 < @5.0 → avaliar 4 condições:
+    (1) favorito < @1.45? (2) Over < @1.70? (3) 2-0/2-1 boa liquidez? (4) DNA goleada?
+    3-4 condições SIM → REMOVE 1-0, 2-0 vira CAMINHO. Declarar: "CAMINHO TEÓRICO: 1-0 | OPERACIONAL: 2-0"
+    <3 condições → PONTE FRACA, stake ≤ 10%
+
+═══════════════════════════════════════
+PASSO 4 — CHECKLIST 0-1
+═══════════════════════════════════════
+5 perguntas (SIM/NÃO):
+□ Adversário marca fora >50%?
+□ Favorito sofre 1º gol >40%?
+□ Adversário abre HT fora >30%?
+□ Favorito tem 0 viradas?
+□ BTTS @1.65–1.85?
+
+3+ SIMs → 0-1 entra com stake relevante.
+1-2 SIMs → 0-1 entra com stake pequena.
+0 SIMs → 0-1 simbólico (mas sempre presente).
+
+REGRA BTTS vs 0-1 — RACIOCÍNIO DO AMERICANO:
+SE BTTS < @1.75:
+→ Mercado confirma que AMBOS vão marcar.
+→ Se adversário abrir 0-1 o favorito quase certamente empata → vira 1-1.
+→ O 1-1 JÁ ESTÁ no Plano B e cobre esse cenário.
+→ 0-1 puro tem valor mínimo — é redundante com o 1-1.
+→ LIBERA UMA VAGA no cluster para:
+   • 2-2 (se Over < @1.85) — BTTS + volume alto
+   • 1-2 (se adversário marca 2+ fora frequentemente)
+   • Score mais alto do Plano A (ex: 3-1)
+
+SE BTTS @1.75–1.90:
+→ 0-1 entra com stake pequena.
+→ 1-1 permanece como Plano B principal.
+
+SE BTTS > @1.90:
+→ 0-1 entra com stake relevante.
+→ Adversário pode segurar o placar sem o favorito empatar.
+→ O americano acredita FORTEMENTE no favorito marcando.
+   Quando BTTS é alto, 0-1 representa risco real não coberto pelo 1-1.
+
+═══════════════════════════════════════
+REGRA ABSOLUTA — BTTS FORÇA SCORE:
+SE BTTS < @1.75 → 2-1 OBRIGATÓRIO nos DESTINOS. Nunca remover. Nunca substituir por 3-0.
+O mercado de BTTS é mais confiável que DNA de pequena amostra.
+3-0 só entra se cluster tiver vaga APÓS incluir o 2-1.
+SE BTTS @1.75-1.90 → 2-1 ou 3-1 recomendado nos destinos.
+SE BTTS > @1.90 → scores limpos do favorito têm prioridade.
+
+PASSO 5 — QUANTIDADE DE SCORES
+═══════════════════════════════════════
+SEMPRE entre 5 e 7. NUNCA menos de 5. NUNCA mais de 7.
+
+5 scores: favorito < @1.45 + Over ≤ @1.65 + BTTS H2H < 2/4
+6 scores: padrão (maioria dos jogos)
+7 scores: favorito @1.65–2.00 + BTTS H2H ≥ 3/4 + Over @1.75–2.00
+
+H2H score repetido 2x+ → entra obrigatório como DESTINO PRINCIPAL.
+ROTA: CAMINHO → DESTINO 1 (âncora) → DESTINO 2 → ... → PLANO B
+Scores em cadeia: cada destino = +1 gol a partir do caminho.
+
+REGRA BTTS → SCORES COM AMBOS MARCANDO:
+SE BTTS < @1.75 → incluir obrigatoriamente score com adversário marcando (ex: 2-1, 3-1).
+SE BTTS @1.75-1.90 → avaliar pelo DNA. Se adversário marca >50% → incluir 2-1.
+SE BTTS > @1.90 → plano B leve. Focar em scores limpos do favorito.
+Nunca ignorar BTTS < @1.75 — é sinal forte que adversário vai marcar.
+
+═══════════════════════════════════════
+PASSO 5B — MERCADOS ESPECIAIS
+═══════════════════════════════════════
+0-0 NUNCA entra no cluster. Em nenhum jogo. Nunca.
+
+🏠 QUALQUER OUTRA VITÓRIA EM CASA (= "GOLEADA"):
+  Incluir quando: H2H tem 4+ gols OU DNA > 3.0 gols/jogo OU Over < @1.65
+  Stake: 5–8% do total.
+
+✈️ QUALQUER OUTRA VITÓRIA VISITANTE: raramente, só underdog DNA muito forte.
+➖ QUALQUER OUTRO EMPATE: quase nunca, só jogos caóticos históricos.
+
+═══════════════════════════════════════
+PASSO 6 — SCORES ALTOS + VALIDAÇÃO
+═══════════════════════════════════════
+3-1 entra quando: Over < @1.90 + DNA confirma.
+2-2 entra quando: BTTS < @1.85 E Over < @1.85.
+4-0/4-1: usar mercado GOLEADA (Qualquer Outra Vitória Casa).
+
+Para cada score declarar: DADO SEGURO (frequente) ou LIMITE MÁXIMO (raro) → stake maior/menor.
+
+═══════════════════════════════════════
+PASSO 7 — MÉTODO E STAKES
+═══════════════════════════════════════
+O TRADER DECIDE AS STAKES. O ROBÔ DECIDE OS PLACARES.
+
+MÉTODO — declarar qual usar:
+  DUTCH NORMAL: odds parecidas (spread ≤ @2.0) → todos retornam lucro igual.
+  DUTCH COM PESO ⭐: 1-2 scores mais prováveis pelo DNA/H2H → recebem mais stake.
+
+PLANO B:
+  1-1 SEMPRE em todos os jogos. NUNCA remover.
+  SE BTTS < @1.75 → 2-1 ou 3-1 deve estar nos DESTINOS (não só plano B).
+  Stake 1-1 = 5% fixo. Reduz para 2.5% APENAS SE: BTTS H2H=0/4 E favorito <@1.30 E Over <@1.55.
+  0-1: pelo checklist (Passo 4).
+
+CLASSIFICATIVA: declarar se posição na tabela confirma ou contradiz o perfil.
+
+VALIDAÇÃO CRUZADA 5/5 — declarar SEMPRE ao final:
+  xG:     calculado e confirma âncora? ✅/❌
+  DNA/H2H: confirma âncora?             ✅/❌
+  Over:   <1.70=✅ | 1.70-1.90=✅ | >2.10=❌
+  BTTS:   <1.85=✅ | 1.85-2.10=⚠️ | >2.10=❌
+  CS:     odd âncora esperada + boa liquidez? ✅/❌
+  
+  5/5 ou 4/5 → CONFIANÇA MÁXIMA/ALTA 🟢 → opera normalmente
+  2/5        → CONFIANÇA MÉDIA 🟡 → stake -20%, cluster conservador
+  0-1/5      → CONFIANÇA BAIXA 🔴 → NÃO OPERA, declarar motivo
+
+DECLARAR SEMPRE:
+"VALIDAÇÃO CRUZADA: X/5 | xG:✅/❌ | DNA:✅/❌ | Over:✅/❌ | BTTS:✅/❌ | CS:✅/❌ | CONFIANÇA: [nível]"
+
+═══════════════════════════════════════
+PASSO 8 — SCORE ÂNCORA + NARRATIVA
+═══════════════════════════════════════
+Escreve em PROSA CORRIDA — 3 parágrafos + 2 linhas finais.
+NUNCA frases soltas. NUNCA bullets. NUNCA "Estou analisando...".
+Vai direto ao caráter dos times como um trader experiente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARÁGRAFO 1 — O FAVORITO:
+Primeira frase: favorito com seu caráter + dado de forma.
+Segunda frase: "é um time que [como ele GANHA]"
+Transformações obrigatórias:
+❌ "marca 50% dos gols entre 76-90'" → ✅ "decide no final quando o adversário já cansou"
+❌ "venceu 3 dos últimos 5" → ✅ "sabe ganhar sem precisar fazer espetáculo"
+❌ "2.1 gols por jogo" → ✅ "não para de marcar quando entra em ritmo"
+
+PARÁGRAFO 2 — ADVERSÁRIO + DINÂMICA:
+Primeira frase: "chega aqui para [passivo] — não para [ativo]"
+Segunda frase: dado comportamental (sequências, H2H, padrão)
+Terceira frase: volume do jogo em UMA palavra:
+"jogo fechado" / "jogo aberto" / "jogo de gols" / "resultado disputado"
+
+PARÁGRAFO 3 — REGRAS ABSOLUTAS:
+
+A lista de scores DEVE conter EXATAMENTE os mesmos scores do JSON scores[].
+Nenhum score do JSON pode ficar fora da lista.
+Nenhum score fora do JSON pode entrar na lista.
+
+REGRA 1 — LISTA DE SCORES:
+O score CAMINHO (1-0 para favorito em casa, 0-1 para favorito fora)
+DEVE aparecer como PRIMEIRO item da lista, antes de qualquer outro score.
+NUNCA omitir o score de entrada do jogo.
+
+VERIFICAÇÃO OBRIGATÓRIA antes de escrever a lista:
+Pergunta: "Qual é o score CAMINHO do JSON?" → esse score DEVE ser o PRIMEIRO.
+Se não está na lista → lista INCOMPLETA → reescrever.
+
+EXEMPLO CORRETO (favorito em casa):
+1-0   ← CAMINHO — SEMPRE PRIMEIRO
+2-0
+2-1
+1-1
+0-1
+
+EXEMPLO ERRADO (NUNCA fazer):
+2-0   ← ERRADO — 1-0 sumiu da lista
+2-1
+1-1
+0-1
+
+Escrever EXATAMENTE neste formato:
+
+"Com base nisso, minha fórmula de placares para este jogo será:
+[score caminho — SEMPRE PRIMEIRO]
+[score destino 1]
+[score destino 2]
+[score planb 1]
+[score planb 2]
+
+Minha seleção inclui o Plano A
+(placares do favorito como [scores tipo caminho + destino])
+junto com o Plano B
+(proteção via [scores tipo planb]).
+[1 frase de contexto].
+
+- Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [comportamento timing].
+- Potencial tardio: [time] concentra gols entre 75-90' — [janela/atenção].
+- Gestão ao vivo: [1 dica prática sobre quando agir].
+- ⚠️ ALERTA: [risco contextual do jogo — DIFERENTE da gestão acima].
+
+Essa é minha leitura para este jogo."
+
+REGRA 2 — PLANO B:
+São APENAS scores onde o favorito NÃO vence: empates e vitórias do adversário.
+1-0 NUNCA é Plano B. 2-0 NUNCA é Plano B. 2-1 NUNCA é Plano B.
+Plano B correto: 1-1, 0-1, 1-2
+
+REGRA 3 — ALERTA DO GÊNIO:
+TESTE OBRIGATÓRIO: leia a linha de Gestão ao vivo que você escreveu.
+Se o ALERTA contém as mesmas palavras → REESCREVA completamente.
+ALERTA = risco contextual do jogo (comportamento, situação, contexto)
+GESTÃO = instrução de trading (lay, posição, odd)
+São sempre frases completamente diferentes.
+Exemplos corretos de ALERTA:
+"Amistoso pode travar após 1-0 — padrão da Holanda é não forçar quando já tem vantagem."
+"Ambos Marcam elevado indica que adversário pode aparecer — Plano B tem peso real."
+PROIBIDO no ALERTA: "lay", "odd", "posição", "proteger", "aguardar comprimir".
+
+PROIBIDO:
+→ "Estou analisando...", "Vou analisar..."
+→ Odds em qualquer lugar da narrativa: "@6.2", "@1.80", "@2.12", "@1.75"
+→ "BTTS @X.XX" ou "BTTS acima de @X.XX" — substituir por linguagem humana:
+   ✅ "o mercado não está convicto que ambos marcam"
+   ✅ "adversário dificilmente marca aqui"
+→ "Over 2.5", "BTTS", "DNA confirma", "dados confirmam"
+→ Mais de 3 parágrafos
+→ Bullets ou listas
+→ Números sem contexto comportamental
+
+═══════════════════════════════════════
+PASSO 9 — GESTÃO AO VIVO
+═══════════════════════════════════════
+Gol fav < 30': aguarda. Score pode escalar. LAY parcial só após confirmar.
+Gol fav 30–60': LAY 50% no score atual. Mantém destinos abertos.
+Score ativo após 70': LAY total. Leveraging no próximo.
+Score ativo após 75': compressão máxima. LAY total imediato.
+0-0 HT: normal se DNA confirma time que marca tarde. Aguarda com confiança.
+Gol adversário: redistribuir para plano B ativo.
+Cartão vermelho favorito: LAY tudo imediato.
+Cartão vermelho adversário: reforça destinos. Mais gols prováveis.
+VAR ativo: PARA TUDO. Zero ação até mercado normalizar.
+Down to zero: automático quando score verde atingir target.
+
+JOGO 2 PERNAS: scores que eliminam favorito no agregado = NÃO cobrir. Sair após 70'.
+
+Você é o Genie do americano.
+
+═══════════════════════════════════════
+FORMATO DE RESPOSTA — OBRIGATÓRIO
+═══════════════════════════════════════
+Responda SEMPRE em 2 partes exatamente nessa ordem:
+
+PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
+##JSON_START##
+{
+  "perfil": "OFENSIVO",
+  "ancora": "2-1",
+  "confianca": "ALTA",
+  "copa": false,
+  "xg_fav": 1.8,
+  "xg_adv": 0.9,
+  "narrativa": "Frase curta de 1-2 linhas sobre o jogo",
+  "early_goal_risk": "BAIXO",
+  "leverage_window": "70-90",
+  "scores": [
+    {"score":"1-0","tipo":"caminho"},
+    {"score":"2-0","tipo":"destino"},
+    {"score":"2-1","tipo":"destino"},
+    {"score":"3-1","tipo":"destino"},
+    {"score":"1-1","tipo":"planb"},
+    {"score":"0-1","tipo":"planb"}
+  ]
+ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
+- favorito em casa: h>a = caminho/destino | h<=a = planb
+- favorito fora: a>h = caminho/destino | a<=h = planb
+2-1 em casa = favorito vence = DESTINO (nunca planb)
+1-1 = empate = PLANB sempre
+0-1 quando favorito é casa = adversário vence = PLANB
+}
+##JSON_END##
+
+IMPORTANTE: Use EXATAMENTE ##JSON_START## e ##JSON_END## como delimitadores. Não use marcadores alternativos. Não use outros formatos.
+
+SCORES OBRIGATÓRIOS NO JSON:
+→ 1-1 SEMPRE como "planb" — sem exceção
+→ 0-1 SEMPRE quando favorito em casa — como "planb"
+→ A narrativa lista EXATAMENTE os scores do JSON — nenhum a mais, nenhum a menos
+
+PARTE 2 — NARRATIVA LIMPA (exatamente o formato do Passo 8)
+
+Escreve APENAS:
+→ Os 3 parágrafos da narrativa (conforme Passo 8)
+→ Linha Early Goal Risk
+→ Linha Potencial tardio
+→ Linha ⚠️ ALERTA
+→ "✅ X/5 — Confiança [Alta/Média/Baixa]"
+→ "🏆 Copa detectada — stake -20%" SE Copa
+
+NÃO escreve NUNCA:
+→ PASSO 0, PASSO 1, PASSO 2... etc.
+→ Tabelas de DNA, médias, percentuais
+→ Distribuição de stakes detalhada
+→ "📊 CLUSTER", "PLANO A —", "PLANO B —"
+→ Gestão ao vivo com minutagens
+→ Raciocínio interno de qualquer tipo
+Todo raciocínio técnico fica no cérebro do robô.
+
+REGRAS DO JSON:
+- "tipo" deve ser: "caminho", "destino" ou "planb"
+- "scores" sempre tem 5-7 items
+- "ancora" = SEMPRE vitória do favorito (1-0, 2-0, 2-1). NUNCA 1-1, 0-0 ou placar do adversário (H2H 2x+ prevalece, senão xG)
+- Nunca incluir 0-0
+- 1-1 SEMPRE obrigatório como planb em todos os jogos
+- 0-1 SEMPRE obrigatório como planb quando favorito é casa
+- 0-0 NUNCA incluir
+- Odds NÃO vão no JSON — vêm do campo CS da Betfair
+`;
+
+
+
+
+// ===== ANALISAR JOGO =====
+
+
+// ===== CS ENGINE — MOTOR DETERMINÍSTICO =====
+// Scores, âncora e pirâmide calculados por código. IA só escreve a narrativa.
+function analyzeCSGame(fav, over, btts) {
+  // ── PERFIL ──────────────────────────────────────────────
+  let profileId, profileLabel;
+  if(fav <= 1.64 && over < 1.70)       { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
+  else if(fav <= 1.64 && over <= 1.85) { profileId='OFENSIVO';             profileLabel='Favorito forte com rota ofensiva'; }
+  else if(fav <= 1.80 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
+  else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
+  else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
+  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — stake reduzida'; }
+
+  // ── SCORES PLANO A ────────────────────────────────────────
+  let mainScores = [];
+  if(profileId === 'GOLEADA') {
+    mainScores = ['2-0','3-0','3-1','2-1'];
+    if(btts <= 2.00) mainScores.push('2-1'); // já está mas confirma peso
+  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    mainScores = ['1-0','2-0','2-1','3-1'];
+  } else if(profileId === 'ABERTO_BTTS') {
+    mainScores = ['1-0','2-0','2-1','3-1'];
+  } else {
+    mainScores = ['1-0','2-0','2-1'];
+  }
+  // Remover duplicatas
+  mainScores = [...new Set(mainScores)];
+
+  // ── PLANO B ───────────────────────────────────────────────
+  let protection = ['1-1','0-1'];
+  if(profileId === 'ABERTO_BTTS' && btts < 1.85) protection = ['2-2','1-1','0-1'];
+  if(profileId === 'ALTO_RISCO') protection = ['0-1','1-1','1-2'];
+
+  // ── ÂNCORA (PLACAR PROJETADO) — calculado por código ─────
+  let ancora = '';
+  if(profileId === 'GOLEADA') {
+    ancora = btts > 1.90 ? '3-0' : '2-1';
+  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    ancora = btts < 1.85 ? '2-1' : '2-0';
+  } else if(profileId === 'ABERTO_BTTS') {
+    ancora = '2-1';
+  } else if(profileId === 'EQUILIBRADO') {
+    ancora = '2-0';
+  } else {
+    ancora = '1-0';
+  }
+
+  // ── PIRÂMIDE ──────────────────────────────────────────────
+  let pyramidType = 'NORMAL';
+  if(over < 1.70) pyramidType = 'INVERTIDA';
+  else if(over > 1.90) pyramidType = 'CONSERVADORA';
+
+  // ── 1-0 posição ───────────────────────────────────────────
+  // GOLEADA → 1-0 no final como ponte fraca
+  // Outros → 1-0 no início como caminho
+  if(profileId !== 'GOLEADA') {
+    mainScores = mainScores.filter(s => s !== '1-0');
+    mainScores.unshift('1-0');
+  }
+
+  const retornoSimples = Math.round((fav - 1) * 100);
+
+  return {
+    profileId, profileLabel, mainScores, protection,
+    ancora, pyramidType, retornoSimples,
+    metaCS: retornoSimples * 2,
+    caminhoPeso: (profileId === 'GOLEADA') ? 'fraco' : 'normal',
+    high01: btts < 1.85
+  };
+}
+
+async function analisarJogo() {
+  if(S.thinking) return;
+  if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
+
+  const texto = document.getElementById('an-texto')?.value?.trim() || '';
+  const fav = parseFloat(document.getElementById('pk-fav')?.value) || 0;
+  const btts = parseFloat(document.getElementById('pk-btts')?.value) || 0;
+  const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
+
+  // Packball check — auto-reduce stake if one criterion outside range
+  const favOk  = fav>=1.25&&fav<=2.35;
+  const bttsOk = btts>=1.65&&btts<=2.15;
+  const overOk = over>=1.40&&over<=2.20;
+  const packballOk = favOk && bttsOk && overOk;
+  const failCount = [!favOk,!bttsOk,!overOk].filter(Boolean).length;
+  // Stake: full if passes, -30% if 1 criterion out, block if 2+
+  const stake = failCount===0 ? S.stake :
+                failCount===1 ? parseFloat((S.stake * 0.70).toFixed(2)) :
+                parseFloat((S.stake * 0.67).toFixed(2));
+
+  if(!texto) { notify('ERRO', 'Cole a análise do jogo primeiro', 'var(--red)'); return; }
+  if(!fav || !btts || !over) { notify('ERRO', 'Preencha as odds Packball primeiro', 'var(--red)'); return; }
+
+  // AUTO-DETECT GAME from text
+  const detected = detectGame(texto);
+  if(detected.casa || detected.fora) {
+    const gameName = (detected.casa||'Casa')+' vs '+(detected.fora||'Fora');
+
+    // Priority 1: use currentGame if it matches the detected name
+    // Priority 2: find any existing game with same name (any date)
+    // Priority 3: create new game
+    let targetGame = null;
+    if(S.currentGame && S.currentGame.name === gameName) {
+      targetGame = S.currentGame; // already selected — use it
+    } else {
+      targetGame = S.games.find(g => g.name === gameName); // find by name, any date
+    }
+
+    if(!targetGame) {
+      const gameDate = detectGameDate(texto);
+      targetGame = {
+        id: Date.now().toString(),
+        name: gameName,
+        casa: detected.casa,
+        fora: detected.fora,
+        comp: detected.comp,
+        hora: detected.hora,
+        stake: stake,
+        placar: '0-0',
+        min: 0,
+        cluster: [],
+        status: 'pre',
+        data: gameDate,
+        resultado: 0,
+        analise: texto
+      };
+      S.games.push(targetGame);
+      saveGames();
+      notify('✅ JOGO DETECTADO', gameName, 'var(--grn)');
+    } else {
+      // Update existing game with new analysis
+      targetGame.analise = texto;
+      targetGame.stake = stake;
+      if(detected.comp && !targetGame.comp) targetGame.comp = detected.comp;
+      if(detected.hora && !targetGame.hora) targetGame.hora = detected.hora;
+    }
+
+    S.currentGame = targetGame;
+    saveGames();
+    renderSidebar();
+    const lt=document.getElementById('l-teams');
+    if(lt) lt.textContent=gameName;
+  } else if(S.currentGame) {
+    // No name detected but there's a current game — use it
+    notify('✅ Usando jogo atual', S.currentGame.name, 'var(--acc)');
+  } else {
+    notify('⚠️ Jogo não detectado', 'Crie o jogo manualmente com + JOGO', 'var(--ylw)');
+  }
+
+  // Build odds info
+  const oddsInfo = Object.keys(S.csOdds).length > 0
+    ? '\n\nODDS BETFAIR (correct score):\n' + Object.entries(S.csOdds).sort((a,b)=>a[1]-b[1]).map(([sc,od])=>`${sc}: @${od} (prob ${calcProb(od)}%)`).join('\n')
+    : '';
+
+  // ── Motor determinístico — calcular scores por código ──────
+  const engine = analyzeCSGame(fav, over, btts);
+
+  const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
+
+CAMPO 1 — DADOS DO JOGO (Academia das Apostas):
+${texto}
+
+CAMPO 2 — ODDS CORRECT SCORE BETFAIR (odds BACK reais):
+${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use estimativas e indique.'}
+
+PACKBALL: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
+STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
+
+Use o Campo 1 para identificar padrão de resultados e contexto.
+Use o Campo 2 para calcular stakes com as odds reais.
+
+SCORES JÁ CALCULADOS PELO MOTOR (NÃO ALTERAR):
+Plano A: \${engine.mainScores.join(', ')}
+Plano B: \${engine.protection.join(', ')}
+Âncora (PLACAR PROJETADO): \${anchoraCalculada}
+Pirâmide: \${piramideCalculada}
+Perfil: \${engine.profileId}
+
+REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.
+Não adicione. Não remova. Não mude o ancora.
+Sua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
 
   // Show loading
   const out = document.getElementById('resultado-out');
