@@ -1795,6 +1795,8 @@ function formatarNarrativa(texto) {
     if(cam) scoreCaminho = cam.score;
   }
 
+  window._scoresSeen = false; // reset para cada análise
+
   var html = '<div style="font-size:14px;line-height:1.85;color:#c8d8f0;text-transform:none;text-align:left;">';
 
   blocos.forEach(function(bloco) {
@@ -1830,8 +1832,14 @@ function formatarNarrativa(texto) {
       // Validação — ignorar (aparece abaixo)
       if(/VALIDAÇÃO.*\/5|Confiança/i.test(linha) && /\d\/\d/.test(linha)) return;
 
-      // Score individual na lista vertical — destacar se for caminho
+      // Score individual na lista vertical — injetar caminho se faltar
       if(/^\d{1,2}-\d{1,2}$/.test(linha.trim())) {
+        if(typeof window._scoresSeen === 'undefined') window._scoresSeen = false;
+        // Se primeiro score da lista E não é o caminho → injetar caminho primeiro
+        if(!window._scoresSeen && scoreCaminho && linha.trim() !== scoreCaminho) {
+          html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ←</p>';
+        }
+        window._scoresSeen = true;
         var isCam = (scoreCaminho && linha.trim() === scoreCaminho);
         html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;' +
           (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
@@ -1849,6 +1857,21 @@ function formatarNarrativa(texto) {
       html += '<p style="margin:0 0 14px;text-transform:none;">'+linha+'</p>';
     });
   });
+
+  // POST-PROCESS: garantir que o score caminho aparece na fórmula
+  if(scoreCaminho && html.includes('minha fórmula de placares')) {
+    // Verificar se o caminho aparece logo após a fórmula
+    var formulaIdx = html.indexOf('minha fórmula de placares');
+    var afterFormula = html.substring(formulaIdx, formulaIdx + 300);
+    if(afterFormula.indexOf(scoreCaminho) === -1) {
+      // Injetar o caminho como primeiro item após "será:"
+      html = html.replace(
+        'minha fórmula de placares para este jogo será:</p>',
+        'minha fórmula de placares para este jogo será:</p>' +
+        '<p style="margin:0 0 6px;font-family:\'Space Mono\',monospace;font-size:13px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ← caminho</p>'
+      );
+    }
+  }
 
   html += '</div>';
   return html;
