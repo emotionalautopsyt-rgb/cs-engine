@@ -2660,19 +2660,7 @@ function renderCluster(cluster, stake) {
 
   card.style.display = 'block';
 
-  // Identificar score opcional = maior odd quando cluster tem 6+
-  let opcionalScore = null;
-  if(cluster.length >= 6) {
-    const validos = cluster.filter(s => s.odd > 0 && s.tipo !== 'expansao');
-    const maiorOdd = validos.reduce((max, s) => s.odd > max.odd ? s : max, validos[0]);
-    // Só marca como opcional se odd >= @15 (score distante do resultado esperado)
-    if(maiorOdd && maiorOdd.odd >= 15) {
-      opcionalScore = maiorOdd;
-      opcionalScore._opcional = true;
-    }
-  }
-
-  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && !s._opcional));
+  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0));
   const mxL = Math.max(...cluster.map(s=>s.lucro||0));
   const ts = cluster.reduce((a,s)=>a+(s.stake||0),0);
   const worstCase = -stake;
@@ -2699,21 +2687,13 @@ function renderCluster(cluster, stake) {
   } else if(total === 5) {
     explWhy = `<strong style="color:var(--acc);">5 SCORES — COBERTURA DUPLA:</strong> ${planoAStr}${planoBStr}. Favorito curto — cluster concentrado.`;
   } else if(total === 6) {
-    const temOpc = cluster.some(s => s._opcional);
-    if(temOpc) {
-      explWhy = `<strong style="color:var(--org);">5 SCORES + 1 OPCIONAL:</strong> Cluster concentrado nos 5 principais. Score de expansão disponível se quiser mais cobertura — maior odd, menor probabilidade.`;
-    } else {
-      explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
-    }
+    explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
   } else {
     explWhy = `<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> ${planoAStr}${planoBStr}. Jogo aberto com ambos os lados cobertos.`;
   }
 
-  const opcCount = cluster.filter(s => s._opcional).length;
-  const mainCount = total - opcCount;
-  const countLabel = opcCount > 0 ? mainCount + ' + 1 OPC' : total + ' SCORES';
   if(statsEl) statsEl.innerHTML = `
-    <span class="bdg bdg-b">${countLabel}</span>
+    <span class="bdg bdg-b">${total} SCORES</span>
     <span class="bdg" style="color:${probColor};border-color:${probColor};background:rgba(0,0,0,.3);margin-left:4px;">PROB ${probTotal}%</span>`;
 
   const colors = {
@@ -2726,17 +2706,6 @@ function renderCluster(cluster, stake) {
   // BIG SCORE CARDS — prominent buttons
   scoresEl.innerHTML = cluster.map((s,idx) => {
     const col = colors[s.tipo] || colors.destino;
-
-    // Score opcional — estilo laranja tracejado
-    if(s._opcional) {
-      return \`<div style="background:rgba(255,122,53,.06);border:2px dashed rgba(255,122,53,.5);border-radius:12px;padding:14px 10px;text-align:center;position:relative;cursor:default;">
-        <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);"><span style="background:rgba(255,122,53,.15);border:1px solid var(--org);border-radius:4px;padding:2px 8px;font-size:7px;color:var(--org);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;">✨ EXPANSÃO</span></div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;letter-spacing:4px;color:var(--org);margin-top:22px;margin-bottom:4px;">\${s.score}</div>
-        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--txt);margin-bottom:4px;font-weight:700;">@ \${s.odd>0?s.odd:'?'}</div>
-        <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--org);margin-bottom:8px;">\${s.prob}% implícita</div>
-        <button onclick="toggleOpcional('\${s.score}')" style="background:rgba(255,122,53,.1);border:1px solid var(--org);border-radius:6px;padding:4px 10px;color:var(--org);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;">+ INCLUIR</button>
-      </div>\`;
-    }
 
     // ⭐ Anchor = score from JSON "ancora" field
     const jsonAncora = S.currentGame?.lastAncora || null;
