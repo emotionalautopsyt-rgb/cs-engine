@@ -1014,7 +1014,7 @@ function iniciarLive(id) {
   g.status = 'live';
   S.currentGame = g;
   renderSidebar();
-  showTab('prelive', document.getElementById('tab-prelive'));
+  showTab('live', document.getElementById('tab-live'));
   const lt = document.getElementById('l-teams');
   if(lt) lt.textContent = g.name;
   notify('● LIVE', g.name, 'var(--red)');
@@ -1178,7 +1178,7 @@ function selectSbGame(id) {
 
   // Navigate to tab
   if(S.currentGame.status === 'live') {
-    showTab('prelive', document.getElementById('tab-prelive'));
+    showTab('live', document.getElementById('tab-live'));
     notify(S.currentGame.name, '● AO VIVO', 'var(--red)');
   } else {
     showTab('prelive', document.getElementById('tab-prelive'));
@@ -1703,16 +1703,27 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
   "leverage_window": "70-90",
   "scores": [
     {"score":"1-0","tipo":"caminho"},
-    {"score":"2-1","tipo":"destino"},
     {"score":"2-0","tipo":"destino"},
+    {"score":"2-1","tipo":"destino"},
     {"score":"3-1","tipo":"destino"},
     {"score":"1-1","tipo":"planb"},
     {"score":"0-1","tipo":"planb"}
   ]
+ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
+- favorito em casa: h>a = caminho/destino | h<=a = planb
+- favorito fora: a>h = caminho/destino | a<=h = planb
+2-1 em casa = favorito vence = DESTINO (nunca planb)
+1-1 = empate = PLANB sempre
+0-1 quando favorito é casa = adversário vence = PLANB
 }
 ##JSON_END##
 
 IMPORTANTE: Use EXATAMENTE ##JSON_START## e ##JSON_END## como delimitadores. Não use marcadores alternativos. Não use outros formatos.
+
+SCORES OBRIGATÓRIOS NO JSON:
+→ 1-1 SEMPRE como "planb" — sem exceção
+→ 0-1 SEMPRE quando favorito em casa — como "planb"
+→ A narrativa lista EXATAMENTE os scores do JSON — nenhum a mais, nenhum a menos
 
 PARTE 2 — NARRATIVA LIMPA (exatamente o formato do Passo 8)
 
@@ -1738,6 +1749,9 @@ REGRAS DO JSON:
 - "scores" sempre tem 5-7 items
 - "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
 - Nunca incluir 0-0
+- 1-1 SEMPRE obrigatório como planb em todos os jogos
+- 0-1 SEMPRE obrigatório como planb quando favorito é casa
+- 0-0 NUNCA incluir
 - Odds NÃO vão no JSON — vêm do campo CS da Betfair
 `;
 
@@ -2568,9 +2582,13 @@ function calcStakes(cluster, stake, analysisText) {
   const has11 = cluster.some(s => s.score === '1-1');
   const hasCasa = cluster.some(s => { const [h,a] = s.score.split('-').map(Number); return h > a; });
   let added = false;
+  // 0-1 só forçado se IA não incluiu E é favorito casa — proteção contra zebra
+  // Mantido por segurança (Holland 0-1 provou ser necessário)
   if(!has01 && hasCasa && S.csOdds['0-1'] > 0) {
     cluster.push({score:'0-1', odd:S.csOdds['0-1'], tipo:'planb', prob:calcProb(S.csOdds['0-1']), stake:0, lucro:0, oddPG:0});
     added = true;
+    // Marcar que foi adicionado pelo sistema (não pela IA)
+    cluster._forced01 = true;
   }
   // 1-1 ALWAYS in cluster — 5% fixed stake, never removed
   if(!has11 && S.csOdds['1-1'] > 0) {
@@ -2940,7 +2958,7 @@ function addGameToBar(game) {
 function irAoVivo() {
   const lt = document.getElementById('l-teams');
   if(lt && S.currentGame) lt.textContent = S.currentGame.name;
-  showTab('prelive', document.getElementById('tab-prelive'));
+  showTab('live', document.getElementById('tab-live'));
   notify('INDO PARA AO VIVO', 'Cluster travado', 'var(--acc)');
 }
 
