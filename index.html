@@ -1776,137 +1776,6 @@ REGRAS DO JSON:
 
 
 // ===== ANALISAR JOGO =====
-function formatarNarrativa(texto) {
-  if(!texto || texto.length < 10) return texto;
-
-  // Remove ALERTA duplicado e linhas técnicas
-  var t = texto.replace(/⚠️\s*ALERTA[^\n]*/gi, '').trim();
-  t = t.split('\n')
-    .filter(function(l) { return !/^##|^{|^}|^PASSO|^═|ancora.*:/i.test(l.trim()); })
-    .join('\n');
-
-  var blocos = t.split(/\n{2,}/).map(function(b){return b.trim();}).filter(function(b){return b.length>20;});
-  if(!blocos.length) blocos = [t];
-
-  // Detectar o score caminho do cluster atual
-  var scoreCaminho = '';
-  if(S.currentCluster && S.currentCluster.length > 0) {
-    var cam = S.currentCluster.find(function(s){ return s.tipo === 'caminho'; });
-    if(cam) scoreCaminho = cam.score;
-  }
-
-  window._scoresSeen = false; // reset para cada análise
-
-  var html = '<div style="font-size:14px;line-height:1.85;color:#c8d8f0;text-transform:none;text-align:left;">';
-
-  blocos.forEach(function(bloco) {
-    var linhas = bloco.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>0;});
-    linhas.forEach(function(linha) {
-
-      // SCORE ÂNCORA — destaque máximo
-      if(/é o placar que esse jogo está pedindo/i.test(linha)) {
-        var m = linha.match(/(\d{1,2}-\d{1,2})\s+é o placar/i);
-        var sc = m ? m[1] : '';
-        var resto = linha.replace(/^\d{1,2}-\d{1,2}\s*/,'');
-        html += '<div style="border-left:4px solid #00d4ff;background:rgba(0,212,255,.06);border-radius:0 10px 10px 0;padding:16px 20px;margin:18px 0;">';
-        if(sc) html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:48px;font-weight:900;letter-spacing:6px;color:#00d4ff;line-height:1;margin-bottom:6px;">'+sc+'</div>';
-        html += '<div style="font-size:13px;font-weight:700;color:#eaf0ff;letter-spacing:1px;text-transform:uppercase;">'+resto+'</div></div>';
-        return;
-      }
-
-      // Early Goal Risk — pílula
-      if(/Risco de gol cedo/i.test(linha)) {
-        var alto=/ALTO/i.test(linha), medio=/MÉDIO|MEDIO/i.test(linha);
-        var cor=alto?'#ff4d6a':medio?'#ffd600':'#00c96e';
-        var bg=alto?'rgba(255,77,106,.1)':medio?'rgba(255,214,0,.1)':'rgba(0,201,110,.1)';
-        html += '<div style="display:inline-block;background:'+bg+';border:1px solid '+cor+';border-radius:20px;padding:5px 14px;margin:6px 6px 2px 0;font-size:12px;color:'+cor+';font-weight:700;">⚡ '+linha+'</div>';
-        return;
-      }
-
-      // Potencial tardio — pílula roxa
-      if(/Potencial tardio/i.test(linha)) {
-        html += '<div style="display:inline-block;background:rgba(124,92,252,.1);border:1px solid #7c5cfc;border-radius:20px;padding:5px 14px;margin:2px 6px 14px 0;font-size:12px;color:#7c5cfc;font-weight:700;">🎯 '+linha+'</div><br>';
-        return;
-      }
-
-      // Validação — ignorar (aparece abaixo)
-      if(/VALIDAÇÃO.*\/5|Confiança/i.test(linha) && /\d\/\d/.test(linha)) return;
-
-      // Score individual na lista vertical — injetar caminho se faltar
-      if(/^\d{1,2}-\d{1,2}$/.test(linha.trim())) {
-        if(typeof window._scoresSeen === 'undefined') window._scoresSeen = false;
-        // Se primeiro score da lista E não é o caminho → injetar caminho primeiro
-        if(!window._scoresSeen && scoreCaminho && linha.trim() !== scoreCaminho) {
-          html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ←</p>';
-        }
-        window._scoresSeen = true;
-        var isCam = (scoreCaminho && linha.trim() === scoreCaminho);
-        html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;' +
-          (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
-          linha.trim() + (isCam ? ' ←' : '') + '</p>';
-        return;
-      }
-
-      // Plano A/B — menor
-      if(/^Plano [AB]/i.test(linha)) {
-        html += '<p style="margin:2px 0 10px;font-size:12px;color:#6b8ba4;font-family:\'Space Mono\',monospace;text-transform:none;">'+linha+'</p>';
-        return;
-      }
-
-      // Parágrafo normal
-      html += '<p style="margin:0 0 14px;text-transform:none;">'+linha+'</p>';
-    });
-  });
-
-  // POST-PROCESS: garantir que o score caminho aparece na fórmula
-  if(scoreCaminho && html.includes('minha fórmula de placares')) {
-    // Verificar se o caminho aparece logo após a fórmula
-    var formulaIdx = html.indexOf('minha fórmula de placares');
-    var afterFormula = html.substring(formulaIdx, formulaIdx + 300);
-    if(afterFormula.indexOf(scoreCaminho) === -1) {
-      // Injetar o caminho como primeiro item após "será:"
-      html = html.replace(
-        'minha fórmula de placares para este jogo será:</p>',
-        'minha fórmula de placares para este jogo será:</p>' +
-        '<p style="margin:0 0 6px;font-family:\'Space Mono\',monospace;font-size:13px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ← caminho</p>'
-      );
-    }
-  }
-
-  html += '</div>';
-  return html;
-}
-
-
-function injetarScoresNarrativa(texto, cluster) {
-  if(!cluster || cluster.length === 0) return texto;
-
-  var marcador = 'minha fórmula de placares para este jogo será:';
-  var idx = texto.toLowerCase().indexOf(marcador);
-  if(idx === -1) return texto;
-
-  var antes = texto.substring(0, idx + marcador.length);
-
-  // Encontrar onde a lista termina — próximo parágrafo com "Minha seleção"
-  var depoisIdx = texto.indexOf('
-
-Minha seleção', idx);
-  if(depoisIdx === -1) depoisIdx = texto.indexOf('
-Minha seleção', idx);
-  var depois = depoisIdx > -1 ? texto.substring(depoisIdx) : '';
-
-  // Ordenar: caminho primeiro, destinos, planb
-  var ord = {caminho:0, destino:1, planb:2, expansao:3};
-  var ordenados = cluster.slice().sort(function(a,b) {
-    return (ord[a.tipo]||1) - (ord[b.tipo]||1);
-  });
-
-  var listaScores = '
-' + ordenados.map(function(s){ return s.score; }).join('
-');
-
-  return antes + listaScores + depois;
-}
 
 async function analisarJogo() {
   if(S.thinking) return;
@@ -2046,7 +1915,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
       .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--txt)">$1</strong>')
       .trim();
 
-    if(out) out.innerHTML = formatarNarrativa(fmt);
+    if(out) out.innerHTML = fmt;
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
@@ -2207,8 +2076,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
       // Show analysis text + context warnings above cluster
       // Formatar narrativa com hierarquia visual
       const fmtCorrigido = injetarScoresNarrativa(fmt||'', S.currentCluster);
-      const narrativaFormatada = formatarNarrativa(fmtCorrigido);
-      if(out) out.innerHTML = narrativaFormatada + contextWarnings;
+      if(out) out.innerHTML = fmtCorrigido.replace(/\n/g,'<br>') + contextWarnings;
       renderCluster(cluster, stake);
       notify('CLUSTER GERADO', cluster.length+' scores — R$'+stake, 'var(--grn)');
     } else {
