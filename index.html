@@ -1764,7 +1764,7 @@ Todo raciocínio técnico fica no cérebro do robô.
 REGRAS DO JSON:
 - "tipo" deve ser: "caminho", "destino" ou "planb"
 - "scores" sempre tem 5-7 items
-- "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
+- "ancora" = SEMPRE vitória do favorito (1-0, 2-0, 2-1). NUNCA 1-1, 0-0 ou placar do adversário (H2H 2x+ prevalece, senão xG)
 - Nunca incluir 0-0
 - 1-1 SEMPRE obrigatório como planb em todos os jogos
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
@@ -3510,4 +3510,53 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </div><!-- /app-body -->
 </body>
-</html>
+</html>function injetarScoresNarrativa(texto, cluster) {
+  if(!cluster || cluster.length === 0) return texto;
+
+  // Buscar marcador case-insensitive com variações
+  var textoLower = texto.toLowerCase();
+  var marcadores = [
+    'minha fórmula de placares para este jogo será:',
+    'minha formula de placares para este jogo sera:',
+    'fórmula de placares para este jogo será:',
+    'formula de placares'
+  ];
+
+  var idx = -1;
+  var marcadorLen = 0;
+  for(var i=0; i<marcadores.length; i++) {
+    idx = textoLower.indexOf(marcadores[i]);
+    if(idx > -1) { marcadorLen = marcadores[i].length; break; }
+  }
+  if(idx === -1) return texto;
+
+  var fimMarcador = idx + marcadorLen;
+
+  // Encontrar fim da lista — buscar próximo parágrafo com "Minha seleção" ou "Plano A"
+  var fins = ['minha seleção', 'plano a', 'plano b'];
+  var proxParagrafo = -1;
+  for(var j=0; j<fins.length; j++) {
+    var p = textoLower.indexOf(fins[j], fimMarcador + 5);
+    if(p > -1) {
+      // Recuar até início do parágrafo
+      var inicio = texto.lastIndexOf('
+', p);
+      if(inicio > fimMarcador) { proxParagrafo = inicio; break; }
+    }
+  }
+  if(proxParagrafo === -1) return texto;
+
+  // Ordenar: caminho PRIMEIRO, destinos, planb
+  var ord = {caminho:0, destino:1, planb:2, expansao:3};
+  var ordenados = cluster.slice().sort(function(a,b) {
+    return (ord[a.tipo]||1) - (ord[b.tipo]||1);
+  });
+
+  var lista = '
+' + ordenados.map(function(s){ return s.score; }).join('
+');
+
+  return texto.substring(0, fimMarcador) + lista + texto.substring(proxParagrafo);
+}
+
+
