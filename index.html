@@ -1832,27 +1832,18 @@ function formatarNarrativa(texto) {
       // Validação — ignorar (aparece abaixo)
       if(/VALIDAÇÃO.*\/5|Confiança/i.test(linha) && /\d\/\d/.test(linha)) return;
 
-        // Score individual na lista vertical
+      // Score individual na lista vertical — injetar caminho se faltar
       if(/^\d{1,2}-\d{1,2}$/.test(linha.trim())) {
-        // Ignorar scores do robô — a lista será gerada pelo cluster abaixo
-        window._scoresSeen = true;
-        return;
-      }
-
-      // Linha "Com base nisso" — gerar lista completa do cluster aqui
-      if(/Com base nisso|minha fórmula/i.test(linha)) {
-        html += '<p style="margin:0 0 10px;text-transform:none;">'+linha+'</p>';
-        // Gerar lista a partir do cluster real
-        if(S.currentCluster && S.currentCluster.length > 0) {
-          var ord = {caminho:0, destino:1, planb:2, expansao:3};
-          var sorted = S.currentCluster.slice().sort(function(a,b){ return (ord[a.tipo]||1)-(ord[b.tipo]||1); });
-          sorted.forEach(function(s) {
-            var isCam = s.tipo === 'caminho';
-            html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:13px;' +
-              (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
-              s.score + (isCam ? ' ←' : '') + '</p>';
-          });
+        if(typeof window._scoresSeen === 'undefined') window._scoresSeen = false;
+        // Se primeiro score da lista E não é o caminho → injetar caminho primeiro
+        if(!window._scoresSeen && scoreCaminho && linha.trim() !== scoreCaminho) {
+          html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ←</p>';
         }
+        window._scoresSeen = true;
+        var isCam = (scoreCaminho && linha.trim() === scoreCaminho);
+        html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;' +
+          (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
+          linha.trim() + (isCam ? ' ←' : '') + '</p>';
         return;
       }
 
@@ -1886,6 +1877,36 @@ function formatarNarrativa(texto) {
   return html;
 }
 
+
+function injetarScoresNarrativa(texto, cluster) {
+  if(!cluster || cluster.length === 0) return texto;
+
+  var marcador = 'minha fórmula de placares para este jogo será:';
+  var idx = texto.toLowerCase().indexOf(marcador);
+  if(idx === -1) return texto;
+
+  var antes = texto.substring(0, idx + marcador.length);
+
+  // Encontrar onde a lista termina — próximo parágrafo com "Minha seleção"
+  var depoisIdx = texto.indexOf('
+
+Minha seleção', idx);
+  if(depoisIdx === -1) depoisIdx = texto.indexOf('
+Minha seleção', idx);
+  var depois = depoisIdx > -1 ? texto.substring(depoisIdx) : '';
+
+  // Ordenar: caminho primeiro, destinos, planb
+  var ord = {caminho:0, destino:1, planb:2, expansao:3};
+  var ordenados = cluster.slice().sort(function(a,b) {
+    return (ord[a.tipo]||1) - (ord[b.tipo]||1);
+  });
+
+  var listaScores = '
+' + ordenados.map(function(s){ return s.score; }).join('
+');
+
+  return antes + listaScores + depois;
+}
 
 async function analisarJogo() {
   if(S.thinking) return;
@@ -2185,7 +2206,8 @@ O Plano B é o seguro — sem ele não há proteção.`;
       }
       // Show analysis text + context warnings above cluster
       // Formatar narrativa com hierarquia visual
-      const narrativaFormatada = formatarNarrativa(fmt||'');
+      const fmtCorrigido = injetarScoresNarrativa(fmt||'', S.currentCluster);
+      const narrativaFormatada = formatarNarrativa(fmtCorrigido);
       if(out) out.innerHTML = narrativaFormatada + contextWarnings;
       renderCluster(cluster, stake);
       notify('CLUSTER GERADO', cluster.length+' scores — R$'+stake, 'var(--grn)');
