@@ -1725,8 +1725,7 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     {"score":"3-1","tipo":"destino"},
     {"score":"1-1","tipo":"planb"},
     {"score":"0-1","tipo":"planb"}
-  ],
-  "expansao": null
+  ]
 ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
 - favorito em casa: h>a = caminho/destino | h<=a = planb
 - favorito fora: a>h = caminho/destino | a<=h = planb
@@ -1771,14 +1770,6 @@ REGRAS DO JSON:
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
 - 0-0 NUNCA incluir
 - Odds NÃO vão no JSON — vêm do campo CS da Betfair
-- "expansao" segue esta regra:
-  → Se cluster tem 6 scores: expansao = null
-  → Se cluster tem 5 scores: avaliar justificativa:
-    • Ambos Marcam < @1.85 → sugerir 2-2 ou 3-1
-    • Over < @1.75 → sugerir score mais alto
-    • H2H score histórico repetido → sugerir ele
-    • Sem justificativa → expansao = null
-  Formato quando há justificativa: {"score":"3-1","motivo":"Over baixo confirma volume"}
 `;
 
 
@@ -2227,13 +2218,6 @@ function extractCluster(text, stake) {
         }
       });
 
-      // Store expansao for optional card display
-      if(data.expansao && data.expansao.score) {
-        cluster._expansao = data.expansao;
-      } else {
-        cluster._expansao = null;
-      }
-
       // Ensure 1-1 present
       if(!cluster.some(s=>s.score==='1-1') && S.csOdds['1-1']>0) {
         cluster.push({score:'1-1',odd:S.csOdds['1-1'],tipo:'planb',
@@ -2676,7 +2660,15 @@ function renderCluster(cluster, stake) {
 
   card.style.display = 'block';
 
-  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0));
+  // Identificar score opcional = maior odd quando cluster tem 6+
+  let opcionalScore = null;
+  if(cluster.length >= 6) {
+    const validos = cluster.filter(s => s.odd > 0 && s.tipo !== 'expansao');
+    opcionalScore = validos.reduce((max, s) => s.odd > max.odd ? s : max, validos[0]);
+    if(opcionalScore) opcionalScore._opcional = true;
+  }
+
+  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && !s._opcional));
   const mxL = Math.max(...cluster.map(s=>s.lucro||0));
   const ts = cluster.reduce((a,s)=>a+(s.stake||0),0);
   const worstCase = -stake;
@@ -2722,6 +2714,17 @@ function renderCluster(cluster, stake) {
   // BIG SCORE CARDS — prominent buttons
   scoresEl.innerHTML = cluster.map((s,idx) => {
     const col = colors[s.tipo] || colors.destino;
+
+    // Score opcional — estilo laranja tracejado
+    if(s._opcional) {
+      return \`<div style="background:rgba(255,122,53,.06);border:2px dashed rgba(255,122,53,.5);border-radius:12px;padding:14px 10px;text-align:center;position:relative;cursor:default;">
+        <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);"><span style="background:rgba(255,122,53,.15);border:1px solid var(--org);border-radius:4px;padding:2px 8px;font-size:7px;color:var(--org);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;">✨ EXPANSÃO</span></div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;letter-spacing:4px;color:var(--org);margin-top:22px;margin-bottom:4px;">\${s.score}</div>
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--txt);margin-bottom:4px;font-weight:700;">@ \${s.odd>0?s.odd:'?'}</div>
+        <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--org);margin-bottom:8px;">\${s.prob}% implícita</div>
+        <button onclick="toggleOpcional('\${s.score}')" style="background:rgba(255,122,53,.1);border:1px solid var(--org);border-radius:6px;padding:4px 10px;color:var(--org);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;">+ INCLUIR</button>
+      </div>\`;
+    }
 
     // ⭐ Anchor = score from JSON "ancora" field
     const jsonAncora = S.currentGame?.lastAncora || null;
@@ -3229,6 +3232,14 @@ function analisarLive() {
 
   const lev=document.getElementById('l-ev');
   if(lev) lev.value='';
+}
+
+function toggleOpcional(score) {
+  const s = S.currentCluster.find(x => x.score === score);
+  if(!s) return;
+  s._incluido = !s._incluido;
+  notify(s._incluido ? '✅ INCLUÍDO' : '❌ REMOVIDO', score + ' do cluster', s._incluido ? 'var(--org)' : 'var(--txt3)');
+  renderCluster(S.currentCluster, S.currentGame?.stake || S.stake);
 }
 
 function renderLiveCluster() {
