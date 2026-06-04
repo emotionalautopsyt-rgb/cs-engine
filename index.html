@@ -2071,7 +2071,7 @@ O Plano B é o seguro — sem ele não há proteção.`;
     const cluster = extractCluster(reply, stake);
 
     // Extract ALERTA DO GÊNIO from reply
-    const alertaMatch = reply.match(/(?:⚠️\s*ALERTA|[-•]\s*Gestão ao vivo)[:\s]+([^\n]+)/i);
+    const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
     const alertaText = alertaMatch ? alertaMatch[1].trim() : null;
 
     // Copa/early season + validation cross-check banners
