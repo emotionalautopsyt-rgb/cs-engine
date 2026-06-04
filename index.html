@@ -1617,6 +1617,23 @@ O score CAMINHO (1-0 para favorito em casa, 0-1 para favorito fora)
 DEVE aparecer como PRIMEIRO item da lista, antes de qualquer outro score.
 NUNCA omitir o score de entrada do jogo.
 
+VERIFICAÇÃO OBRIGATÓRIA antes de escrever a lista:
+Pergunta: "Qual é o score CAMINHO do JSON?" → esse score DEVE ser o PRIMEIRO.
+Se não está na lista → lista INCOMPLETA → reescrever.
+
+EXEMPLO CORRETO (favorito em casa):
+1-0   ← CAMINHO — SEMPRE PRIMEIRO
+2-0
+2-1
+1-1
+0-1
+
+EXEMPLO ERRADO (NUNCA fazer):
+2-0   ← ERRADO — 1-0 sumiu da lista
+2-1
+1-1
+0-1
+
 Escrever EXATAMENTE neste formato:
 
 "Com base nisso, minha fórmula de placares para este jogo será:
