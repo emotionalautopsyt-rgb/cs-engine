@@ -1832,18 +1832,27 @@ function formatarNarrativa(texto) {
       // Validação — ignorar (aparece abaixo)
       if(/VALIDAÇÃO.*\/5|Confiança/i.test(linha) && /\d\/\d/.test(linha)) return;
 
-      // Score individual na lista vertical — injetar caminho se faltar
+        // Score individual na lista vertical
       if(/^\d{1,2}-\d{1,2}$/.test(linha.trim())) {
-        if(typeof window._scoresSeen === 'undefined') window._scoresSeen = false;
-        // Se primeiro score da lista E não é o caminho → injetar caminho primeiro
-        if(!window._scoresSeen && scoreCaminho && linha.trim() !== scoreCaminho) {
-          html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;font-weight:700;color:var(--acc);">' + scoreCaminho + ' ←</p>';
-        }
+        // Ignorar scores do robô — a lista será gerada pelo cluster abaixo
         window._scoresSeen = true;
-        var isCam = (scoreCaminho && linha.trim() === scoreCaminho);
-        html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:12px;' +
-          (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
-          linha.trim() + (isCam ? ' ←' : '') + '</p>';
+        return;
+      }
+
+      // Linha "Com base nisso" — gerar lista completa do cluster aqui
+      if(/Com base nisso|minha fórmula/i.test(linha)) {
+        html += '<p style="margin:0 0 10px;text-transform:none;">'+linha+'</p>';
+        // Gerar lista a partir do cluster real
+        if(S.currentCluster && S.currentCluster.length > 0) {
+          var ord = {caminho:0, destino:1, planb:2, expansao:3};
+          var sorted = S.currentCluster.slice().sort(function(a,b){ return (ord[a.tipo]||1)-(ord[b.tipo]||1); });
+          sorted.forEach(function(s) {
+            var isCam = s.tipo === 'caminho';
+            html += '<p style="margin:0 0 4px;font-family:\'Space Mono\',monospace;font-size:13px;' +
+              (isCam ? 'font-weight:700;color:var(--acc);' : 'color:#c8d8f0;') + '">' +
+              s.score + (isCam ? ' ←' : '') + '</p>';
+          });
+        }
         return;
       }
 
