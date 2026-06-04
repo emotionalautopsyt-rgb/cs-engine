@@ -2664,8 +2664,12 @@ function renderCluster(cluster, stake) {
   let opcionalScore = null;
   if(cluster.length >= 6) {
     const validos = cluster.filter(s => s.odd > 0 && s.tipo !== 'expansao');
-    opcionalScore = validos.reduce((max, s) => s.odd > max.odd ? s : max, validos[0]);
-    if(opcionalScore) opcionalScore._opcional = true;
+    const maiorOdd = validos.reduce((max, s) => s.odd > max.odd ? s : max, validos[0]);
+    // Só marca como opcional se odd >= @15 (score distante do resultado esperado)
+    if(maiorOdd && maiorOdd.odd >= 15) {
+      opcionalScore = maiorOdd;
+      opcionalScore._opcional = true;
+    }
   }
 
   const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && !s._opcional));
@@ -2695,13 +2699,21 @@ function renderCluster(cluster, stake) {
   } else if(total === 5) {
     explWhy = `<strong style="color:var(--acc);">5 SCORES — COBERTURA DUPLA:</strong> ${planoAStr}${planoBStr}. Favorito curto — cluster concentrado.`;
   } else if(total === 6) {
-    explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
+    const temOpc = cluster.some(s => s._opcional);
+    if(temOpc) {
+      explWhy = `<strong style="color:var(--org);">5 SCORES + 1 OPCIONAL:</strong> Cluster concentrado nos 5 principais. Score de expansão disponível se quiser mais cobertura — maior odd, menor probabilidade.`;
+    } else {
+      explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
+    }
   } else {
     explWhy = `<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> ${planoAStr}${planoBStr}. Jogo aberto com ambos os lados cobertos.`;
   }
 
+  const opcCount = cluster.filter(s => s._opcional).length;
+  const mainCount = total - opcCount;
+  const countLabel = opcCount > 0 ? mainCount + ' + 1 OPC' : total + ' SCORES';
   if(statsEl) statsEl.innerHTML = `
-    <span class="bdg bdg-b">${total} SCORES</span>
+    <span class="bdg bdg-b">${countLabel}</span>
     <span class="bdg" style="color:${probColor};border-color:${probColor};background:rgba(0,0,0,.3);margin-left:4px;">PROB ${probTotal}%</span>`;
 
   const colors = {
