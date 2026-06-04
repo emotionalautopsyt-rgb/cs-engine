@@ -1619,20 +1619,23 @@ NUNCA omitir o score de entrada do jogo.
 
 VERIFICAÇÃO OBRIGATÓRIA antes de escrever a lista:
 Pergunta: "Qual é o score CAMINHO do JSON?" → esse score DEVE ser o PRIMEIRO.
-Se não está na lista → lista INCOMPLETA → reescrever.
+Se não está na lista → PARAR — lista INCOMPLETA — reescrever do zero.
 
 EXEMPLO CORRETO (favorito em casa):
-1-0   ← CAMINHO — SEMPRE PRIMEIRO
+1-0   ← CAMINHO — OBRIGATORIAMENTE PRIMEIRO
 2-0
 2-1
 1-1
 0-1
 
-EXEMPLO ERRADO (NUNCA fazer):
-2-0   ← ERRADO — 1-0 sumiu da lista
-2-1
+EXEMPLO ERRADO (PROIBIDO — nunca fazer):
+2-1   ← PROIBIDO — 1-0 está faltando
 1-1
+2-0
 0-1
+1-2
+
+TESTE FINAL: o 1-0 está na primeira linha? SE NÃO → apagar e reescrever.
 
 Escrever EXATAMENTE neste formato:
 
@@ -1671,6 +1674,11 @@ Exemplos corretos de ALERTA:
 "Amistoso pode travar após 1-0 — padrão da Holanda é não forçar quando já tem vantagem."
 "Ambos Marcam elevado indica que adversário pode aparecer — Plano B tem peso real."
 PROIBIDO no ALERTA: "lay", "odd", "posição", "proteger", "aguardar comprimir".
+PROIBIDO: copiar a frase da linha "Gestão ao vivo" — são sempre frases diferentes.
+SE o ALERTA que você escreveu é igual à Gestão → apagar e escrever sobre risco do contexto:
+"Amistoso sem pressão pode travar em 0-0 por mais tempo que o normal."
+"Grécia tem qualidade nas transições — gol em contra-ataque é risco real."
+
 
 PROIBIDO:
 → "Estou analisando...", "Vou analisar..."
@@ -1764,7 +1772,7 @@ Todo raciocínio técnico fica no cérebro do robô.
 REGRAS DO JSON:
 - "tipo" deve ser: "caminho", "destino" ou "planb"
 - "scores" sempre tem 5-7 items
-- "ancora" = score mais provável (H2H 2x+ prevalece, senão xG)
+- "ancora" = SEMPRE o score CAMINHO (1-0 para favorito em casa, 0-1 para favorito fora). Nunca usar 1-1 como ancora.
 - Nunca incluir 0-0
 - 1-1 SEMPRE obrigatório como planb em todos os jogos
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
