@@ -327,6 +327,8 @@ select{cursor:pointer;appearance:none;}
   </div>
   <div class="sb-section" id="sb-tmr-label" style="display:none;">📅 AMANHÃ</div>
   <div id="sb-tmr-list"></div>
+  <div class="sb-section" id="sb-other-label" style="display:none;">📆 OUTROS DIAS</div>
+  <div id="sb-other-list"></div>
   <div class="sb-footer">
     <button class="sb-hist-btn" onclick="openHistModal()">📅 HISTÓRICO DE DIAS</button>
   </div>
@@ -371,12 +373,12 @@ select{cursor:pointer;appearance:none;}
 e garantir que o DNA seja lido corretamente."></textarea>
         </div>
 
-        <!-- ODDS PACKBALL -->
+        <!-- ODDS DE MERCADO -->
         <div class="dv"></div>
-        <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro Packball</div>
+        <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro de Entrada</div>
         <div class="ab ab-b" style="margin-bottom:10px;">
           <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO</div>
-          <div class="ab-text">O americano opera qualquer liga se as odds de mercado tiverem edge. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
+          <div class="ab-text">O Gênio opera qualquer liga se as odds de mercado tiverem edge. Favorito @1.30-2.35 + BTTS + Over dentro do range = pode operar. A liga não importa — o jogo específico importa.</div>
         </div>
         <div class="g3">
           <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
@@ -431,7 +433,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
             <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div>
             <div style="display:flex;flex-direction:column;gap:8px;text-align:left;max-width:200px;margin:0 auto;">
               <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">1</span>Cole a análise do jogo</div>
-              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">2</span>Informe as odds Packball</div>
+              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">2</span>Informe as odds de mercado</div>
               <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">3</span>Cole as odds da Betfair</div>
               <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">4</span>Clique ANALISAR</div>
             </div>
@@ -661,7 +663,10 @@ function openModal() {
     if(f) f.value='';
     const h=document.getElementById('nj-h');
     if(h) h.value='';
-    setGameDate('hoje'); // default today
+    // Sempre forçar hoje ao abrir o modal
+    var dataEl = document.getElementById('nj-data');
+    if(dataEl) dataEl.value = td();
+    setGameDate('hoje');
   } catch(e) {}
 }
 function closeModal() {
@@ -712,9 +717,9 @@ function criarJogo() {
 
 // ===== SIDEBAR RENDER =====
 function renderSidebar() {
-  const today = td();
+  const today    = td();
   const tomorrow = tmr();
-  const sbDate = document.getElementById('sb-date');
+  const sbDate   = document.getElementById('sb-date');
   if(sbDate) {
     const now = new Date();
     const dn = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -722,49 +727,73 @@ function renderSidebar() {
   }
 
   const allGames = S.games || [];
-  const liveGames  = allGames.filter(g => g.data === today && g.status === 'live');
-  const preGames   = allGames.filter(g => g.data === today && g.status !== 'live' && g.status !== 'enc');
-  const doneGames  = allGames.filter(g => g.data === today && g.status === 'enc');
-  const tmrGames   = allGames.filter(g => g.data === tomorrow);
 
-  // Live section
+  // Separar por data — comparação normalizada
+  const liveGames  = allGames.filter(function(g){ return g.data === today && g.status === 'live'; });
+  const preGames   = allGames.filter(function(g){ return g.data === today && g.status !== 'live' && g.status !== 'enc'; });
+  const doneGames  = allGames.filter(function(g){ return g.data === today && g.status === 'enc'; });
+  const tmrGames   = allGames.filter(function(g){ return g.data === tomorrow; });
+  // Jogos de outros dias (passado ou além de amanhã)
+  const otherGames = allGames.filter(function(g){ return g.data !== today && g.data !== tomorrow; });
+
+  // ── LIVE ──────────────────────────────────────────────────
   const liveLabel = document.getElementById('sb-live-label');
   const liveList  = document.getElementById('sb-live-list');
   if(liveLabel && liveList) {
     if(liveGames.length > 0) {
       liveLabel.style.display = 'block';
-      liveList.innerHTML = liveGames.map(g => sbGameCard(g)).join('');
+      liveList.innerHTML = liveGames.map(function(g){ return sbGameCard(g); }).join('');
     } else {
       liveLabel.style.display = 'none';
       liveList.innerHTML = '';
     }
   }
 
-  // Today list (pre + done)
+  // ── HOJE ──────────────────────────────────────────────────
   const todayList = document.getElementById('sb-today-list');
-  // Update hoje count badge
-  var hojeCount = document.getElementById('hoje-count');
-  if(hojeCount) hojeCount.textContent = (preGames.length+doneGames.length) > 0 ? (preGames.length+doneGames.length) : '';
+  var hojeCount   = document.getElementById('hoje-count');
+  var hojeTotal   = preGames.length + doneGames.length;
+  if(hojeCount) hojeCount.textContent = hojeTotal > 0 ? hojeTotal : '';
   if(todayList) {
     const all = [...preGames, ...doneGames];
     if(all.length === 0) {
-      todayList.innerHTML = `<div style="text-align:center;padding:20px;color:var(--txt3);font-family:'Space Mono',monospace;font-size:8px;">Nenhum jogo.<br>Cole uma análise<br>para começar.</div>`;
+      todayList.innerHTML =
+        '<div style="text-align:center;padding:24px 16px;color:var(--txt3);">'+
+        '<div style="font-size:28px;margin-bottom:8px;opacity:.4;">⚽</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--txt3);margin-bottom:4px;">SEM JOGOS</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;line-height:1.8;opacity:.7;">Cole uma análise<br>e clique ANALISAR</div>'+
+        '</div>';
     } else {
-      todayList.innerHTML = all.map(g => sbGameCard(g)).join('');
+      todayList.innerHTML = all.map(function(g){ return sbGameCard(g); }).join('');
     }
   }
 
-  // Tomorrow section
+  // ── AMANHÃ ────────────────────────────────────────────────
   const tmrLabel = document.getElementById('sb-tmr-label');
   const tmrList  = document.getElementById('sb-tmr-list');
   if(tmrLabel && tmrList) {
     if(tmrGames.length > 0) {
       tmrLabel.style.display = 'block';
-      tmrList.style.padding = '6px 8px';
-      tmrList.innerHTML = tmrGames.map(g => sbGameCard(g)).join('');
+      tmrList.style.padding  = '6px 8px';
+      tmrList.innerHTML = tmrGames.map(function(g){ return sbGameCard(g); }).join('');
     } else {
       tmrLabel.style.display = 'none';
       tmrList.innerHTML = '';
+    }
+  }
+
+  // ── OUTROS DIAS ───────────────────────────────────────────
+  // Agrupar por data e exibir cada grupo
+  var otherLabel = document.getElementById('sb-other-label');
+  var otherList  = document.getElementById('sb-other-list');
+  if(otherLabel && otherList) {
+    if(otherGames.length > 0) {
+      otherLabel.style.display = 'block';
+      otherList.style.padding  = '6px 8px';
+      otherList.innerHTML = otherGames.map(function(g){ return sbGameCard(g); }).join('');
+    } else {
+      otherLabel.style.display = 'none';
+      otherList.innerHTML = '';
     }
   }
 }
@@ -1095,7 +1124,7 @@ function applyStake(v) {
   notify('STAKE', 'R$ '+val, 'var(--ylw)');
 }
 
-// ===== PACKBALL CHECK =====
+// ===== FILTRO DE ENTRADA =====
 function checkPackball() {
   const fav = parseFloat(document.getElementById('pk-fav')?.value);
   const btts = parseFloat(document.getElementById('pk-btts')?.value);
@@ -1128,7 +1157,7 @@ function checkPackball() {
   const perfilBadge = perfil ? `<span style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:4px;padding:2px 6px;font-size:9px;color:var(--acc);margin-left:8px;">${perfil}</span>` : '';
 
   if(fails === 0) {
-    el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ PACKBALL APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | BTTS @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
+    el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ FILTRO APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | BTTS @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
   } else if(fails === 1) {
     el.innerHTML = '<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora'+perfilBadge+'</div><div class="ab-text">Stake -30%. '+(!fO?'Fav @'+fav+' fora (1.30-2.35). ':'')+(!bO?'BTTS @'+btts+' fora (1.65-2.15). ':'')+(!oO?'Over @'+over+' fora (1.70-2.20).':'')+'</div></div>';
   } else {
@@ -1286,7 +1315,7 @@ Verificar obrigatoriamente:
   Copa NÃO bloqueia DNA nem H2H — apenas xG❌. DNA/H2H com dados disponíveis = usar.
 
 ═══════════════════════════════════════
-PASSO 1 — FILTRO PACKBALL
+PASSO 1 — FILTRO DE ENTRADA
 ═══════════════════════════════════════
 Favorito: @1.25–2.35 ✅
 BTTS:     até @2.15  ✅
@@ -1400,7 +1429,7 @@ SE BTTS @1.75–1.90:
 SE BTTS > @1.90:
 → 0-1 entra com stake relevante.
 → Adversário pode segurar o placar sem o favorito empatar.
-→ O americano acredita FORTEMENTE no favorito marcando.
+→ O Gênio acredita FORTEMENTE no favorito marcando.
    Quando BTTS é alto, 0-1 representa risco real não coberto pelo 1-1.
 
 ═══════════════════════════════════════
@@ -1596,7 +1625,7 @@ Down to zero: automático quando score verde atingir target.
 
 JOGO 2 PERNAS: scores que eliminam favorito no agregado = NÃO cobrir. Sair após 70'.
 
-Você é o Genie do americano.
+Você é o Gênio dos Placares.
 
 ═══════════════════════════════════════
 FORMATO DE RESPOSTA — OBRIGATÓRIO
@@ -1892,7 +1921,7 @@ async function analisarJogo() {
                 parseFloat((S.stake * 0.67).toFixed(2));
 
   if(!texto) { notify('ERRO', 'Cole a análise do jogo primeiro', 'var(--red)'); return; }
-  if(!fav || !btts || !over) { notify('ERRO', 'Preencha as odds Packball primeiro', 'var(--red)'); return; }
+  if(!fav || !btts || !over) { notify('ERRO', 'Preencha as odds de mercado primeiro', 'var(--red)'); return; }
 
   // AUTO-DETECT GAME from text
   const detected = detectGame(texto);
@@ -1966,7 +1995,7 @@ ${texto}
 CAMPO 2 — ODDS CORRECT SCORE BETFAIR (odds BACK reais):
 ${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use estimativas e indique.'}
 
-PACKBALL: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
+FILTRO DE ENTRADA: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
 STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
 
 Use o Campo 1 para identificar padrão de resultados e contexto.
@@ -2109,7 +2138,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"If it doesn't double — don't trade."</em> — americano<br><br>
+          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -2141,7 +2170,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"If it doesn't double — don't trade."</em> — americano<br><br>
+          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -3211,10 +3240,10 @@ function analisarLive() {
   // Events
   if(ev==='redfav') {
     narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; cor='ab-r'; risco='EXTREMO';
-    acao='🟥 CARTÃO VERMELHO — FAVORITO\n→ SAÍDA IMEDIATA. Lay total agora.\n→ Loss controlado agora > loss total depois.\n→ "If in doubt — GET OUT." — americano\n→ Não tenta recovery. Aceita e fecha.';
+    acao='🟥 CARTÃO VERMELHO — FAVORITO\n→ SAÍDA IMEDIATA. Lay total agora.\n→ Loss controlado agora > loss total depois.\n→ Dúvida = saída. Sempre.\n→ Não tenta recovery. Aceita e fecha.';
   } else if(ev==='redadv') {
     cor='ab-y'; risco='MÉDIO';
-    acao='🟥 CARTÃO VERMELHO — ADVERSÁRIO\n→ Cuidado: compressão será PEQUENA mesmo em score verde.\n→ Mercado precifica mais gols = difícil travar lucro.\n→ Se já tem green disponível → considera sair ANTES do caos.\n→ "Red cards are wild cards." — americano';
+    acao='🟥 CARTÃO VERMELHO — ADVERSÁRIO\n→ Cuidado: compressão será PEQUENA mesmo em score verde.\n→ Mercado precifica mais gols = difícil travar lucro.\n→ Se já tem green disponível → considera sair ANTES do caos.\n→ Cartão vermelho = variável imprevisível. Cautela máxima.';
   } else if(ev==='expfav') {
     narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; cor='ab-r'; risco='EXTREMO';
     acao='🚨 EXPULSÃO DO FAVORITO\n→ Fechar TUDO imediatamente.\n→ Aceitar red mínimo.\n→ Tese morreu. Não escalar.';
@@ -3236,7 +3265,7 @@ function analisarLive() {
     // Two-legs: earlier exit after 70'
     if(S.twoLegs && m>=70) {
       cor='ab-g'; risco='BAIXO';
-      acao='✅ GOL FAVORITO ('+m+') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85\' + — times podem aceitar prorrogação.\n→ Teams will just settle for extra time. — americano';
+      acao='✅ GOL FAVORITO ('+m+') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85\' + — times podem aceitar prorrogação.\n→ Times aceitam prorrogação — não arrisca o resultado.';
     } else if(m<30) {
       cor='ab-b'; acao='⏳ GOL FAVORITO ('+m+') — CEDO DEMAIS\n→ AGUARDAR odd do caminho cair para 2.5-3.5.\n→ Não lay agora — deixar comprimir.\n→ Próximo passo: lay parcial quando odd < 3.5.';
     } else if(m<60) {
