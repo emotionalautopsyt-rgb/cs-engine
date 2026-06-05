@@ -2978,37 +2978,44 @@ function renderCluster(cluster, stake) {
 
 // ===== AUTO DETECT GAME FROM ANALYSIS TEXT =====
 function detectGameDate(text) {
-  // Try to detect game date from analysis text
-  // Patterns: "13 maio 2026", "13/05/2026", "2026-05-13"
+  // Detecta data do texto da análise
+  // Só aceita hoje ou amanhã — qualquer outra data = hoje
+  const today    = td();
+  const tomorrow = tmr();
+  const now      = new Date();
+
   const months = {
     'jan':1,'fev':2,'mar':3,'abr':4,'mai':5,'jun':6,
     'jul':7,'ago':8,'set':9,'out':10,'nov':11,'dez':12,
     'janeiro':1,'fevereiro':2,'março':3,'abril':4,'maio':5,'junho':6,
     'julho':7,'agosto':8,'setembro':9,'outubro':10,'novembro':11,'dezembro':12
   };
-  const today = td();
-  const tomorrow = tmr();
-  const now = new Date();
 
-  // Pattern: "13 maio 2026" or "13 mai - 10:00"
+  function normalizeDate(dateStr) {
+    // Só retorna a data se for hoje ou amanhã — senão hoje
+    if(dateStr === today || dateStr === tomorrow) return dateStr;
+    return today;
+  }
+
+  // Pattern: "13 maio 2026" ou "13 mai"
   const m1 = text.match(/(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*/i);
   if(m1) {
     const day = parseInt(m1[1]);
     const mon = months[m1[2].toLowerCase().substring(0,3)];
     const year = now.getFullYear();
     const dateStr = year+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-    return dateStr;
+    return normalizeDate(dateStr);
   }
 
   // Pattern: "13/05/2026"
   const m2 = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if(m2) return m2[3]+'-'+m2[2]+'-'+m2[1];
+  if(m2) return normalizeDate(m2[3]+'-'+m2[2]+'-'+m2[1]);
 
   // Pattern: "2026-05-13"
   const m3 = text.match(/\d{4}-\d{2}-\d{2}/);
-  if(m3) return m3[0];
+  if(m3) return normalizeDate(m3[0]);
 
-  return today; // default today
+  return today; // default sempre hoje
 }
 
 function detectGame(text) {
