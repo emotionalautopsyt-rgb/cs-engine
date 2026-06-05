@@ -426,7 +426,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div id="cluster-summary"></div>
         <div class="dv"></div>
         <div class="g2" style="gap:8px;margin-top:4px;">
-          <button class="btn btn-g btn-full" onclick="irAoVivo()">IR PARA AO VIVO →</button>
+          
           <button class="btn btn-gh btn-full" onclick="resetCluster()">NOVO JOGO</button>
         </div>
       </div>
@@ -434,159 +434,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
   </div>
 </div>
 
-<!-- ===== AO VIVO ===== -->
-<div class="panel" id="panel-live">
-  <div class="g2">
-    <!-- ESQUERDA: ESTADO -->
-    <div>
-      <div class="card">
-        <div class="card-title">Estado do Jogo</div>
-        <div class="live-box">
-          <div class="live-dot">● LIVE</div>
-          <div class="live-teams" id="l-teams">— vs —</div>
-          <div class="live-score" id="l-sc">0 — 0</div>
-          <div class="live-min" id="l-min">⏱ 0'</div>
-        </div>
 
-        <!-- TIMING BAR -->
-        <div style="margin-bottom:14px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">TIMING DE PROTEÇÃO</span>
-            <span style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700;" id="l-timing-lbl">0' — NÃO PROTEGER</span>
-          </div>
-          <div class="tbar-wrap"><div id="l-tbar" class="tbar" style="width:0%;background:var(--grn);"></div></div>
-          <div style="display:flex;justify-content:space-between;margin-top:3px;">
-            <span style="font-size:7px;color:var(--txt3);">0'</span>
-            <span style="font-size:7px;color:var(--grn);">45'</span>
-            <span style="font-size:7px;color:var(--ylw);">70'</span>
-            <span style="font-size:7px;color:var(--red);">90'</span>
-          </div>
-        </div>
-
-        <!-- INPUTS -->
-        <div class="g3">
-          <div><label>Gols Casa</label><input id="l-gc" type="number" value="0" min="0" oninput="updLive()"></div>
-          <div><label>Gols Fora</label><input id="l-gf" type="number" value="0" min="0" oninput="updLive()"></div>
-          <div><label>Minuto</label><input id="l-m" type="number" value="0" min="0" max="120" oninput="updLive()"></div>
-        </div>
-
-        <!-- XG -->
-        <div class="xg-wrap">
-          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;margin-bottom:9px;">xG AO VIVO — GUIA DE DECISÃO</div>
-          <div class="xg-row">
-            <span class="xg-label" style="color:var(--acc);">xG Casa</span>
-            <div class="xg-barwrap"><div class="xg-bar" id="xgb-c" style="width:0%;background:var(--acc);"></div></div>
-            <input type="number" step="0.1" id="l-xgc" placeholder="0.0" oninput="updXG()"
-              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--acc);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
-          </div>
-          <div class="xg-row">
-            <span class="xg-label" style="color:var(--ylw);">xG Fora</span>
-            <div class="xg-barwrap"><div class="xg-bar" id="xgb-f" style="width:0%;background:var(--ylw);"></div></div>
-            <input type="number" step="0.1" id="l-xgf" placeholder="0.0" oninput="updXG()"
-              style="width:48px;background:#0a1520;border:1px solid var(--border);border-radius:5px;padding:3px 5px;color:var(--ylw);font-size:10px;outline:none;text-align:center;margin:0;font-family:'Space Mono',monospace;">
-          </div>
-          <div id="xg-msg" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);">Insira xG para análise</div>
-        </div>
-
-        <!-- ODD ATUAL + EVENTO -->
-        <div class="g2">
-          <div><label>Odd back score atual</label><input id="l-odd" type="number" step="0.1" placeholder="ex: 5.5"></div>
-          <div><label>Evento</label>
-            <select id="l-ev" onchange="registrarEvento(this.value)">
-              <option value="">Nenhum</option>
-              <option value="expfav">🟥 Expulsão Favorito</option>
-              <option value="expaz">🟨 Expulsão Adversário</option>
-              <option value="pen">⚽ Pênalti</option>
-              <option value="golfav">⚽ Gol Favorito</option>
-              <option value="golaz">⚽ Gol Adversário</option>
-              <option value="redfav">🟥 Cartão Vermelho — Favorito</option>
-              <option value="redadv">🟥 Cartão Vermelho — Adversário</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 2 PERNAS TOGGLE -->
-        <div style="display:flex;align-items:center;gap:10px;background:#0a1520;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
-          <input type="checkbox" id="two-legs" onchange="S.twoLegs=this.checked;notify(this.checked?'2 PERNAS ATIVO':'2 PERNAS OFF',this.checked?'Saída antecipada nos últimos 15min':'Gestão padrão',this.checked?'var(--acc)':'var(--txt3)')" style="width:16px;height:16px;accent-color:var(--acc);cursor:pointer;">
-          <div>
-            <div style="font-size:10px;font-weight:700;color:var(--acc);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">JOGO DE 2 PERNAS</div>
-            <div style="font-size:8px;color:var(--txt3);">Copa / Europa / Playoff — saída antecipada nos últimos 15'</div>
-          </div>
-        </div>
-
-        <button class="btn btn-p btn-full" onclick="analisarLive()" style="margin-bottom:10px;">ANALISAR AGORA</button>
-
-        <!-- AÇÕES RÁPIDAS -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
-          <button class="btn btn-g btn-sm" onclick="qa('lp')">LAY PARCIAL</button>
-          <button class="btn btn-y btn-sm" onclick="qa('lt')">LAY TOTAL</button>
-          <button class="btn btn-p btn-sm" onclick="qa('zo')">ZERO-OUT HT</button>
-          <button class="btn btn-gh btn-sm" onclick="qa('dm')">DOBRAR MÃO</button>
-          <button class="btn btn-r btn-sm" onclick="qa('co')">CASH OUT</button>
-          <button class="btn btn-gh btn-sm" onclick="qa('ma')">MANTER</button>
-        </div>
-        <!-- CARTÃO VERMELHO -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
-          <button onclick="registrarEvento('redfav')" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.4);border-radius:6px;padding:6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO FAV</button>
-          <button onclick="registrarEvento('redadv')" style="background:rgba(255,184,48,.08);border:1px solid rgba(255,184,48,.3);border-radius:6px;padding:6px;color:var(--ylw);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">🟥 CARTÃO ADV</button>
-        </div>
-
-        <div class="dv"></div>
-        <div style="background:#0a1520;border-radius:8px;padding:10px;">
-          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:7px;">RESULTADO RÁPIDO</div>
-          <div style="display:flex;gap:6px;">
-            <input id="l-rv" type="number" placeholder="+48 ou -36" step="0.01" style="flex:1;margin:0;">
-            <button class="btn btn-g btn-sm" onclick="regRapido()">✓</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- DIREITA: DECISÃO -->
-    <div>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <div class="card-title" style="margin-bottom:0;">Decisão da Engine</div>
-          <div id="live-edge"></div>
-        </div>
-        <div id="live-out">
-          <div style="text-align:center;padding:30px;color:var(--txt3);">
-            <div style="font-size:28px;margin-bottom:8px;">🔴</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;">INSIRA O ESTADO E ANALISE</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title" style="margin-bottom:4px;">🎯 Scores do Cluster — Entradas Pré-Live</div>
-        <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">Esses são os placares que você já entrou antes do jogo. O score atual fica destacado.</div>
-        <div id="live-cluster-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
-          <div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>
-        </div>
-        <div id="live-cluster">
-          <!-- compact list kept for reference -->
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Lay Sequencial + Timing</div>
-        <div class="mr"><span class="ml">Odd &lt; 3.5</span><span class="mv" style="color:var(--grn)">LAY AGORA</span></div>
-        <div class="mr"><span class="ml">Odd 3.5–6.0</span><span class="mv" style="color:var(--ylw)">AGUARDAR / ORDEM</span></div>
-        <div class="mr"><span class="ml">Odd &gt; 6.0</span><span class="mv" style="color:var(--txt3)">ORDEM @odd×0.60</span></div>
-        <div class="mr"><span class="ml">0-0 HT</span><span class="mv" style="color:var(--acc)">ORDEM LAY @odd×0.75</span></div>
-        <div class="mr"><span class="ml">HT no verde</span><span class="mv" style="color:var(--acc)">ZERO-OUT</span></div>
-        <div class="mr"><span class="ml">70'+ no alvo</span><span class="mv" style="color:var(--org)">COLETAR</span></div>
-        <div class="dv"></div>
-        <div class="mr"><span class="ml">&lt; 30'</span><span class="mv" style="color:var(--txt3)">0%</span></div>
-        <div class="mr"><span class="ml">30–45'</span><span class="mv" style="color:var(--grn)">10–20%</span></div>
-        <div class="mr"><span class="ml">45–60'</span><span class="mv" style="color:var(--ylw)">30–40%</span></div>
-        <div class="mr"><span class="ml">60–70'</span><span class="mv" style="color:var(--org)">50–60%</span></div>
-        <div class="mr"><span class="ml">70–80'</span><span class="mv" style="color:var(--red)">70–80%</span></div>
-        <div class="mr"><span class="ml">80'+</span><span class="mv" style="color:var(--red)">90–100%</span></div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ===== PERFORMANCE ===== -->
 <div class="panel" id="panel-perf">
@@ -1014,7 +862,7 @@ function iniciarLive(id) {
   g.status = 'live';
   S.currentGame = g;
   renderSidebar();
-  showTab('live', document.getElementById('tab-live'));
+  showTab('prelive', document.getElementById('tab-prelive'));
   const lt = document.getElementById('l-teams');
   if(lt) lt.textContent = g.name;
   notify('● LIVE', g.name, 'var(--red)');
@@ -1178,7 +1026,7 @@ function selectSbGame(id) {
 
   // Navigate to tab
   if(S.currentGame.status === 'live') {
-    showTab('live', document.getElementById('tab-live'));
+    showTab('prelive', document.getElementById('tab-prelive'));
     notify(S.currentGame.name, '● AO VIVO', 'var(--red)');
   } else {
     showTab('prelive', document.getElementById('tab-prelive'));
@@ -1957,7 +1805,7 @@ Plano B: ${engine.protection.join(', ')}
 Pirâmide: ${piramideCalculada}
 Perfil: ${engine.profileId}
 
-REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova. Não mude o ancora.\n\nÂNCORA DEFINITIVO: ${anchoraCalculada}\nNo PARÁGRAFO 3, DEVE aparecer este score como placar projetado.\nExemplo: '2-1 é o placar que esse jogo está pedindo.'\nPROIBIDO: mencionar outro score como mais provável que não seja o ancora.\n\nSua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
+REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova. Não mude o ancora.\n\nLISTA VERTICAL DA NARRATIVA DEVE CONTER TODOS ESSES SCORES:\nPlano A: ${engine.mainScores.join(', ')}\nPlano B: ${engine.protection.join(', ')}\nTotal na lista = ${engine.mainScores.length + engine.protection.length} scores (igual aos cards).\nNenhum score pode ficar fora da lista.\n\nÂNCORA DEFINITIVO: ${anchoraCalculada}\nNo PARÁGRAFO 3, DEVE aparecer este score como placar projetado.\nExemplo: '2-1 é o placar que esse jogo está pedindo.'\nPROIBIDO: mencionar outro score como mais provável que não seja o ancora.\n\nSua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
 
   // Show loading
   const out = document.getElementById('resultado-out');
@@ -2995,7 +2843,7 @@ function addGameToBar(game) {
 function irAoVivo() {
   const lt = document.getElementById('l-teams');
   if(lt && S.currentGame) lt.textContent = S.currentGame.name;
-  showTab('live', document.getElementById('tab-live'));
+  showTab('prelive', document.getElementById('tab-prelive'));
   notify('INDO PARA AO VIVO', 'Cluster travado', 'var(--acc)');
 }
 
