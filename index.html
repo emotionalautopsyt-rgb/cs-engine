@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gênio dos Placares</title>
+<title>🧠 Gênio dos Placares — CS Trading</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -13,8 +13,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 /* HEADER */
 .hdr{background:#060b11;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;}
 .logo{display:flex;align-items:center;gap:10px;}
-.lbox{width:32px;height:32px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:#000;}
-.lname{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:3px;}
+.lbox{width:36px;height:36px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:#000;box-shadow:0 0 14px rgba(0,212,255,.3);}
+.lname{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,var(--acc),#fff,var(--acc));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite;}
 .lver{font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);letter-spacing:1px;margin-top:1px;}
 .hstats{display:flex;gap:16px;align-items:center;}
 .hs{text-align:center;}
@@ -98,6 +98,7 @@ select{cursor:pointer;appearance:none;}
 /* BADGES */
 .bdg{padding:3px 8px;border-radius:20px;font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;letter-spacing:1px;text-transform:uppercase;display:inline-block;}
 .bdg-g{background:rgba(0,201,110,.1);color:var(--grn);border:1px solid rgba(0,201,110,.25);}
+.bdg-success{background:linear-gradient(135deg,rgba(0,201,110,.2),rgba(0,212,255,.1));color:var(--grn);border:1px solid var(--grn);animation:badgePop .4s ease;box-shadow:0 0 10px rgba(0,201,110,.2);}
 .bdg-r{background:rgba(255,77,106,.1);color:var(--red);border:1px solid rgba(255,77,106,.25);}
 .bdg-y{background:rgba(255,214,0,.1);color:var(--ylw);border:1px solid rgba(255,214,0,.25);}
 .bdg-b{background:rgba(0,212,255,.1);color:var(--acc);border:1px solid rgba(0,212,255,.25);}
@@ -115,8 +116,9 @@ select{cursor:pointer;appearance:none;}
 .ab-text{font-size:11px;color:var(--txt2);line-height:1.65;}
 
 /* SCORE CARDS */
-.score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
-.score-card{background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;position:relative;overflow:hidden;}
+.score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;}
+.score-card{background:#0a1520;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;animation:cardIn .4s ease both;}
+.score-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4);}
 .score-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
 .score-card.caminho::before{background:var(--acc);}
 .score-card.destino::before{background:var(--grn);}
@@ -164,6 +166,11 @@ select{cursor:pointer;appearance:none;}
 .live-box{background:linear-gradient(135deg,#0a1520,#0f1e2c);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center;margin-bottom:14px;position:relative;}
 .live-dot{position:absolute;top:10px;right:12px;font-family:'Space Mono',monospace;font-size:7px;letter-spacing:2px;color:var(--red);animation:blink 1.5s infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+@keyframes twblink{0%,100%{opacity:1;}50%{opacity:0;}}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes routeGlow{0%{text-shadow:0 0 0 transparent;}50%{text-shadow:0 0 20px var(--acc),0 0 40px var(--acc);}100%{text-shadow:0 0 8px rgba(0,212,255,.4);}}
+@keyframes badgePop{0%{transform:scale(0.5);opacity:0;}70%{transform:scale(1.15);}100%{transform:scale(1);opacity:1;}}
+@keyframes shimmer{0%{background-position:-200% center;}100%{background-position:200% center;}}
 .live-teams{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;color:var(--txt2);margin-bottom:7px;}
 .live-score{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:900;letter-spacing:10px;line-height:1;margin-bottom:5px;}
 .live-min{font-family:'Space Mono',monospace;font-size:10px;color:var(--grn);letter-spacing:2px;}
@@ -173,6 +180,10 @@ select{cursor:pointer;appearance:none;}
 .narr-box.morta{background:rgba(255,77,106,.05);border-color:var(--red);}
 .narr-label{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;margin-bottom:4px;}
 .narr-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;}
+/* Narrativa pré-live — legível e clean */
+#resultado-out{font-size:12px;line-height:1.85;color:var(--txt);}
+#resultado-out strong{color:var(--acc);}
+#resultado-out .ab-text{color:var(--txt2);font-size:11px;}
 .tbar-wrap{background:#0a1520;border-radius:3px;height:5px;overflow:hidden;margin:4px 0;}
 .tbar{height:100%;border-radius:3px;transition:all .3s;}
 .xg-wrap{background:#0a1520;border-radius:9px;padding:12px;margin-bottom:12px;}
@@ -388,7 +399,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
         <div id="cs-status" style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:8px;"></div>
 
-        <button class="btn btn-p btn-full" onclick="analisarJogo()" style="margin-top:4px;padding:12px;">
+        <button class="btn btn-full" id="btn-analisar" onclick="analisarJogo()" style="margin-top:4px;padding:14px;background:linear-gradient(135deg,#00d4ff,#7c5cfc,#00c96e);background-size:200% auto;font-size:12px;letter-spacing:2px;color:#000;font-weight:900;border-radius:10px;box-shadow:0 0 20px rgba(0,212,255,.25);animation:shimmer 3s linear infinite;transition:all .2s;position:relative;overflow:hidden;">
           🧠 ANALISAR E GERAR CLUSTER
         </button>
       </div>
@@ -396,27 +407,27 @@ e garantir que o DNA seja lido corretamente."></textarea>
 
     <!-- DIREITA: RESULTADO -->
     <div>
-      <div class="card" id="resultado-card">
+      <div class="card" id="resultado-card" style="transition:box-shadow .4s,border-color .4s;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <div class="card-title" style="margin-bottom:0;">🎯 Cluster Gerado</div>
+          <div class="card-title" style="margin-bottom:0;font-size:12px;letter-spacing:3px;">🎯 CLUSTER GERADO</div>
           <div id="res-badge"></div>
         </div>
         <div id="resultado-out">
-          <div style="text-align:center;padding:50px 20px;color:var(--txt3);">
-            <div style="font-size:36px;margin-bottom:12px;">🧠</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;margin-bottom:10px;">AGUARDANDO ANÁLISE</div>
-            <div style="font-size:10px;line-height:2.0;color:var(--txt3);">
-              1. Cole a análise do jogo<br>
-              2. Informe as odds Packball<br>
-              3. Cole as odds da Betfair<br>
-              4. Clique ANALISAR
+          <div style="text-align:center;padding:40px 20px;color:var(--txt3);">
+            <div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div>
+            <div style="display:flex;flex-direction:column;gap:8px;text-align:left;max-width:200px;margin:0 auto;">
+              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">1</span>Cole a análise do jogo</div>
+              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">2</span>Informe as odds Packball</div>
+              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">3</span>Cole as odds da Betfair</div>
+              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">4</span>Clique ANALISAR</div>
             </div>
           </div>
         </div>
       </div>
 
       <!-- CLUSTER TRAVADO -->
-      <div class="card" id="cluster-card" style="display:none;">
+      <div class="card" id="cluster-card" style="display:none;border-color:rgba(0,201,110,.3);box-shadow:0 0 20px rgba(0,201,110,.08);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div class="card-title" style="margin-bottom:0;">✅ Cluster Aprovado</div>
           <div id="cluster-stats"></div>
@@ -1705,18 +1716,29 @@ function analyzeCSGame(fav, over, btts) {
 
 function typeWriter(el, html, spd) {
   if(!el) return;
-  spd = spd || 14;
+  spd = spd || 4;
   el.innerHTML = '';
-  el.style.color = '#ffc740';
+  el.style.color = 'var(--txt)';
+  // Add blinking cursor
+  var cursor = '<span id="tw-cursor" style="display:inline-block;width:2px;height:13px;background:var(--acc);margin-left:2px;vertical-align:middle;animation:twblink .6s infinite;"></span>';
   var i = 0;
   var t = setInterval(function() {
-    if(i < html.length) { el.innerHTML = html.substring(0,i+1); i++; el.scrollTop = el.scrollHeight; }
-    else { clearInterval(t); el.style.color = ''; }
+    if(i < html.length) {
+      el.innerHTML = html.substring(0,i+1) + cursor;
+      i++;
+      el.scrollTop = el.scrollHeight;
+    } else {
+      clearInterval(t);
+      el.innerHTML = html;
+      el.style.color = '';
+    }
   }, spd);
 }
 
 async function analisarJogo() {
   if(S.thinking) return;
+  var btnAn = document.getElementById('btn-analisar');
+  if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.textContent='⏳ ANALISANDO...'; }
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
 
   const texto = document.getElementById('an-texto')?.value?.trim() || '';
@@ -2027,7 +2049,14 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
       const fmtCorrigido = injetarScoresNarrativa(fmt||'', S.currentCluster);
       if(out) typeWriter(out, fmtCorrigido.replace(/\n/g,'<br>') + contextWarnings, 14);
       renderCluster(cluster, stake);
-      notify('CLUSTER GERADO', cluster.length+' scores — R$'+stake, 'var(--grn)');
+      notify('🎯 CLUSTER GERADO', cluster.length+' scores prontos para operar', 'var(--grn)');
+      // Flash effect no card
+      var resCard = document.getElementById('resultado-card');
+      if(resCard) {
+        resCard.style.boxShadow = '0 0 30px rgba(0,201,110,.3)';
+        resCard.style.borderColor = 'var(--grn)';
+        setTimeout(function(){ resCard.style.boxShadow=''; resCard.style.borderColor=''; }, 2000);
+      }
     } else {
       notify('ANÁLISE OK', 'Cluster não detectado — verifique a resposta', 'var(--ylw)');
     }
@@ -2628,13 +2657,14 @@ function renderCluster(cluster, stake) {
 
     var borderSt = isAnchor ? 'var(--ylw)' : cardCol.border;
     var shadowSt  = isAnchor ? 'box-shadow:0 0 18px rgba(255,214,0,.25);' : '';
+    var animDelay = 'animation-delay:'+(idx*0.08)+'s;';
     var smColor   = specialMarket ? specialMarket.color : cardCol.border;
     var smFontSz  = specialMarket ? '11px' : '24px';
     var smCovers  = specialMarket ? '<div style="font-size:7px;color:var(--txt3);margin-bottom:2px;">'+specialMarket.covers+'</div>' : '';
     var oddDisplay = s.odd>0 ? s.odd : '?';
     var probW2    = Math.min(s.prob*1.8,100);
     var pgLine2   = s.oddPG>0 ? '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @'+s.oddPG+' pós-gol</div>' : '';
-    return '<div style="background:'+cardCol.bg+';border:2px solid '+borderSt+';border-radius:12px;padding:16px 12px;text-align:center;position:relative;cursor:default;transition:transform .15s;min-width:120px;'+shadowSt+'" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">'+
+    return '<div style="background:'+cardCol.bg+';border:2px solid '+borderSt+';border-radius:12px;padding:16px 12px;text-align:center;position:relative;cursor:default;transition:transform .15s,box-shadow .2s;min-width:120px;'+shadowSt+animDelay+'" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">'+
       edgeBadge+
       '<div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);">'+
         '<span class="bdg '+cardCol.badge+'" style="font-size:7px;letter-spacing:1.5px;">'+cardCol.label+'</span>'+
