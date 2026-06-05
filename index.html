@@ -36,7 +36,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 .sb-date{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);}
 .sb-section{padding:8px 12px 4px;font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);}
 .sb-scroll{flex:1;overflow-y:auto;padding:6px 8px;}
-.sb-game{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;transition:all .15s;position:relative;}
+.sb-game{padding:10px 14px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid #162030;background:#0b1219;transition:all .15s;position:relative;border-left:2px solid #f5a623;}
 .sb-game:hover{background:#0a1520;border-color:var(--border);}
 .sb-game.act{background:rgba(0,212,255,.06);border-color:var(--acc);}
 .sb-game.live{border-color:var(--red);}
@@ -1697,6 +1697,18 @@ function analyzeCSGame(fav, over, btts) {
   };
 }
 
+function typeWriter(el, html, spd) {
+  if(!el) return;
+  spd = spd || 14;
+  el.innerHTML = '';
+  el.style.color = '#ffc740';
+  var i = 0;
+  var t = setInterval(function() {
+    if(i < html.length) { el.innerHTML = html.substring(0,i+1); i++; el.scrollTop = el.scrollHeight; }
+    else { clearInterval(t); el.style.color = ''; }
+  }, spd);
+}
+
 async function analisarJogo() {
   if(S.thinking) return;
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
@@ -2005,7 +2017,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
       // Show analysis text + context warnings above cluster
       // Formatar narrativa com hierarquia visual
       const fmtCorrigido = injetarScoresNarrativa(fmt||'', S.currentCluster);
-      if(out) out.innerHTML = fmtCorrigido.replace(/\n/g,'<br>') + contextWarnings;
+      if(out) typeWriter(out, fmtCorrigido.replace(/\n/g,'<br>') + contextWarnings, 14);
       renderCluster(cluster, stake);
       notify('CLUSTER GERADO', cluster.length+' scores — R$'+stake, 'var(--grn)');
     } else {
@@ -2580,8 +2592,8 @@ function renderCluster(cluster, stake) {
 
     // Override col for anchor — golden border
     const cardCol = isAnchor ? {
-      bg:'rgba(255,214,0,.12)', border:'var(--ylw)',
-      label:'PLACAR PROJETADO', badge:'bdg-y', bar:'var(--ylw)'
+      bg:'rgba(139,92,246,.10)', border:'#8b5cf6',
+      label:'PLACAR PROJETADO', badge:'bdg-b', bar:'#8b5cf6'
     } : col;
 
     // Special market label for Any Other Win scores
