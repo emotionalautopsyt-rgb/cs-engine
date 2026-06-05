@@ -2070,11 +2070,25 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
 
     // Copa/early season + validation cross-check banners
     let contextWarnings = '';
-    // ALERTA DO GÊNIO — destaque dourado
-    if(alertaText) contextWarnings += `<div style="background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.3);border-radius:9px;padding:10px 14px;margin-bottom:8px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--ylw);margin-bottom:4px;">⚠️ ALERTA DO GÊNIO</div>
-      <div style="font-size:11px;color:var(--txt2);">${alertaText}</div>
-    </div>`;
+    // ALERTA DO GÊNIO — destaque máximo + placar projetado
+    if(alertaText) contextWarnings +=
+      '<div style="background:linear-gradient(135deg,rgba(255,199,64,.12),rgba(255,122,53,.08));border:1px solid rgba(255,199,64,.45);border-radius:12px;padding:14px 16px;margin-bottom:10px;position:relative;overflow:hidden;">'+
+        '<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ylw),var(--org));"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+          '<span style="font-size:18px;">⚡</span>'+
+          '<span style="font-family:Barlow Condensed,sans-serif;font-size:12px;font-weight:900;letter-spacing:2px;color:var(--ylw);text-transform:uppercase;">ALERTA DO GÊNIO</span>'+
+        '</div>'+
+        '<div style="font-size:12px;color:var(--txt);line-height:1.7;font-style:italic;">'+alertaText+'</div>'+
+      '</div>';
+    // PLACAR PROJETADO — logo abaixo do alerta
+    var ancoraProjt = engine ? engine.ancora : null;
+    if(ancoraProjt) contextWarnings +=
+      '<div style="background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,255,.08));border:1px solid rgba(124,92,252,.4);border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:center;position:relative;overflow:hidden;">'+
+        '<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--pur),var(--acc));"></div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:8px;color:rgba(124,92,252,.8);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">🎯 Placar Projetado pelo Gênio</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:52px;font-weight:900;letter-spacing:8px;color:#fff;line-height:1;text-shadow:0 0 24px rgba(124,92,252,.6),0 0 48px rgba(0,212,255,.3);">'+ancoraProjt+'</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-top:8px;letter-spacing:1px;">Score âncora — maior probabilidade</div>'+
+      '</div>';
     // Validation cross-check banner
     contextWarnings += `<div style="background:#0a1520;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:'Space Mono',monospace;font-size:8px;">
       <span style="color:${confidence.color};font-weight:700;">${confidence.icon} VALIDAÇÃO: ${crossScore.toFixed(1)}/5 — CONFIANÇA ${confidence.level}</span><br>
