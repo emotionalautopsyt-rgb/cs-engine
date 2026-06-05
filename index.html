@@ -388,6 +388,19 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
         <div id="cs-status" style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:8px;"></div>
 
+        <!-- API KEY -->
+        <div id="apikey-box" style="background:#0a1520;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;flex:1;">🔑 ANTHROPIC API KEY</div>
+            <span id="apikey-status" style="font-family:'Space Mono',monospace;font-size:7px;"></span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <input id="api-key-input" type="password" placeholder="sk-ant-..." style="margin:0;flex:1;font-size:10px;"
+              oninput="checkApiKey(this.value)">
+            <button class="btn btn-gh btn-sm" onclick="saveApiKey()" style="white-space:nowrap;height:36px;margin-top:0;">SALVAR</button>
+          </div>
+        </div>
+
         <button class="btn btn-p btn-full" onclick="analisarJogo()" style="margin-top:4px;padding:12px;">
           🧠 ANALISAR E GERAR CLUSTER
         </button>
@@ -598,7 +611,7 @@ function td() {
 function tmr() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function fd(d) { if(!d) return 'Hoje'; try { const [y,m,day]=d.split('-'); return day+'/'+m+'/'+y; } catch(e) { return d; } }
 function gt() { const n=new Date(); return n.getHours()+':'+String(n.getMinutes()).padStart(2,'0'); }
@@ -778,8 +791,8 @@ function sbGameCard(g) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">
           <div>${placarInfo}${statusBadge}</div>
           <div style="display:flex;gap:3px;">
-            ${g.status === 'live' ? `<button onclick="event.stopPropagation();encerrarJogo('${g.id}')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;">FIM</button>` : ''}
-            ${g.status === 'pre' ? `<button onclick="event.stopPropagation();iniciarLive('${g.id}')" style="background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.2);border-radius:4px;padding:1px 5px;color:var(--red);font-size:7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;">▶ LIVE</button>` : ''}
+            ${g.status === 'live' ? '<button onclick="event.stopPropagation();encerrarJogo(\''+g.id+'\')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">FIM</button>' : ''}
+            ${g.status === 'pre' ? '<button onclick="event.stopPropagation();iniciarLive(\''+g.id+'\')" style="background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.2);border-radius:4px;padding:1px 5px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>' : ''}
             <button onclick="event.stopPropagation();deleteGame('${g.id}')" style="background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.15);border-radius:4px;padding:1px 6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;" title="Remover jogo">✕</button>
           </div>
         </div>
@@ -940,18 +953,24 @@ function openHistModal() {
             <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;">${fd(d)}</div>
             <div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${total>=0?'var(--grn)':'var(--red)'};">${total>=0?'+':''}R$${total.toFixed(2)}</div>
           </div>
-          ${games.map(g => `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;background:#0a1520;border-radius:6px;margin-bottom:4px;">
-              <div>
-                <div style="font-size:11px;font-weight:500;">${g.name}</div>
-                <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">${g.comp||''} ${g.placar?'• '+g.placar:''}</div>
-                ${g.cluster?.length?`<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);">${g.cluster.map(s=>s.score).join('→')}</div>`:''}
-              </div>
-              <div style="text-align:right;">
-                <div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${(g.resultado||0)>0?'var(--grn)':(g.resultado||0)<0?'var(--red)':'var(--txt3)'};">${(g.resultado||0)!==0?((g.resultado||0)>0?'+':'')+' R$'+(g.resultado||0).toFixed(2):'—'}</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:7px;color:var(--txt3);">${g.status==='enc'?'ENC':g.status==='live'?'LIVE':'PRÉ'}</div>
-              </div>
-            </div>`).join('')}
+          ${games.map(function(g){
+            var clusterLine = g.cluster&&g.cluster.length ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--acc);">'+g.cluster.map(function(s){return s.score;}).join('→')+'</div>' : '';
+            var res = g.resultado||0;
+            var resColor = res>0?'var(--grn)':res<0?'var(--red)':'var(--txt3)';
+            var resText = res!==0?(res>0?'+':'')+' R$'+res.toFixed(2):'—';
+            var stLabel = g.status==='enc'?'ENC':g.status==='live'?'LIVE':'PRÉ';
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;background:#0a1520;border-radius:6px;margin-bottom:4px;">'+
+              '<div>'+
+                '<div style="font-size:11px;font-weight:500;">'+g.name+'</div>'+
+                '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+(g.comp||'')+' '+(g.placar?'• '+g.placar:'')+'</div>'+
+                clusterLine+
+              '</div>'+
+              '<div style="text-align:right;">'+
+                '<div style="font-family:Space Mono,monospace;font-size:10px;font-weight:700;color:'+resColor+';">'+resText+'</div>'+
+                '<div style="font-family:Barlow Condensed,sans-serif;font-size:7px;color:var(--txt3);">'+stLabel+'</div>'+
+              '</div>'+
+            '</div>';
+          }).join('')}
           <div style="height:1px;background:var(--border);margin-top:8px;"></div>
         </div>`;
     }).join('');
@@ -1081,7 +1100,7 @@ function checkPackball() {
   if(fails === 0) {
     el.innerHTML = `<div class="ab ab-g"><div class="ab-title" style="color:var(--grn);">✅ PACKBALL APROVADO${perfilBadge}</div><div class="ab-text">Fav @${fav} ✓ | BTTS @${btts} ✓ | Over @${over} ✓ — Perfil: <strong>${perfil}</strong> | Pirâmide: <strong>${piramide}</strong></div></div>`;
   } else if(fails === 1) {
-    el.innerHTML = `<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora${perfilBadge}</div><div class="ab-text">Stake -30%. ${!fO?`Fav @${fav} fora (1.30-2.35).`:''} ${!bO?`BTTS @${btts} fora (1.65-2.15).`:''} ${!oO?`Over @${over} fora (1.70-2.20).`:''}</div></div>`;
+    el.innerHTML = '<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw);">⚠️ CAUTELA — 1 critério fora'+perfilBadge+'</div><div class="ab-text">Stake -30%. '+(!fO?'Fav @'+fav+' fora (1.30-2.35). ':'')+(!bO?'BTTS @'+btts+' fora (1.65-2.15). ':'')+(!oO?'Over @'+over+' fora (1.70-2.20).':'')+'</div></div>';
   } else {
     el.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">⛔ RECUSADO — ${fails} critérios fora</div><div class="ab-text">2+ critérios fora = sem edge. Não operar.</div></div>`;
   }
@@ -1827,10 +1846,21 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
   S.thinking = true;
 
   try {
-    const resp = await fetch('/.netlify/functions/analyze', {
+    const apiKey = document.getElementById('api-key-input')?.value?.trim() || localStorage.getItem('cs_apikey') || '';
+    if(!apiKey) {
+      if(out) out.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">⚠️ API KEY NÃO CONFIGURADA</div><div class="ab-text">Cole sua chave Anthropic no campo API Key acima e clique Salvar.<br><br>Obtenha sua chave em: <a href="https://console.anthropic.com" target="_blank" style="color:var(--acc)">console.anthropic.com</a></div></div>`;
+      if(badge) badge.innerHTML = '<span class="bdg bdg-r">SEM API KEY</span>';
+      S.thinking = false;
+      return;
+    }
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
@@ -1841,7 +1871,11 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
       })
     });
 
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    if(!resp.ok) {
+      const errData = await resp.json().catch(()=>({}));
+      const errMsg = errData?.error?.message || 'HTTP '+resp.status;
+      throw new Error(errMsg);
+    }
     const data = await resp.json();
     const reply = data.content?.[0]?.text || 'Erro.';
 
@@ -2054,10 +2088,10 @@ function extractCluster(text, stake) {
   if(!text) return [];
 
   // ── PRIMARY: Parse JSON block from bot output ──────────────────────
-  // Accept both ##JSON_START## and ```json formats
+  // Accept both ##JSON_START## and backtick-json formats
   let jsonStr = null;
   const m1 = text.match(/##JSON_START##([\s\S]*?)##JSON_END##/);
-  const m2 = text.match(/```json\s*([\s\S]*?)```/);
+  const m2 = text.match(/\x60\x60\x60json[\s\S]*?\x60\x60\x60/);
   if(m1) jsonStr = m1[1].trim();
   else if(m2) jsonStr = m2[1].trim();
 
@@ -2555,25 +2589,23 @@ function renderCluster(cluster, stake) {
 
   // Build explanation dynamically based on actual counts
   let explWhy = '';
-  const planoAStr = `${nPlanoA} score${nPlanoA!==1?'s':''} Plano A`;
-  const planoBStr = nPlanoB > 0 ? ` + ${nPlanoB} Plano B (seguro${nPlanoB>1?'s':''})` : '';
-  const expStr    = nExp > 0 ? ` + ${nExp} expansão simbólica` : '';
+  const planoAStr = nPlanoA+' score'+(nPlanoA!==1?'s':'')+' Plano A';
+  const planoBStr = nPlanoB > 0 ? ' + '+nPlanoB+' Plano B (seguro'+(nPlanoB>1?'s':'')+')'  : '';
+  const expStr    = nExp > 0 ? ' + '+nExp+' expansão simbólica' : '';
 
   if(total <= 3) {
-    explWhy = `<strong style="color:var(--acc);">3 SCORES — MÁXIMA CONVICÇÃO:</strong> Narrativa cristalina, score principal concentra o edge. Mais stake por score = mais green quando acertar.`;
+    explWhy = '<strong style="color:var(--acc);">3 SCORES — MÁXIMA CONVICÇÃO:</strong> Narrativa cristalina, score principal concentra o edge. Mais stake por score = mais green quando acertar.';
   } else if(total === 4) {
-    explWhy = `<strong style="color:var(--acc);">4 SCORES — STANDARD:</strong> ${planoAStr}${planoBStr}. Narrativa clara com proteção adequada.`;
+    explWhy = '<strong style="color:var(--acc);">4 SCORES — STANDARD:</strong> '+planoAStr+planoBStr+'. Narrativa clara com proteção adequada.';
   } else if(total === 5) {
-    explWhy = `<strong style="color:var(--acc);">5 SCORES — COBERTURA DUPLA:</strong> ${planoAStr}${planoBStr}. Favorito curto — cluster concentrado.`;
+    explWhy = '<strong style="color:var(--acc);">5 SCORES — COBERTURA DUPLA:</strong> '+planoAStr+planoBStr+'. Favorito curto — cluster concentrado.';
   } else if(total === 6) {
-    explWhy = `<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> ${planoAStr}${planoBStr}. Múltiplas rotas — Dutch cobre tudo.`;
+    explWhy = '<strong style="color:var(--acc);">6 SCORES — COBERTURA TOTAL:</strong> '+planoAStr+planoBStr+'. Múltiplas rotas — Dutch cobre tudo.';
   } else {
-    explWhy = `<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> ${planoAStr}${planoBStr}. Jogo aberto com ambos os lados cobertos.`;
+    explWhy = '<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> '+planoAStr+planoBStr+'. Jogo aberto com ambos os lados cobertos.';
   }
 
-  if(statsEl) statsEl.innerHTML = `
-    <span class="bdg bdg-b">${total} SCORES</span>
-    <span class="bdg" style="color:${probColor};border-color:${probColor};background:rgba(0,0,0,.3);margin-left:4px;">PROB ${probTotal}%</span>`;
+  if(statsEl) statsEl.innerHTML = '<span class="bdg bdg-b">'+total+' SCORES</span><span class="bdg" style="color:'+probColor+';border-color:'+probColor+';background:rgba(0,0,0,.3);margin-left:4px;">PROB '+probTotal+'%</span>';
 
   const colors = {
     caminho: {bg:'rgba(0,212,255,.12)', border:'var(--acc)', label:'CAMINHO', badge:'bdg-b', bar:'var(--acc)'},
@@ -2614,131 +2646,112 @@ function renderCluster(cluster, stake) {
     if(s.odd > 0 && s.impliedOdd > 0) {
       const pct = ((s.odd - s.impliedOdd) / s.impliedOdd * 100);
       if(pct >= 15) {
-        edgeBadge = `<div style="position:absolute;top:8px;right:8px;background:rgba(0,255,127,.15);border:1px solid rgba(0,255,127,.4);border-radius:4px;padding:1px 5px;font-size:7px;color:#00ff7f;font-family:'Space Mono',monospace;">EDGE +${pct.toFixed(0)}%</div>`;
+        edgeBadge = '<div style="position:absolute;top:8px;right:8px;background:rgba(0,255,127,.15);border:1px solid rgba(0,255,127,.4);border-radius:4px;padding:1px 5px;font-size:7px;color:#00ff7f;font-family:Space Mono,monospace;">EDGE +'+pct.toFixed(0)+'%</div>';
       } else if(pct <= -15) {
-        edgeBadge = `<div style="position:absolute;top:8px;right:8px;background:rgba(255,184,48,.1);border:1px solid rgba(255,184,48,.3);border-radius:4px;padding:1px 5px;font-size:7px;color:var(--ylw);font-family:'Space Mono',monospace;">CÉTICO ${pct.toFixed(0)}%</div>`;
+        edgeBadge = '<div style="position:absolute;top:8px;right:8px;background:rgba(255,184,48,.1);border:1px solid rgba(255,184,48,.3);border-radius:4px;padding:1px 5px;font-size:7px;color:var(--ylw);font-family:Space Mono,monospace;">CÉTICO '+pct.toFixed(0)+'%</div>';
       }
     }
 
-    return `
-    <div style="
-      background:${cardCol.bg};
-      border:2px solid ${isAnchor ? 'var(--ylw)' : cardCol.border};
-      border-radius:12px;
-      padding:16px 12px;
-      text-align:center;
-      position:relative;
-      cursor:default;
-      transition:transform .15s;
-      min-width:120px;
-      ${isAnchor ? 'box-shadow:0 0 18px rgba(255,214,0,.25);' : ''}
-    " onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-      ${edgeBadge}
-      <!-- Type badge -->
-      <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);">
-        <span class="bdg ${cardCol.badge}" style="font-size:7px;letter-spacing:1.5px;">${cardCol.label}</span>
-      </div>
-      <!-- Score — very big -->
-      <div style="
-        font-family:'Barlow Condensed',sans-serif;
-        font-weight:900;
-        letter-spacing:4px;
-        color:${specialMarket ? specialMarket.color : cardCol.border};
-        margin-top:22px;
-        margin-bottom:4px;
-        line-height:1;
-        font-size:${specialMarket ? '11px' : '24px'};
-      ">${displayScore}</div>
-      ${specialMarket ? `<div style="font-size:7px;color:var(--txt3);margin-bottom:2px;">${specialMarket.covers}</div>` : ''}
-      <!-- Odd -->
-      <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--txt);margin-bottom:6px;font-weight:700;">@ ${s.odd>0?s.odd:'?'}</div>
-      <!-- Prob bar -->
-      <div style="background:var(--border);border-radius:3px;height:4px;margin:0 8px 4px;overflow:hidden;">
-        <div style="width:${Math.min(s.prob*1.8,100)}%;height:100%;background:${cardCol.bar};border-radius:3px;"></div>
-      </div>
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:${cardCol.bar};margin-bottom:8px;">${s.prob}% implícita</div>
-      <!-- Post-goal odd -->
-      ${s.oddPG>0?`<div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @${s.oddPG} pós-gol</div>`:''}
-    </div>`;
+    var borderSt = isAnchor ? 'var(--ylw)' : cardCol.border;
+    var shadowSt  = isAnchor ? 'box-shadow:0 0 18px rgba(255,214,0,.25);' : '';
+    var smColor   = specialMarket ? specialMarket.color : cardCol.border;
+    var smFontSz  = specialMarket ? '11px' : '24px';
+    var smCovers  = specialMarket ? '<div style="font-size:7px;color:var(--txt3);margin-bottom:2px;">'+specialMarket.covers+'</div>' : '';
+    var oddDisplay = s.odd>0 ? s.odd : '?';
+    var probW2    = Math.min(s.prob*1.8,100);
+    var pgLine2   = s.oddPG>0 ? '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @'+s.oddPG+' pós-gol</div>' : '';
+    return '<div style="background:'+cardCol.bg+';border:2px solid '+borderSt+';border-radius:12px;padding:16px 12px;text-align:center;position:relative;cursor:default;transition:transform .15s;min-width:120px;'+shadowSt+'" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">'+
+      edgeBadge+
+      '<div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);">'+
+        '<span class="bdg '+cardCol.badge+'" style="font-size:7px;letter-spacing:1.5px;">'+cardCol.label+'</span>'+
+      '</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-weight:900;letter-spacing:4px;color:'+smColor+';margin-top:22px;margin-bottom:4px;line-height:1;font-size:'+smFontSz+';">'+displayScore+'</div>'+
+      smCovers+
+      '<div style="font-family:Space Mono,monospace;font-size:12px;color:var(--txt);margin-bottom:6px;font-weight:700;">@ '+oddDisplay+'</div>'+
+      '<div style="background:var(--border);border-radius:3px;height:4px;margin:0 8px 4px;overflow:hidden;">'+
+        '<div style="width:'+probW2+'%;height:100%;background:'+cardCol.bar+';border-radius:3px;"></div>'+
+      '</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:'+cardCol.bar+';margin-bottom:8px;">'+s.prob+'% implícita</div>'+
+      pgLine2+
+    '</div>';
   }).join('');
 
-  if(summaryEl) summaryEl.innerHTML = `
-    <!-- SCORE ÂNCORA + NARRATIVA -->
-    ${(() => {
-      const txt = S.currentGame?.savedAnTexto || '';
-      const ancM   = txt.match(/Score\s+[âa]ncora[:\s]+(\d{1,2}-\d{1,2})/i);
-      const anchor = ancM ? ancM[1] : null;
-      const earlyM = txt.match(/Early\s+goal\s+risk[:\s]+([^\n]+)/i);
-      const earlyRisk = earlyM ? earlyM[1].trim() : null;
-      const levM   = txt.match(/Leverage\s+window[:\s]+([^\n]+)/i);
-      const levWin = levM ? levM[1].trim() : null;
-      const narrM  = txt.match(/Narrativa[:\s]*\n([^\n]+(?:\n[^\n]+){0,2})/i);
-      const narr   = narrM ? narrM[1].replace(/\n/g,' ').trim() : null;
-      if(!anchor && !narr) return '';
-      return `<div style="background:#0a1520;border-radius:8px;padding:10px;margin-bottom:10px;text-align:left;">
-        ${anchor ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--acc);font-weight:700;margin-bottom:4px;">⭐ SCORE ÂNCORA: ${anchor}</div>` : ''}
-        ${narr ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt2);margin-bottom:6px;">${narr}</div>` : ''}
-        ${earlyRisk ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--ylw);">⚠️ Early goal risk: ${earlyRisk}</div>` : ''}
-        ${levWin ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--grn);">⚡ Leverage window: ${levWin}</div>` : ''}
-      </div>`;
-    })()}
+  if(summaryEl) {
+    // Score âncora + narrativa
+    const txt = S.currentGame?.savedAnTexto || '';
+    const ancM    = txt.match(/Score\s+[âa]ncora[:\s]+(\d{1,2}-\d{1,2})/i);
+    const anchor  = ancM ? ancM[1] : null;
+    const earlyM  = txt.match(/Early\s+goal\s+risk[:\s]+([^\n]+)/i);
+    const earlyRisk = earlyM ? earlyM[1].trim() : null;
+    const levM    = txt.match(/Leverage\s+window[:\s]+([^\n]+)/i);
+    const levWin  = levM ? levM[1].trim() : null;
+    const narrM   = txt.match(/Narrativa[:\s]*\n([^\n]+(?:\n[^\n]+){0,2})/i);
+    const narr    = narrM ? narrM[1].replace(/\n/g,' ').trim() : null;
 
-    <!-- METHOD INDICATOR -->
-    ${(()=>{
-      const combinedProb = parseFloat((cluster.reduce((a,s)=>a+(s.prob||0),0)).toFixed(1));
-      const odds=cluster.filter(s=>s.odd>0).map(s=>s.odd);
-      const sp=odds.length>1?Math.max(...odds)-Math.min(...odds):0;
-      const method=sp<=2.0?'DUTCH':'DUTCH ⭐';
-      return `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:center;margin-top:4px;">
-      <div style="background:#0a1520;border-radius:8px;padding:10px;">
-        <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-bottom:3px;">${cluster.length} SCORES</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--acc);">${method}</div>
-      </div>
-      <div style="background:#0a1520;border-radius:8px;padding:10px;">
-        <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-bottom:3px;">COBERTURA</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:${combinedProb>=50?'var(--grn)':'var(--ylw)'};">${combinedProb.toFixed(1)}%</div>
-      </div>
-    </div>`;
-    })()}
+    var anchorBlock = '';
+    if(anchor || narr) {
+      anchorBlock =
+        '<div style="background:#0a1520;border-radius:8px;padding:10px;margin-bottom:10px;text-align:left;">'+
+        (anchor ? '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--acc);font-weight:700;margin-bottom:4px;">⭐ SCORE ÂNCORA: '+anchor+'</div>' : '')+
+        (narr ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt2);margin-bottom:6px;">'+narr+'</div>' : '')+
+        (earlyRisk ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--ylw);">⚠️ Early goal risk: '+earlyRisk+'</div>' : '')+
+        (levWin ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--grn);">⚡ Leverage window: '+levWin+'</div>' : '')+
+        '</div>';
+    }
 
-    <!-- SEQUENCE -->
-    <div style="margin-top:10px;padding:10px;background:#0a1520;border-radius:8px;text-align:center;">
-      ${cluster._removed10 ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--ylw);margin-bottom:3px;">CAMINHO TEÓRICO: ${cluster._removed10} | SCORE OPERACIONAL: ${cluster.find(s=>s.tipo==='caminho')?.score||'2-0'}</div>` : ''}
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-bottom:4px;">ROTA DO JOGO</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--acc);letter-spacing:3px;">${
-        // Show Plano A route then Plano B route with separator
-        (() => {
-          const caminhoScores = cluster.filter(s => s.tipo === 'caminho').map(s => s.score);
-          const destinosOrdered = cluster
-            .filter(s => s.tipo === 'destino')
-            .sort((a,b) => {
-              const [ha,aa] = a.score.split('-').map(Number);
-              const [hb,ab] = b.score.split('-').map(Number);
-              return (ha+aa) - (hb+ab); // ascending by total goals
-            })
-            .map(s => s.score);
-          const planoA = [...caminhoScores, ...destinosOrdered];
-          const planoB = cluster.filter(s => s.tipo === 'planb' || s.tipo === 'expansao').map(s => s.score);
-          return planoA.join(' → ') + (planoB.length ? ' | ' + planoB.join(' / ') : '');
-        })()
-      }</div>
-    </div>
+    // Method indicator
+    var combinedProb = parseFloat((cluster.reduce(function(a,s){return a+(s.prob||0);},0)).toFixed(1));
+    var odds2 = cluster.filter(function(s){return s.odd>0;}).map(function(s){return s.odd;});
+    var sp2 = odds2.length>1 ? Math.max.apply(null,odds2)-Math.min.apply(null,odds2) : 0;
+    var method = sp2<=2.0 ? 'DUTCH' : 'DUTCH ⭐';
+    var methodBlock =
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:center;margin-top:4px;">'+
+      '<div style="background:#0a1520;border-radius:8px;padding:10px;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:3px;">'+cluster.length+' SCORES</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:var(--acc);">'+method+'</div>'+
+      '</div>'+
+      '<div style="background:#0a1520;border-radius:8px;padding:10px;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:3px;">COBERTURA</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:'+(combinedProb>=50?'var(--grn)':'var(--ylw)')+';">'+combinedProb.toFixed(1)+'%</div>'+
+      '</div></div>';
 
-    <!-- WHY THIS NUMBER OF SCORES -->
-    <div style="margin-top:10px;padding:12px;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;">
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);letter-spacing:2px;margin-bottom:6px;">POR QUE ${total} SCORES</div>
-      <div style="font-size:11px;color:var(--txt2);line-height:1.65;">${explWhy}</div>
-    </div>
+    // Sequence / route
+    var removed10Line = cluster._removed10 ?
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--ylw);margin-bottom:3px;">CAMINHO TEÓRICO: '+cluster._removed10+' | SCORE OPERACIONAL: '+(cluster.find(function(s){return s.tipo==='caminho';})||{}).score+'</div>' : '';
+    var caminhoScores = cluster.filter(function(s){return s.tipo==='caminho';}).map(function(s){return s.score;});
+    var destinosOrdered = cluster.filter(function(s){return s.tipo==='destino';})
+      .sort(function(a,b){
+        var ha=parseInt(a.score),aa=parseInt(a.score.split('-')[1]);
+        var hb=parseInt(b.score),ab=parseInt(b.score.split('-')[1]);
+        return (ha+aa)-(hb+ab);
+      }).map(function(s){return s.score;});
+    var planoA2 = caminhoScores.concat(destinosOrdered);
+    var planoB2 = cluster.filter(function(s){return s.tipo==='planb'||s.tipo==='expansao';}).map(function(s){return s.score;});
+    var routeStr = planoA2.join(' → ')+(planoB2.length?' | '+planoB2.join(' / '):'');
+    var seqBlock =
+      '<div style="margin-top:10px;padding:10px;background:#0a1520;border-radius:8px;text-align:center;">'+
+      removed10Line+
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:4px;">ROTA DO JOGO</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:var(--acc);letter-spacing:3px;">'+routeStr+'</div>'+
+      '</div>';
 
-    <!-- PROB -->
-    <div class="ab ${probTotal>=60?'ab-g':probTotal>=50?'ab-y':'ab-r'}" style="margin-top:10px;margin-bottom:0;">
-      <div class="ab-title" style="color:${probColor};">COBERTURA DO CLUSTER — ${probLabel}</div>
-      <div class="ab-text">
-        Prob combinada: <strong style="color:${probColor};">${probTotal}%</strong>
-        ${probTotal>=60?' — Cobertura sólida.':probTotal>=50?' — Cobertura aceitável.':" — Baixa, mas EV contextual pode justificar."}
-        Pior caso sempre = −R$${stake}.
-      </div>
-    </div>`;
+    // WHY number of scores
+    var whyBlock =
+      '<div style="margin-top:10px;padding:12px;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;">'+
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--acc);letter-spacing:2px;margin-bottom:6px;">POR QUE '+total+' SCORES</div>'+
+      '<div style="font-size:11px;color:var(--txt2);line-height:1.65;">'+explWhy+'</div>'+
+      '</div>';
+
+    // Prob coverage
+    var probCovTxt = probTotal>=60?' — Cobertura sólida.':probTotal>=50?' — Cobertura aceitável.':' — Baixa, mas EV contextual pode justificar.';
+    var probBlock =
+      '<div class="ab '+(probTotal>=60?'ab-g':probTotal>=50?'ab-y':'ab-r')+'" style="margin-top:10px;margin-bottom:0;">'+
+      '<div class="ab-title" style="color:'+probColor+';">COBERTURA DO CLUSTER — '+probLabel+'</div>'+
+      '<div class="ab-text">Prob combinada: <strong style="color:'+probColor+';">'+probTotal+'%</strong>'+probCovTxt+' Pior caso sempre = −R$'+stake+'.</div>'+
+      '</div>';
+
+    summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + probBlock;
+  }
 
   renderLiveCluster();
 }
@@ -2865,7 +2878,7 @@ function resetCluster() {
   const cc = document.getElementById('cluster-card');
   if(cc) cc.style.display = 'none';
   const out = document.getElementById('resultado-out');
-  if(out) out.innerHTML = `<div style="text-align:center;padding:50px 20px;color:var(--txt3);"><div style="font-size:36px;margin-bottom:12px;">🧠</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;">AGUARDANDO ANÁLISE</div></div>`;
+  if(out) out.innerHTML = '<div style="text-align:center;padding:50px 20px;color:var(--txt3);"><div style="font-size:36px;margin-bottom:12px;">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;">AGUARDANDO ANÁLISE</div></div>';
   ['an-texto','cs-paste','pk-fav','pk-btts','pk-over'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const st=document.getElementById('cs-status'); if(st) st.textContent='';
   const pk=document.getElementById('pk-status'); if(pk) pk.innerHTML='';
@@ -2921,8 +2934,8 @@ function updXG() {
   const df=xgf>0?parseFloat((xgf-gf).toFixed(2)):0;
   let msg='';
   if(xgc>0||xgf>0){
-    if(dc>=0.7) msg=`🔵 +${dc} GOL DEVENDO ao Casa — manter/dobrar`;
-    else if(df>=0.7) msg=`🟡 +${df} GOL DEVENDO ao Fora — cautela`;
+    if(dc>=0.7) msg='🔵 +'+dc+' GOL DEVENDO ao Casa — manter/dobrar';
+    else if(df>=0.7) msg='🟡 +'+df+' GOL DEVENDO ao Fora — cautela';
     else if(xgf>xgc*1.4) msg='⚠️ Fora superando xG — narrativa enfraquecendo';
     else if(xgc>xgf*1.3) msg='✅ Casa dominante — tese confirmada';
     else msg='⚪ xG equilibrado — aguardar evento';
@@ -2944,11 +2957,11 @@ function registrarEvento(ev) {
   if(ev === 'golfav') {
     gc += 1;
     gcEl.value = gc;
-    notify('⚽ GOL FAVORITO', `Placar: ${gc}-${gf}`, 'var(--grn)');
+    notify('⚽ GOL FAVORITO', 'Placar: '+gc+'-'+gf, 'var(--grn)');
   } else if(ev === 'golaz') {
     gf += 1;
     gfEl.value = gf;
-    notify('⚽ GOL ADVERSÁRIO', `Placar: ${gc}-${gf}`, 'var(--red)');
+    notify('⚽ GOL ADVERSÁRIO', 'Placar: '+gc+'-'+gf, 'var(--red)');
   }
 
   // Auto-update live state
@@ -2981,16 +2994,16 @@ function analisarLive() {
   const dc=xgc>0?parseFloat((xgc-gc).toFixed(2)):0;
   const df=xgf>0?parseFloat((xgf-gf).toFixed(2)):0;
   let xgMsg='';
-  if(dc>=0.7) xgMsg=`🔵 xG: +${dc} GOL DEVENDO ao Casa`;
-  else if(df>=0.7) xgMsg=`🟡 xG: +${df} GOL DEVENDO ao Fora`;
+  if(dc>=0.7) xgMsg='🔵 xG: +'+dc+' GOL DEVENDO ao Casa';
+  else if(df>=0.7) xgMsg='🟡 xG: +'+df+' GOL DEVENDO ao Fora';
   else if(xgf>xgc*1.4&&gc>=gf) xgMsg='⚠️ Fora superando xG — narrativa fraca';
 
   if(xgf>xgc*1.5&&gc<=gf) { narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; }
   else if(xgf>xgc) { narr='fraca'; narrL='NARRATIVA ENFRAQUECENDO'; narrC='var(--ylw)'; }
 
   let layMsg='';
-  if(odd>6.0) { const t=parseFloat((odd*0.60).toFixed(1)); layMsg=`ORDEM LAY a @${t} (não pague @${odd}).`; }
-  else if(odd>3.5) { layMsg=`Aguardar comprimir. Ordem a @${parseFloat((odd*0.75).toFixed(1))}.`; }
+  if(odd>6.0) { const t=parseFloat((odd*0.60).toFixed(1)); layMsg='ORDEM LAY a @'+t+' (não pague @'+odd+').'; }
+  else if(odd>3.5) { layMsg='Aguardar comprimir. Ordem a @'+parseFloat((odd*0.75).toFixed(1))+'.'; }
   else if(odd>0) { lay='LAY AGORA @ '+odd; }
 
   // Find next score
@@ -3000,7 +3013,7 @@ function analisarLive() {
     const ci=S.currentCluster.findIndex(s=>s.score===cur);
     if(ci>=0&&ci<S.currentCluster.length-1) {
       const nx=S.currentCluster[ci+1];
-      nextScore=`Próximo alvo: <strong style="color:var(--grn)">${nx.score}</strong> → estimado @${nx.oddPG||'?'} após gol`;
+      nextScore='Próximo alvo: <strong style="color:var(--grn)">'+nx.score+'</strong> → estimado @'+(nx.oddPG||'?')+' após gol';
     }
   }
 
@@ -3023,22 +3036,22 @@ function analisarLive() {
     const noCluster = S.currentCluster.some(s => s.score===placarAtual);
     cor='ab-r'; risco='ALTO';
     if(hasPlanoB && noCluster) {
-      acao=`⚠️ GOL DO ADVERSÁRIO (${m}') — PLACAR NO CLUSTER\n→ Você tem posição no Plano B.\n→ Aguardar favorito empatar.\n→ Odd do score atual vai cair — não panic.\n→ SE adversário marcar mais 1: LAY TOTAL imediato.`;
+      acao='⚠️ GOL DO ADVERSÁRIO ('+m+') — PLACAR NO CLUSTER\n→ Você tem posição no Plano B.\n→ Aguardar favorito empatar.\n→ Odd do score atual vai cair — não panic.\n→ SE adversário marcar mais 1: LAY TOTAL imediato.';
       cor='ab-y';
     } else {
-      acao=`🚨 GOL DO ADVERSÁRIO (${m}') — FORA DO CLUSTER\n→ LAY TOTAL imediato.\n→ Aceitar a perda.\n→ Favorito raramente vira. Não esperar.`;
+      acao='🚨 GOL DO ADVERSÁRIO ('+m+') — FORA DO CLUSTER\n→ LAY TOTAL imediato.\n→ Aceitar a perda.\n→ Favorito raramente vira. Não esperar.';
     }
     } else if(ev==='golfav') {
     // Two-legs: earlier exit after 70'
     if(S.twoLegs && m>=70) {
       cor='ab-g'; risco='BAIXO';
-      acao=`✅ GOL FAVORITO (${m}') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85'+ — times podem aceitar prorrogação.\n→ "Teams will just settle for extra time." — americano`;
+      acao='✅ GOL FAVORITO ('+m+') — 2 PERNAS: SAÍDA ANTECIPADA\n→ Jogo de 2 pernas. Lay TOTAL agora.\n→ Não espera 85\' + — times podem aceitar prorrogação.\n→ Teams will just settle for extra time. — americano';
     } else if(m<30) {
-      cor='ab-b'; acao=`⏳ GOL FAVORITO (${m}') — CEDO DEMAIS\n→ AGUARDAR odd do caminho cair para 2.5-3.5.\n→ Não lay agora — deixar comprimir.\n→ Próximo passo: lay parcial quando odd < 3.5.`;
+      cor='ab-b'; acao='⏳ GOL FAVORITO ('+m+') — CEDO DEMAIS\n→ AGUARDAR odd do caminho cair para 2.5-3.5.\n→ Não lay agora — deixar comprimir.\n→ Próximo passo: lay parcial quando odd < 3.5.';
     } else if(m<60) {
-      cor='ab-g'; acao=`✅ GOL FAVORITO (${m}') — AGIR\n→ LAY PARCIAL no score atual (${gc}-${gf}).\n→ Redistribuir green para próximo score.\n→ Manter cluster aberto.`;
+      cor='ab-g'; acao='✅ GOL FAVORITO ('+m+') — AGIR\n→ LAY PARCIAL no score atual ('+gc+'-'+gf+').\n→ Redistribuir green para próximo score.\n→ Manter cluster aberto.';
     } else {
-      cor='ab-g'; risco='BAIXO'; acao=`✅ GOL FAVORITO (${m}') — COLETAR\n→ Avaliar lay total no score atual.\n→ Se 70'+ → COLETAR o green disponível.\n→ Não arriscar mais tempo.`;
+      cor='ab-g'; risco='BAIXO'; acao='✅ GOL FAVORITO ('+m+') — COLETAR\n→ Avaliar lay total no score atual.\n→ Se 70\' + → COLETAR o green disponível.\n→ Não arriscar mais tempo.';
     }
   } else if(narr==='morta') {
     cor='ab-r'; risco='ALTO';
@@ -3046,20 +3059,20 @@ function analisarLive() {
   } else if(gc===0&&gf===0&&m>=45) {
     cor='ab-y';
     const ordLP=odd>0?parseFloat((odd*0.75).toFixed(1)):0;
-    acao=`🔄 0-0 NO INTERVALO\n→ Colocar ordem de LAY no 0-0 a @${ordLP||'odd×0.75'}.\n→ Não pagar o preço cheio.\n→ Qualquer gol = green em tudo.`;
+    acao='🔄 0-0 NO INTERVALO\n→ Colocar ordem de LAY no 0-0 a @'+(ordLP||'odd×0.75')+'.\n→ Não pagar o preço cheio.\n→ Qualquer gol = green em tudo.';
   } else {
     if(odd>0&&odd<=3.5) {
       cor='ab-g'; risco='BAIXO';
-      acao=`✅ LAY AGORA (${m}')\n→ Odd ${odd} comprimida — momento certo.\n→ Lay parcial no score atual.\n→ Transferir green para próximo score.`;
+      acao='✅ LAY AGORA ('+m+')\n→ Odd '+odd+' comprimida — momento certo.\n→ Lay parcial no score atual.\n→ Transferir green para próximo score.';
       lay='LAY @ '+odd;
     } else if(odd>3.5&&odd<=6.0) {
       cor='ab-y';
-      acao=`⏳ AGUARDAR (${m}')\n→ ${layMsg}\n→ Odd ainda alta demais para lay imediato.`;
+      acao='⏳ AGUARDAR ('+m+')\n→ '+layMsg+'\n→ Odd ainda alta demais para lay imediato.';
     } else if(odd>6.0) {
       cor='ab-b';
-      acao=`📋 ORDEM ANTECIPADA (${m}')\n→ ${layMsg}\n→ Não pagar preço cheio.`;
+      acao='📋 ORDEM ANTECIPADA ('+m+')\n→ '+layMsg+'\n→ Não pagar preço cheio.';
     } else {
-      acao=`⏳ AGUARDAR (${m}')\n→ Cluster intacto. Observar xG e pressão.`;
+      acao='⏳ AGUARDAR ('+m+')\n→ Cluster intacto. Observar xG e pressão.';
     }
     if(m>=70) acao+='\n\n⚠️ TEMPO CRÍTICO — Se no alvo: COLETAR AGORA.';
     risco=m<45?'BAIXO':m<70?'MODERADO':'ALTO';
@@ -3069,26 +3082,32 @@ function analisarLive() {
   const rC={'BAIXO':'var(--grn)','MODERADO':'var(--ylw)','ALTO':'var(--red)','EXTREMO':'var(--red)'};
 
   const liveEdge=document.getElementById('live-edge');
-  if(liveEdge) liveEdge.innerHTML=`<span class="bdg" style="color:${eC[edge]};border-color:${eC[edge]};background:rgba(0,0,0,.3)">${edge}</span>`;
+  if(liveEdge) liveEdge.innerHTML = '<span class="bdg" style="color:'+(eC[edge]||'var(--txt3)')+';border-color:'+(eC[edge]||'var(--txt3)')+';background:rgba(0,0,0,.3)">'+edge+'</span>';
 
   const liveOut=document.getElementById('live-out');
-  if(liveOut) liveOut.innerHTML=`
-    <div class="narr-box ${narr}">
-      <div class="narr-label">NARRATIVA</div>
-      <div class="narr-val" style="color:${narrC}">${narrL}</div>
-    </div>
-    <div class="ab ${cor}">
-      <div class="ab-title" style="color:${cor==='ab-g'?'var(--grn)':cor==='ab-r'?'var(--red)':cor==='ab-y'?'var(--ylw)':'var(--acc)'}">AÇÃO IMEDIATA</div>
-      <div class="ab-text" style="white-space:pre-line;font-family:'Space Mono',monospace;font-size:10px;">${acao}</div>
-    </div>
-    ${lay?`<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw)">LAY ORDER</div><div class="ab-text" style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">${lay}</div></div>`:''}
-    ${xgMsg?`<div class="ab ab-p"><div class="ab-title" style="color:var(--pur)">xG AO VIVO</div><div class="ab-text">${xgMsg}</div></div>`:''}
-    ${nextScore?`<div class="ab ab-b"><div class="ab-title" style="color:var(--acc)">PRÓXIMO SCORE</div><div class="ab-text">${nextScore}</div></div>`:''}
-    <div class="dv"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div class="mr" style="border:none;"><span class="ml">EDGE</span><span class="mv" style="color:${eC[edge]}">${edge}</span></div>
-      <div class="mr" style="border:none;"><span class="ml">RISCO</span><span class="mv" style="color:${rC[risco]||'var(--txt3)'}">${risco}</span></div>
-    </div>`;
+  if(liveOut) {
+    var titleColor = cor==='ab-g'?'var(--grn)':cor==='ab-r'?'var(--red)':cor==='ab-y'?'var(--ylw)':'var(--acc)';
+    var layBlock    = lay ? '<div class="ab ab-y"><div class="ab-title" style="color:var(--ylw)">LAY ORDER</div><div class="ab-text" style="font-family:Space Mono,monospace;font-size:11px;font-weight:700;">'+lay+'</div></div>' : '';
+    var xgBlock     = xgMsg ? '<div class="ab ab-p"><div class="ab-title" style="color:var(--pur)">xG AO VIVO</div><div class="ab-text">'+xgMsg+'</div></div>' : '';
+    var nextBlock   = nextScore ? '<div class="ab ab-b"><div class="ab-title" style="color:var(--acc)">PRÓXIMO SCORE</div><div class="ab-text">'+nextScore+'</div></div>' : '';
+    var edgeColor   = eC[edge] || 'var(--txt3)';
+    var riscoColor  = rC[risco] || 'var(--txt3)';
+    liveOut.innerHTML =
+      '<div class="narr-box '+narr+'">'+
+        '<div class="narr-label">NARRATIVA</div>'+
+        '<div class="narr-val" style="color:'+narrC+'">'+narrL+'</div>'+
+      '</div>'+
+      '<div class="ab '+cor+'">'+
+        '<div class="ab-title" style="color:'+titleColor+'">AÇÃO IMEDIATA</div>'+
+        '<div class="ab-text" style="white-space:pre-line;font-family:Space Mono,monospace;font-size:10px;">'+acao+'</div>'+
+      '</div>'+
+      layBlock + xgBlock + nextBlock +
+      '<div class="dv"></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+        '<div class="mr" style="border:none;"><span class="ml">EDGE</span><span class="mv" style="color:'+edgeColor+'">'+edge+'</span></div>'+
+        '<div class="mr" style="border:none;"><span class="ml">RISCO</span><span class="mv" style="color:'+riscoColor+'">'+risco+'</span></div>'+
+      '</div>';
+  }
 
   const lev=document.getElementById('l-ev');
   if(lev) lev.value='';
@@ -3139,44 +3158,25 @@ function renderLiveCluster() {
 
     // Status badge
     let statusBadge = '';
-    if(isNow) statusBadge = `<div style="position:absolute;top:6px;right:6px;background:var(--grn);color:#000;font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:1px;">● ATIVO</div>`;
-    else if(isPast) statusBadge = `<div style="position:absolute;top:6px;right:6px;background:var(--txt3);color:#000;font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:1px;">PASSOU</div>`;
+    if(isNow) statusBadge = '<div style="position:absolute;top:6px;right:6px;background:var(--grn);color:#000;font-family:Barlow Condensed,sans-serif;font-size:7px;font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:1px;">● ATIVO</div>';
+    else if(isPast) statusBadge = '<div style="position:absolute;top:6px;right:6px;background:var(--txt3);color:#000;font-family:Barlow Condensed,sans-serif;font-size:7px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:1px;">PASSOU</div>';
 
-    return `
-    <div style="
-      position:relative;
-      background:${col.bg};
-      border:2px solid ${isNow ? col.border : isPast ? 'var(--border)' : col.border};
-      border-radius:12px;
-      padding:12px 10px;
-      text-align:center;
-      opacity:${opacity};
-      ${pulsar}
-      transition:all .2s;
-    ">
-      ${statusBadge}
-      <!-- Type label -->
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:${col.border};letter-spacing:1px;margin-bottom:4px;font-weight:700;">${col.label}</div>
-      <!-- SCORE BIG -->
-      <div style="
-        font-family:'Barlow Condensed',sans-serif;
-        font-size:38px;
-        font-weight:900;
-        letter-spacing:3px;
-        color:${isNow ? col.border : 'var(--txt)'};
-        line-height:1;
-        margin-bottom:4px;
-        ${isNow ? 'text-shadow:0 0 20px '+col.border+';' : ''}
-      ">${s.score}</div>
-      <!-- Odd -->
-      <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--txt2);margin-bottom:4px;">@ ${s.odd > 0 ? s.odd : '?'}</div>
-      <!-- Prob bar -->
-      <div style="background:var(--border);border-radius:3px;height:3px;margin:0 6px 4px;">
-        <div style="width:${Math.min((s.prob||0)*1.8,100)}%;height:100%;background:${col.bar};border-radius:3px;"></div>
-      </div>
-      <!-- Post-goal odd -->
-      ${s.oddPG > 0 && !isPast ? `<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--grn);margin-top:4px;">→ @${s.oddPG} pós-gol</div>` : ''}
-    </div>`;
+    var borderCol = isNow ? col.border : isPast ? 'var(--border)' : col.border;
+    var scoreColor = isNow ? col.border : 'var(--txt)';
+    var shadowStyle = isNow ? 'text-shadow:0 0 20px '+col.border+';' : '';
+    var oddVal = s.odd > 0 ? s.odd : '?';
+    var probW = Math.min((s.prob||0)*1.8,100);
+    var pgLine = s.oddPG > 0 && !isPast ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--grn);margin-top:4px;">→ @'+s.oddPG+' pós-gol</div>' : '';
+    return '<div style="position:relative;background:'+col.bg+';border:2px solid '+borderCol+';border-radius:12px;padding:12px 10px;text-align:center;opacity:'+opacity+';'+pulsar+'transition:all .2s;">'+
+      statusBadge+
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:'+col.border+';letter-spacing:1px;margin-bottom:4px;font-weight:700;">'+col.label+'</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:38px;font-weight:900;letter-spacing:3px;color:'+scoreColor+';line-height:1;margin-bottom:4px;'+shadowStyle+'">'+s.score+'</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:10px;color:var(--txt2);margin-bottom:4px;">@ '+oddVal+'</div>'+
+      '<div style="background:var(--border);border-radius:3px;height:3px;margin:0 6px 4px;">'+
+        '<div style="width:'+probW+'%;height:100%;background:'+col.bar+';border-radius:3px;"></div>'+
+      '</div>'+
+      pgLine+
+    '</div>';
   }).join('');
 
   // Live action guidance based on current score
@@ -3188,26 +3188,22 @@ function renderLiveCluster() {
 
   if(list) {
     if(activeScore) {
-      list.innerHTML = `
-        <div style="background:rgba(0,201,110,.08);border:1px solid var(--grn);border-radius:8px;padding:10px;margin-top:8px;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--grn);letter-spacing:1px;margin-bottom:4px;">✅ VOCÊ ESTÁ NO SCORE CERTO</div>
-          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--txt2);">Placar atual <strong style="color:var(--grn);">${cur}</strong> está no cluster. 
-          ${nextScore ? 'Próximo alvo: <strong style="color:var(--acc);">'+nextScore.score+'</strong>' : 'Este pode ser o score final — aguardar e coletar.'}</div>
-        </div>`;
+      var nxt = nextScore ? 'Próximo alvo: <strong style="color:var(--acc);">'+nextScore.score+'</strong>' : 'Este pode ser o score final — aguardar e coletar.';
+      list.innerHTML = '<div style="background:rgba(0,201,110,.08);border:1px solid var(--grn);border-radius:8px;padding:10px;margin-top:8px;">'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;color:var(--grn);letter-spacing:1px;margin-bottom:4px;">✅ VOCÊ ESTÁ NO SCORE CERTO</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);">Placar atual <strong style="color:var(--grn);">'+cur+'</strong> está no cluster. '+nxt+'</div>'+
+      '</div>';
     } else if(gc + gf > 0) {
-      // Current score not in cluster
-      const isPlanbScore = S.currentCluster.some(s => s.tipo === 'planb' && s.score === cur);
-      list.innerHTML = `
-        <div style="background:rgba(255,77,106,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:8px;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--red);letter-spacing:1px;margin-bottom:4px;">⚠️ SCORE ATUAL NÃO ESTÁ NO CLUSTER</div>
-          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--txt2);">Placar <strong style="color:var(--red);">${cur}</strong> — avaliar se ainda há caminho para um score do cluster ou executar LAY TOTAL.</div>
-        </div>`;
+      var isPlanbScore = S.currentCluster.some(function(s){ return s.tipo === 'planb' && s.score === cur; });
+      list.innerHTML = '<div style="background:rgba(255,77,106,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:8px;">'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;color:var(--red);letter-spacing:1px;margin-bottom:4px;">⚠️ SCORE ATUAL NÃO ESTÁ NO CLUSTER</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);">Placar <strong style="color:var(--red);">'+cur+'</strong> — avaliar se ainda há caminho para um score do cluster ou executar LAY TOTAL.</div>'+
+      '</div>';
     } else {
-      list.innerHTML = `
-        <div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px;margin-top:8px;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--acc);letter-spacing:1px;margin-bottom:4px;">⏱ AGUARDANDO 1º GOL</div>
-          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--txt2);">Atualize o placar conforme os gols forem acontecendo.</div>
-        </div>`;
+      list.innerHTML = '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px;margin-top:8px;">'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;color:var(--acc);letter-spacing:1px;margin-bottom:4px;">⏱ AGUARDANDO 1º GOL</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);">Atualize o placar conforme os gols forem acontecendo.</div>'+
+      '</div>';
     }
   }
 }
@@ -3270,14 +3266,14 @@ function renderNaoList() {
   if(!el) return;
   if(!naoList.length) { el.innerHTML = '<div style="color:var(--txt3);font-size:10px;text-align:center;padding:8px;">Nenhum registro</div>'; return; }
   const motivos = {filtro:'Filtro',rotacao:'Rotação',escalacao:'Escalação',motivacao:'Motivação baixa',liquidez:'Sem liquidez',valor:'Meta CS',outro:'Outro'};
-  el.innerHTML = naoList.slice(0,10).map(r =>
-    `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:9px;">
-      <span style="color:var(--txt2);">${r.j}</span>
-      <span style="color:var(--ylw);">${motivos[r.m]||r.m}</span>
-      <span style="color:var(--txt3);">${r.sc||'—'}</span>
-      <span style="color:var(--txt3);">${r.d}</span>
-    </div>`
-  ).join('');
+  el.innerHTML = naoList.slice(0,10).map(function(r){
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:9px;">'+
+      '<span style="color:var(--txt2);">'+(r.j||'')+'</span>'+
+      '<span style="color:var(--ylw);">'+(motivos[r.m]||r.m||'')+'</span>'+
+      '<span style="color:var(--txt3);">'+(r.sc||'—')+'</span>'+
+      '<span style="color:var(--txt3);">'+(r.d||'')+'</span>'+
+    '</div>';
+  }).join('');
 }
 
 
@@ -3350,19 +3346,23 @@ function renderPerf() {
 
   // Hist list
   const hl=document.getElementById('hist-list');
-  if(hl) hl.innerHTML=[...h].reverse().map(r=>`
-    <div class="hist-row">
-      <div>
-        <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">${fd(r.d)} ${r.c?'• '+r.c:''}</div>
-        <div style="font-size:12px;font-weight:500;margin:2px 0;">${r.j}</div>
-        ${r.sc?`<div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">Score: ${r.sc}</div>`:''}
-      </div>
-      <div style="text-align:right;">
-        <div style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:${r.v>0?'var(--grn)':r.v<0?'var(--red)':'var(--txt3)'}">${r.v>0?'+':''}R$ ${r.v.toFixed(2)}</div>
-        <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);">stake R$ ${r.s}</div>
-        <button style="font-size:7px;color:var(--txt3);background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;" onclick="delR(${r.ts})">✕</button>
-      </div>
-    </div>`).join('');
+  if(hl) hl.innerHTML=[...h].reverse().map(function(r){
+    var vColor = r.v>0?'var(--grn)':r.v<0?'var(--red)':'var(--txt3)';
+    var vSign  = r.v>0?'+':'';
+    var scLine = r.sc ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Score: '+r.sc+'</div>' : '';
+    return '<div class="hist-row">'+
+      '<div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+fd(r.d)+(r.c?' • '+r.c:'')+'</div>'+
+        '<div style="font-size:12px;font-weight:500;margin:2px 0;">'+r.j+'</div>'+
+        scLine+
+      '</div>'+
+      '<div style="text-align:right;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:12px;font-weight:700;color:'+vColor+'">'+vSign+'R$ '+r.v.toFixed(2)+'</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">stake R$ '+r.s+'</div>'+
+        '<button style="font-size:7px;color:var(--txt3);background:none;border:none;cursor:pointer;font-family:Space Mono,monospace;" onclick="delR('+r.ts+')">✕</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
 
   // Weekly
   const now=new Date(), dow=now.getDay()===0?6:now.getDay()-1;
@@ -3374,10 +3374,18 @@ function renderPerf() {
   const de=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0');
   const wt=document.getElementById('week-t'); if(wt) wt.textContent='Semana — '+ds+' a '+de;
   const wo=document.getElementById('week-out');
-  if(wo) wo.innerHTML=wh.length===0?'<div style="color:var(--txt3);text-align:center;padding:11px;font-size:11px;">Sem dados</div>':`
-    <div class="mr"><span class="ml">Jogos</span><span class="mv">${wh.length}</span></div>
-    <div class="mr"><span class="ml">Saldo</span><span class="mv" style="color:${ws>=0?'var(--grn)':'var(--red)'}">${ws>=0?'+':''}R$ ${ws.toFixed(2)}</span></div>
-    <div class="mr"><span class="ml">Winrate</span><span class="mv" style="color:var(--ylw)">${wwr}%</span></div>`;
+  if(wo) {
+    if(wh.length===0) {
+      wo.innerHTML = '<div style="color:var(--txt3);text-align:center;padding:11px;font-size:11px;">Sem dados</div>';
+    } else {
+      var saldoColor = ws>=0 ? 'var(--grn)' : 'var(--red)';
+      var saldoSign  = ws>=0 ? '+' : '';
+      wo.innerHTML =
+        '<div class="mr"><span class="ml">Jogos</span><span class="mv">'+wh.length+'</span></div>' +
+        '<div class="mr"><span class="ml">Saldo</span><span class="mv" style="color:'+saldoColor+'">'+saldoSign+'R$ '+ws.toFixed(2)+'</span></div>' +
+        '<div class="mr"><span class="ml">Winrate</span><span class="mv" style="color:var(--ylw)">'+wwr+'%</span></div>';
+    }
+  }
 }
 
 function delR(ts) { S.hist=S.hist.filter(r=>r.ts!==ts); save(); renderPerf(); updHdr(); }
@@ -3424,6 +3432,38 @@ function limparHist() {
   if(window.confirm ? window.confirm('Limpar histórico?') : true) { S.hist=[]; save(); renderPerf(); updHdr(); notify('LIMPO','','var(--ylw)'); }
 }
 
+// ===== API KEY =====
+function checkApiKey(val) {
+  const st = document.getElementById('apikey-status');
+  if(!st) return;
+  const v = (val||'').trim();
+  if(!v) { st.textContent=''; return; }
+  if(v.startsWith('sk-ant-') && v.length > 20) {
+    st.textContent = '✅ válida';
+    st.style.color = 'var(--grn)';
+  } else {
+    st.textContent = '⚠️ formato inválido';
+    st.style.color = 'var(--ylw)';
+  }
+}
+function saveApiKey() {
+  const el = document.getElementById('api-key-input');
+  if(!el) return;
+  const val = el.value.trim();
+  if(!val) { notify('ERRO', 'Cole a API key primeiro', 'var(--red)'); return; }
+  localStorage.setItem('cs_apikey', val);
+  notify('API KEY', 'Salva com sucesso', 'var(--grn)');
+  checkApiKey(val);
+}
+function loadApiKey() {
+  const saved = localStorage.getItem('cs_apikey') || '';
+  const el = document.getElementById('api-key-input');
+  if(el && saved) {
+    el.value = saved;
+    checkApiKey(saved);
+  }
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   try {
@@ -3444,14 +3484,13 @@ document.addEventListener('DOMContentLoaded', () => {
         S.currentCluster = S.currentGame.cluster;
       }
     }
+    loadApiKey();
     // Render sidebar
     renderSidebar();
   } catch(e) { console.error('Init:',e); }
 });
-</script>
-</div><!-- /app-body -->
-</body>
-</html>function injetarScoresNarrativa(texto, cluster) {
+
+function injetarScoresNarrativa(texto, cluster) {
   if(!cluster || cluster.length === 0) return texto;
 
   // Buscar marcador case-insensitive com variações
@@ -3480,8 +3519,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var p = textoLower.indexOf(fins[j], fimMarcador + 5);
     if(p > -1) {
       // Recuar até início do parágrafo
-      var inicio = texto.lastIndexOf('
-', p);
+      var inicio = texto.lastIndexOf('\n', p);
       if(inicio > fimMarcador) { proxParagrafo = inicio; break; }
     }
   }
@@ -3493,11 +3531,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return (ord[a.tipo]||1) - (ord[b.tipo]||1);
   });
 
-  var lista = '
-' + ordenados.map(function(s){ return s.score; }).join('
-');
+  var lista = '\n' + ordenados.map(function(s){ return s.score; }).join('\n');
 
   return texto.substring(0, fimMarcador) + lista + texto.substring(proxParagrafo);
 }
-
-
+</script>
+</div><!-- /app-body -->
+</body>
+</html>
