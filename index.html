@@ -1677,10 +1677,13 @@ REGRAS DO JSON:
 
 // ===== CS ENGINE — MOTOR DETERMINÍSTICO =====
 // Scores, âncora e pirâmide calculados por código. IA só escreve a narrativa.
-function analyzeCSGame(fav, over, btts) {
+function analyzeCSGame(fav, over, btts, csOdds) {
+  csOdds = csOdds || {};
+
   // ── PERFIL ──────────────────────────────────────────────
+  // Fiel ao PDF: tabela de perfis por fav + over
   let profileId, profileLabel;
-  if(fav <= 1.64 && over < 1.70)       { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
+  if     (fav <= 1.64 && over < 1.70)  { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
   else if(fav <= 1.64 && over <= 1.85) { profileId='OFENSIVO';             profileLabel='Favorito forte com rota ofensiva'; }
   else if(fav <= 1.80 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
   else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
@@ -1688,61 +1691,160 @@ function analyzeCSGame(fav, over, btts) {
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
   else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — stake reduzida'; }
 
-  // ── SCORES PLANO A ────────────────────────────────────────
+  // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
+
   if(profileId === 'GOLEADA') {
-    mainScores = ['2-0','3-0','3-1','2-1'];
-    if(btts <= 2.00) mainScores.push('2-1'); // já está mas confirma peso
-  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    // PDF: 2-0 / 3-0 / 2-1 / 3-1 (ordem exata)
+    // 1-0 como ponte fraca — avaliado pela odd real abaixo
+    mainScores = ['2-0','3-0','2-1','3-1'];
+
+  } else if(profileId === 'OFENSIVO') {
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1
     mainScores = ['1-0','2-0','2-1','3-1'];
+
+  } else if(profileId === 'EQUILIBRADO_OFENSIVO') {
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1
+    // BTTS < 1.85 → 0-1 stake maior (tratado no plano B)
+    mainScores = ['1-0','2-0','2-1','3-1'];
+
+  } else if(profileId === 'EQUILIBRADO') {
+    // PDF: 1-0 / 2-0 / 2-1 (sem 3-1)
+    mainScores = ['1-0','2-0','2-1'];
+
   } else if(profileId === 'ABERTO_BTTS') {
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 + 2-2 se BTTS < 1.85
     mainScores = ['1-0','2-0','2-1','3-1'];
+    if(btts < 1.85) mainScores.push('2-2');
+
+  } else if(profileId === 'CONSERVADOR') {
+    // PDF: 1-0 / 2-0 / 2-1 (sem 3-1)
+    mainScores = ['1-0','2-0','2-1'];
+
   } else {
+    // ALTO_RISCO: máx 5 scores
     mainScores = ['1-0','2-0','2-1'];
   }
-  // Remover duplicatas
-  mainScores = [...new Set(mainScores)];
 
-  // ── PLANO B ───────────────────────────────────────────────
-  let protection = ['1-1','0-1'];
-  if(profileId === 'ABERTO_BTTS' && btts < 1.85) protection = ['2-2','1-1','0-1'];
-  if(profileId === 'ALTO_RISCO') protection = ['0-1','1-1','1-2'];
+  // ── REGRA DO 1-0 — pela odd real do CS (PDF) ─────────────
+  // Lê a odd real do 1-0 que o usuário colou na Betfair
+  var odd10 = csOdds['1-0'] || 0;
 
-  // ── ÂNCORA (PLACAR PROJETADO) — calculado por código ─────
+  if(profileId === 'GOLEADA') {
+    // No perfil GOLEADA: 1-0 é "ponte fraca"
+    // Só inclui se odd CS ≥ @6.0 (PDF: avaliar odd do CS)
+    if(odd10 >= 6.0) {
+      mainScores.push('1-0'); // entra como ponte fraca no final
+    }
+    // Se odd < 6.0 ou não informada → não inclui (cluster inicia no 2-0)
+  } else {
+    // Outros perfis: 1-0 já está no cluster
+    // PDF: odd > @9.0 → stake maior (tratado no label do tipo)
+    // Odd < @5.0 com fav < 1.45 + over < 1.70 → remover
+    var condicoesDominante = (fav < 1.45 && over < 1.70);
+    if(odd10 > 0 && odd10 < 5.0 && condicoesDominante) {
+      // Remove o 1-0 — cluster inicia no 2-0
+      mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
+    }
+  }
+
+  // ── PLANO B — fiel ao PDF por perfil ──────────────────────
+  let protection = [];
+
+  if(profileId === 'GOLEADA') {
+    // PDF: 0-1 e 1-1 (stake mínima)
+    protection = ['1-1','0-1'];
+
+  } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
+    // PDF: 0-1 e 1-1
+    // BTTS < 1.85 → 0-1 com stake maior (marcamos com high01)
+    protection = ['1-1','0-1'];
+
+  } else if(profileId === 'EQUILIBRADO' || profileId === 'CONSERVADOR') {
+    // PDF: 0-1 e 1-1 (mais leve)
+    protection = ['1-1','0-1'];
+
+  } else if(profileId === 'ABERTO_BTTS') {
+    // PDF: 0-1 / 1-1 / 2-2
+    if(btts < 1.85) {
+      protection = ['2-2','1-1','0-1'];
+    } else {
+      protection = ['1-1','0-1'];
+    }
+
+  } else {
+    // ALTO_RISCO: PB robusto — 0-1 / 1-1 / 1-2
+    protection = ['0-1','1-1','1-2'];
+  }
+
+  // ── ÂNCORA (PLACAR PROJETADO) ─────────────────────────────
+  // Regra: sempre vitória do favorito
+  // BTTS < 1.85 → adversário marca → âncora com gol adversário (2-1)
+  // BTTS > 1.90 + GOLEADA → âncora limpa (3-0)
   let ancora = '';
   if(profileId === 'GOLEADA') {
     ancora = btts > 1.90 ? '3-0' : '2-1';
   } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
     ancora = btts < 1.85 ? '2-1' : '2-0';
   } else if(profileId === 'ABERTO_BTTS') {
-    ancora = '2-1';
+    ancora = btts < 1.85 ? '2-1' : '2-0';
   } else if(profileId === 'EQUILIBRADO') {
-    ancora = '2-0';
+    ancora = btts < 1.85 ? '2-1' : '2-0';
+  } else if(profileId === 'CONSERVADOR') {
+    ancora = '1-0';
   } else {
+    // ALTO_RISCO
     ancora = '1-0';
   }
 
-  // ── PIRÂMIDE ──────────────────────────────────────────────
+  // ── DUTCH vs PIRÂMIDE — pelas odds reais (PDF) ───────────
+  // Se diferença entre maior e menor odd do cluster < 2.0 → Dutch
+  // Se > 2.0 → Pirâmide
   let pyramidType = 'NORMAL';
-  if(over < 1.70) pyramidType = 'INVERTIDA';
-  else if(over > 1.90) pyramidType = 'CONSERVADORA';
+  var clusterScores = mainScores.concat(protection);
+  var clusterOdds = clusterScores
+    .map(function(s){ return csOdds[s] || 0; })
+    .filter(function(o){ return o > 0; });
 
-  // ── 1-0 posição ───────────────────────────────────────────
-  // GOLEADA → 1-0 no final como ponte fraca
-  // Outros → 1-0 no início como caminho
-  if(profileId !== 'GOLEADA') {
-    mainScores = mainScores.filter(s => s !== '1-0');
-    mainScores.unshift('1-0');
+  if(clusterOdds.length >= 2) {
+    var maxOdd = Math.max.apply(null, clusterOdds);
+    var minOdd = Math.min.apply(null, clusterOdds);
+    var spread = maxOdd - minOdd;
+    if(spread < 2.0) {
+      pyramidType = 'DUTCH';
+    } else if(over < 1.70) {
+      pyramidType = 'INVERTIDA';
+    } else if(over > 1.90) {
+      pyramidType = 'CONSERVADORA';
+    } else {
+      pyramidType = 'NORMAL';
+    }
+  } else {
+    // Sem odds reais — fallback pelo over
+    if(over < 1.70)       pyramidType = 'INVERTIDA';
+    else if(over > 1.90)  pyramidType = 'CONSERVADORA';
+    else                  pyramidType = 'NORMAL';
   }
 
+  // ── META CS ───────────────────────────────────────────────
   const retornoSimples = Math.round((fav - 1) * 100);
+
+  // ── 1-0 tipo para o card ──────────────────────────────────
+  // odd > @9.0 → caminho com leverage alto
+  // @5.0-9.0 → caminho normal
+  // ponte fraca (GOLEADA) → tipo diferente
+  var tipo10 = 'caminho';
+  if(profileId === 'GOLEADA') tipo10 = 'caminho_fraco';
+  else if(odd10 > 9.0) tipo10 = 'caminho_leverage';
 
   return {
     profileId, profileLabel, mainScores, protection,
     ancora, pyramidType, retornoSimples,
     metaCS: retornoSimples * 2,
     caminhoPeso: (profileId === 'GOLEADA') ? 'fraco' : 'normal',
-    high01: btts < 1.85
+    high01: btts < 1.85,
+    tipo10: tipo10,
+    odd10Used: odd10
   };
 }
 
@@ -1854,7 +1956,7 @@ async function analisarJogo() {
     : '';
 
   // ── Motor determinístico — calcular scores por código ──────
-  const engine = analyzeCSGame(fav, over, btts);
+  const engine = analyzeCSGame(fav, over, btts, S.csOdds);
 
   const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
 
@@ -1876,6 +1978,8 @@ Plano B: ${engine.protection.join(', ')}
 Âncora (PLACAR PROJETADO): ${engine.ancora}
 Pirâmide: ${engine.pyramidType}
 Perfil: ${engine.profileId}
+${engine.caminhoPeso === 'fraco' ? 'NOTA: 1-0 é PONTE FRACA neste perfil — se incluído, é score de passagem, não alvo.' : ''}
+${engine.odd10Used > 9.0 ? 'NOTA: 1-0 tem odd alta (@'+engine.odd10Used+') — alta compressão após gol, bom leverage ao vivo.' : ''}
 
 REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova. Não mude o ancora.\n\nLISTA VERTICAL DA NARRATIVA DEVE CONTER TODOS ESSES SCORES:\nPlano A: ${engine.mainScores.join(', ')}\nPlano B: ${engine.protection.join(', ')}\nTotal na lista = ${engine.mainScores.length + engine.protection.length} scores (igual aos cards).\nNenhum score pode ficar fora da lista.\n\nÂNCORA DEFINITIVO: ${engine.ancora}\nNo PARÁGRAFO 3, DEVE aparecer este score como placar projetado.\nExemplo: '2-1 é o placar que esse jogo está pedindo.'\nPROIBIDO: mencionar outro score como mais provável que não seja o ancora.\n\nSua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
 
