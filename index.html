@@ -35,10 +35,11 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 .sb-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;}
 .sb-date{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:2px;}
 .sb-section{padding:8px 14px 6px;font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid var(--border);background:#040810;}
-.sb-scroll{flex:1;overflow-y:auto;padding:8px 8px;}
+.sb-scroll{flex:1;overflow-y:auto;padding:0;}
 .sb-scroll::-webkit-scrollbar{width:3px;}
 .sb-scroll::-webkit-scrollbar-track{background:transparent;}
 .sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.sb-list{padding:6px 8px;}
 .sb-game{padding:11px 12px;border-radius:10px;cursor:pointer;margin-bottom:7px;border:1px solid #0f1e2e;background:linear-gradient(135deg,#0b1520,#0d1825);transition:all .18s;position:relative;border-left:3px solid var(--ylw);overflow:hidden;}
 .sb-game::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,212,255,.03));opacity:0;transition:opacity .2s;}
 .sb-game:hover{background:linear-gradient(135deg,#0d1a28,#0f1e2e);border-color:rgba(0,212,255,.3);transform:translateX(2px);}
@@ -315,20 +316,22 @@ select{cursor:pointer;appearance:none;}
     </div>
     <button onclick="openModal()" style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),var(--pur));border:none;color:#000;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,212,255,.2);transition:all .15s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">+</button>
   </div>
-  <div class="sb-section" id="sb-live-label" style="display:none;">🔴 AO VIVO</div>
-  <div id="sb-live-list"></div>
-  <div class="sb-section" style="display:flex;align-items:center;justify-content:space-between;"><span>📋 HOJE</span><span id="hoje-count" style="background:rgba(0,212,255,.1);color:var(--acc);border-radius:10px;padding:1px 6px;font-size:7px;"></span></div>
-  <div class="sb-scroll" id="sb-today-list">
-    <div style="text-align:center;padding:24px 16px;color:var(--txt3);">
-      <div style="font-size:28px;margin-bottom:8px;opacity:.4;">⚽</div>
-      <div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--txt3);margin-bottom:4px;">SEM JOGOS</div>
-      <div style="font-family:Space Mono,monospace;font-size:7px;line-height:1.8;opacity:.7;">Cole uma análise<br>e clique ANALISAR</div>
+  <div class="sb-scroll">
+    <div id="sb-live-label" class="sb-section" style="display:none;">🔴 AO VIVO</div>
+    <div class="sb-list" id="sb-live-list"></div>
+    <div class="sb-section" style="display:flex;align-items:center;justify-content:space-between;"><span>📋 HOJE</span><span id="hoje-count" style="background:rgba(0,212,255,.1);color:var(--acc);border-radius:10px;padding:1px 6px;font-size:7px;"></span></div>
+    <div class="sb-list" id="sb-today-list">
+      <div style="text-align:center;padding:24px 16px;color:var(--txt3);">
+        <div style="font-size:28px;margin-bottom:8px;opacity:.4;">⚽</div>
+        <div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--txt3);margin-bottom:4px;">SEM JOGOS</div>
+        <div style="font-family:Space Mono,monospace;font-size:7px;line-height:1.8;opacity:.7;">Cole uma análise<br>e clique ANALISAR</div>
+      </div>
     </div>
+    <div id="sb-tmr-label" class="sb-section" style="display:none;">📅 AMANHÃ</div>
+    <div class="sb-list" id="sb-tmr-list"></div>
+    <div id="sb-other-label" class="sb-section" style="display:none;">📆 OUTROS DIAS</div>
+    <div class="sb-list" id="sb-other-list"></div>
   </div>
-  <div class="sb-section" id="sb-tmr-label" style="display:none;">📅 AMANHÃ</div>
-  <div id="sb-tmr-list"></div>
-  <div class="sb-section" id="sb-other-label" style="display:none;">📆 OUTROS DIAS</div>
-  <div id="sb-other-list"></div>
   <div class="sb-footer">
     <button class="sb-hist-btn" onclick="openHistModal()">📅 HISTÓRICO DE DIAS</button>
   </div>
@@ -774,7 +777,7 @@ function renderSidebar() {
   if(tmrLabel && tmrList) {
     if(tmrGames.length > 0) {
       tmrLabel.style.display = 'block';
-      tmrList.style.padding  = '6px 8px';
+      // padding via CSS .sb-list
       tmrList.innerHTML = tmrGames.map(function(g){ return sbGameCard(g); }).join('');
     } else {
       tmrLabel.style.display = 'none';
@@ -789,7 +792,7 @@ function renderSidebar() {
   if(otherLabel && otherList) {
     if(otherGames.length > 0) {
       otherLabel.style.display = 'block';
-      otherList.style.padding  = '6px 8px';
+      // padding via CSS .sb-list
       otherList.innerHTML = otherGames.map(function(g){ return sbGameCard(g); }).join('');
     } else {
       otherLabel.style.display = 'none';
