@@ -7,11 +7,11 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
-:root{--bg:#070c12;--card:#0f1a24;--border:#1a2a38;--acc:#00d4ff;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffd600;--org:#ff7a35;--pur:#7c5cfc;--txt:#ddeeff;--txt2:#6b8ba4;--txt3:#3a5570;}
+:root{--bg:#06080f;--card:#0d1520;--border:#162030;--acc:#00d4ff;--acc2:#00b8e0;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffc740;--org:#ff7a35;--pur:#7c5cfc;--txt:#d8eaf8;--txt2:#5a7a96;--txt3:#2e4a62;}
 body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-size:13px;min-height:100vh;}
 
 /* HEADER */
-.hdr{background:#060b11;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;}
+.hdr{background:linear-gradient(180deg,#080e18,#06080f);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 1px 20px rgba(0,0,0,.4);}
 .logo{display:flex;align-items:center;gap:10px;}
 .lbox{width:36px;height:36px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:#000;box-shadow:0 0 14px rgba(0,212,255,.3);}
 .lname{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,var(--acc),#fff,var(--acc));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite;}
@@ -30,33 +30,39 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 .app-body{display:flex;min-height:calc(100vh - 52px - 48px);}
 
 /* SIDEBAR */
-.sidebar{width:220px;flex-shrink:0;background:#060b11;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:100px;height:calc(100vh - 100px);overflow:hidden;}
-.sb-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.sb-title{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;}
-.sb-date{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);}
-.sb-section{padding:8px 12px 4px;font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);}
-.sb-scroll{flex:1;overflow-y:auto;padding:6px 8px;}
-.sb-game{padding:10px 14px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid #162030;background:#0b1219;transition:all .15s;position:relative;border-left:2px solid #f5a623;}
-.sb-game:hover{background:#0a1520;border-color:var(--border);}
-.sb-game.act{background:rgba(0,212,255,.06);border-color:var(--acc);}
-.sb-game.live{border-color:var(--red);}
-.sb-game.done{opacity:.6;}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:2px;}
-.sb-dot.pre{background:var(--ylw);}
-.sb-dot.live{background:var(--red);box-shadow:0 0 5px var(--red);animation:blink 1.5s infinite;}
+.sidebar{width:230px;flex-shrink:0;background:#050a10;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:100px;height:calc(100vh - 100px);overflow:hidden;}
+.sb-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,#060d16,#050a10);}
+.sb-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;}
+.sb-date{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:2px;}
+.sb-section{padding:8px 14px 6px;font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid var(--border);background:#040810;}
+.sb-scroll{flex:1;overflow-y:auto;padding:8px 8px;}
+.sb-scroll::-webkit-scrollbar{width:3px;}
+.sb-scroll::-webkit-scrollbar-track{background:transparent;}
+.sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.sb-game{padding:11px 12px;border-radius:10px;cursor:pointer;margin-bottom:7px;border:1px solid #0f1e2e;background:linear-gradient(135deg,#0b1520,#0d1825);transition:all .18s;position:relative;border-left:3px solid var(--ylw);overflow:hidden;}
+.sb-game::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,212,255,.03));opacity:0;transition:opacity .2s;}
+.sb-game:hover{background:linear-gradient(135deg,#0d1a28,#0f1e2e);border-color:rgba(0,212,255,.3);transform:translateX(2px);}
+.sb-game:hover::after{opacity:1;}
+.sb-game.act{background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,212,255,.03));border-color:var(--acc);border-left-color:var(--acc);box-shadow:0 0 12px rgba(0,212,255,.08);}
+.sb-game.live{border-left-color:var(--red);background:linear-gradient(135deg,rgba(255,77,106,.06),rgba(255,77,106,.02));}
+.sb-game.done{opacity:.55;}
+.sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.sb-dot.pre{background:var(--ylw);box-shadow:0 0 4px rgba(255,214,0,.4);}
+.sb-dot.live{background:var(--red);box-shadow:0 0 6px var(--red);animation:blink 1.5s infinite;}
 .sb-dot.done{background:var(--txt3);}
-.sb-dot.win{background:var(--grn);}
+.sb-dot.win{background:var(--grn);box-shadow:0 0 4px rgba(0,201,110,.4);}
 .sb-dot.loss{background:var(--red);}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,201,110,.4);}50%{box-shadow:0 0 0 8px rgba(0,201,110,.0);}}
-.sb-name{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sb-info{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:2px;}
-.sb-cluster{font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt);line-height:1.2;}
+.sb-vs{font-family:'Space Mono',monospace;font-size:6px;color:var(--txt3);letter-spacing:1px;margin:1px 0;}
+.sb-info{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;display:flex;align-items:center;gap:4px;}
+.sb-cluster{font-family:'Space Mono',monospace;font-size:6px;color:rgba(0,212,255,.6);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px;}
 .sb-result{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;margin-top:2px;}
-.sb-badge{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:1px;display:inline-block;}
-.sb-footer{padding:8px 12px;border-top:1px solid var(--border);}
-.sb-hist-btn{width:100%;padding:6px;border-radius:6px;background:#0a1520;border:1px solid var(--border);color:var(--txt2);font-family:'Barlow Condensed',sans-serif;font-size:8px;font-weight:700;letter-spacing:1px;cursor:pointer;text-align:center;}
-.sb-hist-btn:hover{border-color:var(--acc);color:var(--acc);}
+.sb-badge{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:1px;display:inline-block;}
+.sb-footer{padding:10px 12px;border-top:1px solid var(--border);}
+.sb-hist-btn{width:100%;padding:8px;border-radius:8px;background:#0a1520;border:1px solid var(--border);color:var(--txt2);font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;text-align:center;transition:all .15s;}
+.sb-hist-btn:hover{border-color:var(--acc);color:var(--acc);background:rgba(0,212,255,.05);}
 
 /* HIST MODAL */
 .hist-modal{display:none;position:fixed;inset:0;background:rgba(5,9,14,.92);z-index:600;align-items:flex-start;justify-content:flex-end;}
@@ -74,7 +80,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 @media(max-width:900px){.sidebar{display:none;}}
 
 /* CARDS */
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+.card{background:linear-gradient(135deg,var(--card),#0a1218);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.2);}
 .card-title{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;margin-bottom:12px;}
 .card-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 
@@ -105,18 +111,18 @@ select{cursor:pointer;appearance:none;}
 .bdg-o{background:rgba(255,122,53,.1);color:var(--org);border:1px solid rgba(255,122,53,.25);}
 
 /* ALERT BOXES */
-.ab{border-radius:9px;padding:12px;margin-bottom:10px;border-left:3px solid;}
-.ab-g{background:rgba(0,201,110,.04);border-color:var(--grn);}
-.ab-r{background:rgba(255,77,106,.04);border-color:var(--red);}
-.ab-y{background:rgba(255,214,0,.04);border-color:var(--ylw);}
-.ab-b{background:rgba(0,212,255,.04);border-color:var(--acc);}
-.ab-o{background:rgba(255,122,53,.04);border-color:var(--org);}
-.ab-p{background:rgba(124,92,252,.04);border-color:var(--pur);}
+.ab{border-radius:10px;padding:12px 14px;margin-bottom:10px;border-left:3px solid;backdrop-filter:blur(4px);}
+.ab-g{background:rgba(0,201,110,.05);border-color:var(--grn);border:1px solid rgba(0,201,110,.12);border-left:3px solid var(--grn);}
+.ab-r{background:rgba(255,77,106,.05);border-color:var(--red);border:1px solid rgba(255,77,106,.12);border-left:3px solid var(--red);}
+.ab-y{background:rgba(255,199,64,.05);border-color:var(--ylw);border:1px solid rgba(255,199,64,.12);border-left:3px solid var(--ylw);}
+.ab-b{background:rgba(0,212,255,.04);border-color:var(--acc);border:1px solid rgba(0,212,255,.12);border-left:3px solid var(--acc);}
+.ab-o{background:rgba(255,122,53,.05);border-color:var(--org);border:1px solid rgba(255,122,53,.12);border-left:3px solid var(--org);}
+.ab-p{background:rgba(124,92,252,.05);border-color:var(--pur);border:1px solid rgba(124,92,252,.12);border-left:3px solid var(--pur);}
 .ab-title{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;}
 .ab-text{font-size:11px;color:var(--txt2);line-height:1.65;}
 
 /* SCORE CARDS */
-.score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;}
+.score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;}@media(max-width:1200px){.score-grid{grid-template-columns:repeat(2,1fr);}}
 .score-card{background:#0a1520;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;animation:cardIn .4s ease both;}
 .score-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4);}
 .score-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
@@ -167,6 +173,11 @@ select{cursor:pointer;appearance:none;}
 .live-dot{position:absolute;top:10px;right:12px;font-family:'Space Mono',monospace;font-size:7px;letter-spacing:2px;color:var(--red);animation:blink 1.5s infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
 @keyframes twblink{0%,100%{opacity:1;}50%{opacity:0;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.ld-step{display:flex;align-items:center;gap:8px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);padding:6px 10px;border-radius:6px;border:1px solid transparent;transition:all .3s;letter-spacing:.5px;}
+.ld-step.active{color:var(--txt);border-color:rgba(0,212,255,.15);background:rgba(0,212,255,.04);}
+.ld-step.active .ld-icon{filter:none;}
+.ld-icon{font-size:12px;width:20px;text-align:center;filter:grayscale(1);transition:filter .3s;}
 @keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
 @keyframes routeGlow{0%{text-shadow:0 0 0 transparent;}50%{text-shadow:0 0 20px var(--acc),0 0 40px var(--acc);}100%{text-shadow:0 0 8px rgba(0,212,255,.4);}}
 @keyframes badgePop{0%{transform:scale(0.5);opacity:0;}70%{transform:scale(1.15);}100%{transform:scale(1);opacity:1;}}
@@ -302,14 +313,16 @@ select{cursor:pointer;appearance:none;}
       <div class="sb-title">Jogos do Dia</div>
       <div class="sb-date" id="sb-date"></div>
     </div>
-    <button class="btn btn-p btn-sm" onclick="openModal()" style="padding:3px 8px;font-size:8px;">+</button>
+    <button onclick="openModal()" style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),var(--pur));border:none;color:#000;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,212,255,.2);transition:all .15s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">+</button>
   </div>
   <div class="sb-section" id="sb-live-label" style="display:none;">🔴 AO VIVO</div>
   <div id="sb-live-list"></div>
-  <div class="sb-section">📋 HOJE</div>
+  <div class="sb-section" style="display:flex;align-items:center;justify-content:space-between;"><span>📋 HOJE</span><span id="hoje-count" style="background:rgba(0,212,255,.1);color:var(--acc);border-radius:10px;padding:1px 6px;font-size:7px;"></span></div>
   <div class="sb-scroll" id="sb-today-list">
-    <div style="text-align:center;padding:20px;color:var(--txt3);font-family:'Space Mono',monospace;font-size:8px;">
-      Nenhum jogo.<br>Cole uma análise<br>para começar.
+    <div style="text-align:center;padding:24px 16px;color:var(--txt3);">
+      <div style="font-size:28px;margin-bottom:8px;opacity:.4;">⚽</div>
+      <div style="font-family:Barlow Condensed,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--txt3);margin-bottom:4px;">SEM JOGOS</div>
+      <div style="font-family:Space Mono,monospace;font-size:7px;line-height:1.8;opacity:.7;">Cole uma análise<br>e clique ANALISAR</div>
     </div>
   </div>
   <div class="sb-section" id="sb-tmr-label" style="display:none;">📅 AMANHÃ</div>
@@ -729,6 +742,9 @@ function renderSidebar() {
 
   // Today list (pre + done)
   const todayList = document.getElementById('sb-today-list');
+  // Update hoje count badge
+  var hojeCount = document.getElementById('hoje-count');
+  if(hojeCount) hojeCount.textContent = (preGames.length+doneGames.length) > 0 ? (preGames.length+doneGames.length) : '';
   if(todayList) {
     const all = [...preGames, ...doneGames];
     if(all.length === 0) {
@@ -779,24 +795,40 @@ function sbGameCard(g) {
     ? `<span style="color:var(--ylw);font-size:8px;font-family:'Space Mono',monospace;">${g.placar}</span> `
     : '';
 
-  return `<div class="sb-game ${isAct?'act':''} ${g.status}" onclick="selectSbGame('${g.id}')">
-    <div style="display:flex;gap:6px;align-items:flex-start;">
-      ${statusDot}
-      <div style="flex:1;min-width:0;">
-        <div class="sb-name">${g.name}</div>
-        <div class="sb-info">${g.comp||'CS Trading'} ${g.hora?'• '+g.hora:''}</div>
-        ${clusterInfo}
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">
-          <div>${placarInfo}${statusBadge}</div>
-          <div style="display:flex;gap:3px;">
-            ${g.status === 'live' ? '<button onclick="event.stopPropagation();encerrarJogo(\''+g.id+'\')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">FIM</button>' : ''}
-            ${g.status === 'pre' ? '<button onclick="event.stopPropagation();iniciarLive(\''+g.id+'\')" style="background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.2);border-radius:4px;padding:1px 5px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>' : ''}
-            <button onclick="event.stopPropagation();deleteGame('${g.id}')" style="background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.15);border-radius:4px;padding:1px 6px;color:var(--red);font-size:9px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;" title="Remover jogo">✕</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>`;
+  // Split name into teams for better display
+  var nameParts = g.name ? g.name.split(' vs ') : [g.name, ''];
+  var teamA = nameParts[0] || g.name;
+  var teamB = nameParts[1] || '';
+  var displayName = teamB
+    ? '<div class="sb-name">'+teamA+'</div><div style="font-family:Space Mono,monospace;font-size:6px;color:var(--txt3);margin:1px 0;letter-spacing:1px;">vs</div><div class="sb-name" style="color:var(--txt2);">'+teamB+'</div>'
+    : '<div class="sb-name">'+teamA+'</div>';
+
+  // Cluster: show only top 3 scores cleanly
+  var clusterShort = g.cluster && g.cluster.length > 0
+    ? '<div class="sb-cluster">'+g.cluster.slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
+    : '';
+
+  return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" onclick="selectSbGame(\''+g.id+'\')">'+ 
+    '<div style="display:flex;gap:8px;align-items:flex-start;">'+
+      statusDot+
+      '<div style="flex:1;min-width:0;">'+
+        displayName+
+        '<div class="sb-info">'+
+          '<span style="color:var(--txt3);">'+(g.comp||'CS Trading')+'</span>'+
+          (g.hora ? '<span style="color:var(--border);">•</span><span style="color:var(--acc);">'+g.hora+'</span>' : '')+
+        '</div>'+
+        clusterShort+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">'+
+          '<div>'+placarInfo+statusBadge+'</div>'+
+          '<div style="display:flex;gap:3px;">'+
+            (g.status === 'live' ? '<button onclick="event.stopPropagation();encerrarJogo(\''+g.id+'\')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">FIM</button>' : '')+
+            (g.status === 'pre' ? '<button onclick="event.stopPropagation();iniciarLive(\''+g.id+'\')" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">▶ LIVE</button>' : '')+
+            '<button onclick="event.stopPropagation();deleteGame(\''+g.id+'\')" style="background:transparent;border:none;border-radius:4px;padding:2px 5px;color:var(--txt3);font-size:9px;cursor:pointer;opacity:.5;transition:opacity .15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5" title="Remover">✕</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
 }
 
 function deleteGame(id) {
@@ -1847,12 +1879,33 @@ Perfil: ${engine.profileId}
 
 REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova. Não mude o ancora.\n\nLISTA VERTICAL DA NARRATIVA DEVE CONTER TODOS ESSES SCORES:\nPlano A: ${engine.mainScores.join(', ')}\nPlano B: ${engine.protection.join(', ')}\nTotal na lista = ${engine.mainScores.length + engine.protection.length} scores (igual aos cards).\nNenhum score pode ficar fora da lista.\n\nÂNCORA DEFINITIVO: ${engine.ancora}\nNo PARÁGRAFO 3, DEVE aparecer este score como placar projetado.\nExemplo: '2-1 é o placar que esse jogo está pedindo.'\nPROIBIDO: mencionar outro score como mais provável que não seja o ancora.\n\nSua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
 
-  // Show loading
+  // Show EPIC loading
   const out = document.getElementById('resultado-out');
   const badge = document.getElementById('res-badge');
-  if(out) out.innerHTML = `<div style="text-align:center;padding:40px;color:var(--txt3);"><div style="font-size:26px;margin-bottom:10px;">⏳</div><div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;">ANALISANDO CONTEXTO...</div><div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-top:6px;">Lendo padrões de placares, BTTS, volume de gols...</div></div>`;
+  if(out) out.innerHTML = [
+    '<div style="padding:30px 20px;text-align:center;">',
+      '<div style="position:relative;width:64px;height:64px;margin:0 auto 20px;">',
+        '<div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(0,212,255,.1);"></div>',
+        '<div style="position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--acc);animation:spin 1s linear infinite;"></div>',
+        '<div style="position:absolute;inset:8px;border-radius:50%;border:2px solid transparent;border-top-color:var(--pur);animation:spin .7s linear infinite reverse;"></div>',
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;">🧠</div>',
+      '</div>',
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;color:var(--acc);margin-bottom:16px;">PROCESSANDO</div>',
+      '<div id="loading-steps" style="text-align:left;max-width:220px;margin:0 auto;display:flex;flex-direction:column;gap:8px;">',
+        '<div class="ld-step active" id="ls1"><span class="ld-icon">⚡</span><span>Lendo padrões e contexto</span></div>',
+        '<div class="ld-step" id="ls2"><span class="ld-icon">📊</span><span>Analisando odds e perfil</span></div>',
+        '<div class="ld-step" id="ls3"><span class="ld-icon">🎯</span><span>Calculando cluster de placares</span></div>',
+        '<div class="ld-step" id="ls4"><span class="ld-icon">✍️</span><span>Gerando narrativa</span></div>',
+      '</div>',
+    '</div>'
+  ].join('');
   if(badge) badge.innerHTML = '<span class="bdg bdg-y">PROCESSANDO</span>';
   S.thinking = true;
+  // Animate loading steps
+  var lsTimers = [];
+  lsTimers.push(setTimeout(function(){ var e=document.getElementById('ls2'); if(e){e.classList.add('active');} }, 800));
+  lsTimers.push(setTimeout(function(){ var e=document.getElementById('ls3'); if(e){e.classList.add('active');} }, 1800));
+  lsTimers.push(setTimeout(function(){ var e=document.getElementById('ls4'); if(e){e.classList.add('active');} }, 3000));
 
   try {
     const resp = await fetch('/.netlify/functions/analyze', {
