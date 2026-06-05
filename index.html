@@ -54,7 +54,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 .sb-dot.loss{background:var(--red);}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,201,110,.4);}50%{box-shadow:0 0 0 8px rgba(0,201,110,.0);}}
-.sb-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt);line-height:1.2;}
+.sb-name{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.3px;color:var(--txt);line-height:1.25;word-break:break-word;}
 .sb-vs{font-family:'Space Mono',monospace;font-size:6px;color:var(--txt3);letter-spacing:1px;margin:1px 0;}
 .sb-info{font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;display:flex;align-items:center;gap:4px;}
 .sb-cluster{font-family:'Space Mono',monospace;font-size:6px;color:rgba(0,212,255,.6);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px;}
@@ -1748,7 +1748,7 @@ function analyzeCSGame(fav, over, btts) {
 
 function typeWriter(el, html, spd) {
   if(!el) return;
-  spd = spd || 4;
+  spd = spd || 1;
   el.innerHTML = '';
   el.style.color = 'var(--txt)';
   // Add blinking cursor
@@ -1770,7 +1770,7 @@ function typeWriter(el, html, spd) {
 async function analisarJogo() {
   if(S.thinking) return;
   var btnAn = document.getElementById('btn-analisar');
-  if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.textContent='⏳ ANALISANDO...'; }
+  if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.innerHTML='⏳ ANALISANDO...'; }
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
 
   const texto = document.getElementById('an-texto')?.value?.trim() || '';
@@ -2072,28 +2072,34 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     let contextWarnings = '';
     // ALERTA DO GÊNIO — destaque máximo + placar projetado
     if(alertaText) contextWarnings +=
-      '<div style="background:linear-gradient(135deg,rgba(255,199,64,.12),rgba(255,122,53,.08));border:1px solid rgba(255,199,64,.45);border-radius:12px;padding:14px 16px;margin-bottom:10px;position:relative;overflow:hidden;">'+
-        '<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ylw),var(--org));"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
-          '<span style="font-size:18px;">⚡</span>'+
-          '<span style="font-family:Barlow Condensed,sans-serif;font-size:12px;font-weight:900;letter-spacing:2px;color:var(--ylw);text-transform:uppercase;">ALERTA DO GÊNIO</span>'+
+      '<div style="background:linear-gradient(135deg,rgba(255,199,64,.14),rgba(255,122,53,.10));border:1px solid rgba(255,199,64,.5);border-radius:14px;padding:18px 20px;margin-bottom:12px;position:relative;overflow:hidden;">'+
+        '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--ylw),var(--org));"></div>'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'+
+          '<span style="font-size:22px;line-height:1;">⚡</span>'+
+          '<span style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:900;letter-spacing:3px;color:var(--ylw);text-transform:uppercase;">ALERTA DO GÊNIO</span>'+
         '</div>'+
-        '<div style="font-size:12px;color:var(--txt);line-height:1.7;font-style:italic;">'+alertaText+'</div>'+
+        '<div style="font-size:13px;color:#e8f4ff;line-height:1.85;letter-spacing:.2px;">'+alertaText+'</div>'+
       '</div>';
     // PLACAR PROJETADO — logo abaixo do alerta
     var ancoraProjt = engine ? engine.ancora : null;
     if(ancoraProjt) contextWarnings +=
-      '<div style="background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,255,.08));border:1px solid rgba(124,92,252,.4);border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:center;position:relative;overflow:hidden;">'+
-        '<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--pur),var(--acc));"></div>'+
-        '<div style="font-family:Space Mono,monospace;font-size:8px;color:rgba(124,92,252,.8);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">🎯 Placar Projetado pelo Gênio</div>'+
-        '<div style="font-family:Barlow Condensed,sans-serif;font-size:52px;font-weight:900;letter-spacing:8px;color:#fff;line-height:1;text-shadow:0 0 24px rgba(124,92,252,.6),0 0 48px rgba(0,212,255,.3);">'+ancoraProjt+'</div>'+
-        '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-top:8px;letter-spacing:1px;">Score âncora — maior probabilidade</div>'+
+      '<div style="background:linear-gradient(135deg,rgba(124,92,252,.18),rgba(0,212,255,.10));border:1px solid rgba(124,92,252,.45);border-radius:14px;padding:20px;margin-bottom:12px;text-align:center;position:relative;overflow:hidden;">'+
+        '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--pur),var(--acc));"></div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:12px;font-weight:700;color:rgba(180,150,255,.9);letter-spacing:3px;margin-bottom:14px;text-transform:uppercase;">🎯 Placar Projetado pelo Gênio</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:64px;font-weight:900;letter-spacing:10px;color:#fff;line-height:1;text-shadow:0 0 30px rgba(124,92,252,.7),0 0 60px rgba(0,212,255,.3);margin-bottom:14px;">'+ancoraProjt+'</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;color:rgba(180,200,255,.8);letter-spacing:2px;text-transform:uppercase;">Score Âncora — Maior Probabilidade</div>'+
       '</div>';
     // Validation cross-check banner
-    contextWarnings += `<div style="background:#0a1520;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:'Space Mono',monospace;font-size:8px;">
-      <span style="color:${confidence.color};font-weight:700;">${confidence.icon} VALIDAÇÃO: ${crossScore.toFixed(1)}/5 — CONFIANÇA ${confidence.level}</span><br>
-      <span style="color:var(--txt3);">xG:${ind1?'✅':'❌'} DNA:${ind2?'✅':'❌'} Over:${ind3===1?'✅':ind3===0.5?'⚠️':'❌'} BTTS:${ind4===1?'✅':ind4===0.5?'⚠️':'❌'} CS:${ind5?'✅':'❌'}</span>
-    </div>`;
+    contextWarnings += '<div style="background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;">'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:900;color:'+confidence.color+';letter-spacing:1px;margin-bottom:8px;">'+confidence.icon+' VALIDAÇÃO: '+crossScore.toFixed(1)+'/5 — CONFIANÇA '+confidence.level+'</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind1?'var(--grn)':'var(--red)')+';">xG '+(ind1?'✅':'❌')+'</span>'+
+        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind2?'var(--grn)':'var(--red)')+';">DNA '+(ind2?'✅':'❌')+'</span>'+
+        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind3===1?'var(--grn)':ind3===0.5?'var(--ylw)':'var(--red)')+';">Over '+(ind3===1?'✅':ind3===0.5?'⚠️':'❌')+'</span>'+
+        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind4===1?'var(--grn)':ind4===0.5?'var(--ylw)':'var(--red)')+';">BTTS '+(ind4===1?'✅':ind4===0.5?'⚠️':'❌')+'</span>'+
+        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind5?'var(--grn)':'var(--red)')+';">CS '+(ind5?'✅':'❌')+'</span>'+
+      '</div>'+
+    '</div>';
     if(isCopa) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
       <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — stake -20% aplicado.</div>
     </div>`;
@@ -2114,7 +2120,17 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
       // Show analysis text + context warnings above cluster
       // Formatar narrativa com hierarquia visual
       const fmtCorrigido = injetarScoresNarrativa(fmt||'', S.currentCluster);
-      if(out) typeWriter(out, fmtCorrigido.replace(/\n/g,'<br>') + contextWarnings, 14);
+      // Format narrative: paragraphs spaced, P3 highlighted
+      var narrativaFmt = fmtCorrigido
+        .replace(/\n\n/g, '</p><p style="margin-bottom:14px;">')
+        .replace(/\n/g, '<br>')
+        .replace(/(minha fórmula[^<]*será[^<]*:)/gi, '<span style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:900;letter-spacing:1px;color:var(--acc);">$1</span>')
+        .replace(/(-\s*Risco de gol[^<]*<br>)/gi, '<span style="color:var(--ylw);">$1</span>')
+        .replace(/(-\s*Potencial tardio[^<]*<br>)/gi, '<span style="color:var(--txt);">$1</span>')
+        .replace(/(-\s*Gestão ao vivo[^<]*<br>)/gi, '<span style="color:var(--grn);">$1</span>')
+        .replace(/(⚠️[^<]*)/gi, '<span style="color:var(--ylw);">$1</span>');
+      var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
+      if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
       renderCluster(cluster, stake);
       notify('🎯 CLUSTER GERADO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
@@ -2800,10 +2816,10 @@ function renderCluster(cluster, stake) {
     var planoB2 = cluster.filter(function(s){return s.tipo==='planb'||s.tipo==='expansao';}).map(function(s){return s.score;});
     var routeStr = planoA2.join(' → ')+(planoB2.length?' | '+planoB2.join(' / '):'');
     var seqBlock =
-      '<div style="margin-top:10px;padding:10px;background:#0a1520;border-radius:8px;text-align:center;">'+
+      '<div style="margin-top:12px;padding:18px 14px;background:linear-gradient(135deg,rgba(0,212,255,.07),rgba(0,212,255,.03));border:1px solid rgba(0,212,255,.2);border-radius:12px;text-align:center;">'+
       removed10Line+
-      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:4px;">ROTA DO JOGO</div>'+
-      '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:var(--acc);letter-spacing:3px;">'+routeStr+'</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--acc);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase;">⚡ Rota do Jogo</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:var(--acc);letter-spacing:4px;line-height:1.4;animation:routeGlow 2s ease forwards;">'+routeStr+'</div>'+
       '</div>';
 
     // WHY number of scores
