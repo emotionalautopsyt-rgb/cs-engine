@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧠 Gênio dos Placares — CS Trading</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#06080f;--card:#0d1520;--border:#162030;--acc:#00d4ff;--acc2:#00b8e0;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffc740;--org:#ff7a35;--pur:#7c5cfc;--txt:#d8eaf8;--txt2:#5a7a96;--txt3:#2e4a62;}
 body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-size:13px;min-height:100vh;}
@@ -250,7 +250,7 @@ select{cursor:pointer;appearance:none;}
   font-weight:900;
   letter-spacing:2.4px;
   text-transform:uppercase;
-  box-shadow:0 4px 14px rgba(255,184,0,.14), inset 0 1px 0 rgba(255,255,255,.25);
+  box-shadow:0 0 18px rgba(255,184,0,.24), inset 0 1px 0 rgba(255,255,255,.35);
   position:relative;
   overflow:hidden;
   transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
@@ -277,7 +277,7 @@ select{cursor:pointer;appearance:none;}
 }
 .genio-analisar-btn:hover{
   transform:translateY(-2px);
-  box-shadow:0 6px 18px rgba(255,184,0,.20), 0 6px 18px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow:0 0 28px rgba(255,184,0,.38), 0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.45);
   filter:saturate(1.08);
 }
 .genio-analisar-btn:active{
@@ -294,31 +294,147 @@ select{cursor:pointer;appearance:none;}
 </style>
 
 <style>
-/* PATCH RESTAURAÇÃO VISUAL — voltar para o visual limpo da primeira versão */
-#perf-view-geral .g4 .card{
-  min-height:auto!important;
+/* =====================================================
+   VISUAL FINAL CLEAN — parecido com a primeira versão
+   Sem glow exagerado, fontes legíveis e dashboard PT-BR
+   ===================================================== */
+
+:root{
+  --bg:#070b12;
+  --card:#0c1520;
+  --border:#183247;
+  --acc:#00d4ff;
+  --acc2:#00a8d8;
+  --grn:#00c96e;
+  --red:#ff4d6a;
+  --ylw:#ffc740;
+  --txt:#e8f1f8;
+  --txt2:#9bb2c3;
+  --txt3:#6f8799;
 }
-#p-saldo,#p-wr,#p-roi,#p-hoje{
-  font-family:'Barlow Condensed',sans-serif!important;
-  font-size:25px!important;
-  font-weight:900!important;
-  letter-spacing:.2px!important;
-  line-height:1.05!important;
+
+body{
+  font-family:'Inter','Barlow',Arial,sans-serif!important;
+  background:#070b12!important;
+  color:var(--txt)!important;
+}
+
+/* remove brilho pesado */
+*{
   text-shadow:none!important;
   filter:none!important;
 }
+
+/* header e logo */
+.hdr{
+  background:linear-gradient(180deg,#0a111a,#070b12)!important;
+  box-shadow:0 2px 14px rgba(0,0,0,.22)!important;
+}
+.lname{
+  font-family:'Inter',Arial,sans-serif!important;
+  font-size:18px!important;
+  font-weight:800!important;
+  letter-spacing:2px!important;
+  background:none!important;
+  -webkit-text-fill-color:var(--txt)!important;
+  color:var(--txt)!important;
+  animation:none!important;
+}
+.lbox{
+  box-shadow:none!important;
+}
+
+/* cards */
+.card{
+  background:linear-gradient(180deg,#0c1520,#09111a)!important;
+  border:1px solid rgba(0,212,255,.18)!important;
+  box-shadow:0 2px 12px rgba(0,0,0,.24)!important;
+}
+.card-title{
+  font-family:'Inter',Arial,sans-serif!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  letter-spacing:1.4px!important;
+  color:var(--acc)!important;
+}
+
+/* tabs */
+.tab{
+  font-family:'Inter',Arial,sans-serif!important;
+  font-size:9px!important;
+  letter-spacing:1.2px!important;
+  font-weight:800!important;
+}
+.tab.act{
+  color:var(--acc)!important;
+  border-bottom-color:var(--acc)!important;
+}
+
+/* labels e textos secundários mais legíveis */
+label,
+.hsl,
+.ml,
+.sb-date,
+.ab-text,
+#perf-view-geral [style*="color:var(--txt3)"],
+#panel-perf [style*="color:var(--txt3)"],
+#panel-hist [style*="color:var(--txt3)"]{
+  color:var(--txt2)!important;
+}
+
+/* cards principais da performance */
+#perf-view-geral .g4 .card{
+  min-height:96px!important;
+  padding:16px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  align-items:center!important;
+}
+
+#p-saldo,#p-wr,#p-roi,#p-hoje{
+  font-family:'Barlow Condensed','Inter',Arial,sans-serif!important;
+  font-size:28px!important;
+  font-weight:900!important;
+  line-height:1.05!important;
+  letter-spacing:.4px!important;
+}
+
 #p-total,#p-wrd,#p-stake-t,#p-hojej{
   font-family:'Space Mono',monospace!important;
-  font-size:7px!important;
-  color:var(--txt3)!important;
-  letter-spacing:.4px!important;
-  line-height:1.4!important;
-  text-shadow:none!important;
-  filter:none!important;
+  font-size:9px!important;
+  color:var(--txt2)!important;
+  letter-spacing:.2px!important;
+  margin-top:5px!important;
 }
-#cal-total,#cal-cov,#cal-roi,#cal-status{
-  text-shadow:none!important;
-  filter:none!important;
+
+/* PT-BR: siglas curtas */
+#p-wrd{
+  text-transform:none!important;
+}
+
+/* calibração */
+#cal-total,#cal-cov,#cal-roi{
+  font-family:'Barlow Condensed','Inter',Arial,sans-serif!important;
+  font-size:22px!important;
+  font-weight:900!important;
+}
+#cal-status{
+  font-family:'Inter',Arial,sans-serif!important;
+  font-size:11px!important;
+  font-weight:800!important;
+}
+#cal-bar{
+  background:linear-gradient(90deg,var(--acc),var(--grn),var(--ylw))!important;
+  box-shadow:none!important;
+}
+
+/* gráfico limpo */
+#perf-chart{
+  background:#08131d!important;
+  border:1px solid rgba(0,212,255,.14)!important;
+  border-radius:12px!important;
+  padding:10px!important;
 }
 #perf-chart svg,
 #perf-chart canvas,
@@ -329,17 +445,71 @@ select{cursor:pointer;appearance:none;}
   filter:none!important;
   text-shadow:none!important;
 }
-.card{
-  box-shadow:0 2px 12px rgba(0,0,0,.2)!important;
+
+/* listas */
+.hist-row,
+#hist-list > div,
+#perf-month-list > div,
+#perf-best-box > div,
+#perf-camps-ranking > div{
+  background:#08131d!important;
+  border:1px solid rgba(0,212,255,.12)!important;
+  box-shadow:none!important;
 }
-.lname{
-  text-shadow:none!important;
+
+/* últimos jogos mais legíveis */
+#hist-list{
+  color:var(--txt)!important;
 }
+#hist-list small,
+#hist-list div[style*="font-size:7px"],
+#hist-list div[style*="font-size:8px"]{
+  color:var(--txt2)!important;
+}
+
+/* botão dourado sem brilho exagerado */
 .genio-analisar-btn{
-  box-shadow:0 4px 14px rgba(255,184,0,.14), inset 0 1px 0 rgba(255,255,255,.25)!important;
+  background:linear-gradient(135deg,#ffd66b 0%,#ffb800 48%,#e09320 100%)!important;
+  color:#071018!important;
+  box-shadow:0 4px 12px rgba(255,184,0,.16), inset 0 1px 0 rgba(255,255,255,.25)!important;
+  font-family:'Inter',Arial,sans-serif!important;
+  font-size:12px!important;
+  letter-spacing:1.4px!important;
 }
 .genio-analisar-btn::before{
-  opacity:.35!important;
+  display:none!important;
+}
+.genio-analisar-btn:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:0 6px 16px rgba(255,184,0,.20), inset 0 1px 0 rgba(255,255,255,.32)!important;
+}
+
+/* inputs */
+input,select,textarea{
+  font-family:'Inter','Space Mono',Arial,sans-serif!important;
+  background:#08131d!important;
+  border:1px solid rgba(0,212,255,.14)!important;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:var(--acc)!important;
+  box-shadow:0 0 0 2px rgba(0,212,255,.08)!important;
+}
+
+/* score cards */
+.score-card{
+  box-shadow:none!important;
+}
+
+/* melhorar cabeçalho performance */
+#panel-perf .card > div:first-child .card-title{
+  color:var(--txt)!important;
+  font-size:13px!important;
+}
+
+/* esconder efeitos de shimmer muito chamativos fora da logo antiga */
+@keyframes shimmer{
+  0%{background-position:0 center;}
+  100%{background-position:0 center;}
 }
 </style>
 
@@ -658,7 +828,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-total" style="font-size:20px;font-weight:700;color:var(--acc);">0</div><div style="font-size:8px;color:var(--txt3);">JOGOS</div></div>
-          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div><div style="font-size:8px;color:var(--txt3);">GREEN RATE</div></div>
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div><div style="font-size:8px;color:var(--txt3);">TAXA DE ACERTO</div></div>
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-roi" style="font-size:20px;font-weight:700;">0%</div><div style="font-size:8px;color:var(--txt3);">ROI</div></div>
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">EM CALIBRAÇÃO</div><div style="font-size:8px;color:var(--txt3);">STATUS</div></div>
         </div>
@@ -4034,8 +4204,8 @@ function renderPerf() {
   const mloss = Math.min(...h.map(function(r){return Number(r.v||0);}));
   if(bestBox) bestBox.innerHTML =
     '<div class="mr"><span class="ml">Melhor mês</span><span class="mv" style="color:'+(bestMonth?color(bestMonth.s):'var(--txt3)')+'">'+(bestMonth?monthName(bestMonth.mk)+' • '+fmt(bestMonth.s):'-')+'</span></div>'+
-    '<div class="mr"><span class="ml">Maior green</span><span class="mv" style="color:var(--grn)">+'+'R$ '+mw.toFixed(2)+'</span></div>'+
-    '<div class="mr"><span class="ml">Maior red</span><span class="mv" style="color:var(--red)">R$ '+mloss.toFixed(2)+'</span></div>'+
+    '<div class="mr"><span class="ml">Maior ganho</span><span class="mv" style="color:var(--grn)">+'+'R$ '+mw.toFixed(2)+'</span></div>'+
+    '<div class="mr"><span class="ml">Maior perda</span><span class="mv" style="color:var(--red)">R$ '+mloss.toFixed(2)+'</span></div>'+
     '<div class="mr"><span class="ml">Média por jogo</span><span class="mv" style="color:'+color(avg)+'">'+fmt(avg)+'</span></div>';
 
   // Last games
@@ -4267,5 +4437,40 @@ function injetarScoresNarrativa(texto, cluster) {
 }
 </script>
 </div><!-- /app-body -->
+
+<script>
+(function(){
+  function ptPerformanceLabels(){
+    const wrd = document.getElementById('p-wrd');
+    if(wrd){
+      wrd.innerHTML = wrd.innerHTML
+        .replace(/(\d+)W\s*\/\s*(\d+)L/g, '$1 V / $2 D')
+        .replace(/green\(s\)\s*\/\s*/i, 'V / ')
+        .replace(/red\(s\)/i, 'D');
+    }
+    const calBadge = document.getElementById('cal-badge');
+    if(calBadge) calBadge.textContent = calBadge.textContent.replace('TRADES','JOGOS');
+    document.querySelectorAll('*').forEach(el=>{
+      if(el.childNodes && el.childNodes.length === 1 && el.childNodes[0].nodeType === 3){
+        el.textContent = el.textContent
+          .replace('TRADES','JOGOS')
+          .replace('GREEN RATE','TAXA DE ACERTO')
+          .replace('Maior green','Maior ganho')
+          .replace('Maior red','Maior perda');
+      }
+    });
+  }
+  document.addEventListener('DOMContentLoaded', ptPerformanceLabels);
+  const oldRenderPerf = window.renderPerf;
+  if(typeof oldRenderPerf === 'function'){
+    window.renderPerf = function(){
+      const r = oldRenderPerf.apply(this, arguments);
+      setTimeout(ptPerformanceLabels, 30);
+      return r;
+    }
+  }
+})();
+</script>
+
 </body>
 </html>
