@@ -803,31 +803,20 @@ function renderSidebar() {
 
 function sbGameCard(g) {
   const isAct = S.currentGame && S.currentGame.id === g.id;
+  const gid = g.id;
+
   const statusDot = {
-    'pre': '<div class="sb-dot pre"></div>',
+    'pre':  '<div class="sb-dot pre"></div>',
     'live': '<div class="sb-dot live"></div>',
-    'enc': g.resultado > 0 ? '<div class="sb-dot win"></div>' : g.resultado < 0 ? '<div class="sb-dot loss"></div>' : '<div class="sb-dot done"></div>'
+    'enc':  g.resultado > 0 ? '<div class="sb-dot win"></div>' : g.resultado < 0 ? '<div class="sb-dot loss"></div>' : '<div class="sb-dot done"></div>'
   }[g.status] || '<div class="sb-dot pre"></div>';
 
-  const statusBadge = {
-    'pre': `<span class="sb-badge" style="background:rgba(255,214,0,.1);color:var(--ylw);">PRÉ</span>`,
-    'live': `<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">● LIVE</span>`,
-    'enc': g.resultado > 0
-      ? `<span class="sb-badge" style="background:rgba(0,201,110,.1);color:var(--grn);">+R$${g.resultado.toFixed(0)}</span>`
-      : g.resultado < 0
-      ? `<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">-R$${Math.abs(g.resultado).toFixed(0)}</span>`
-      : `<span class="sb-badge" style="background:rgba(58,85,112,.2);color:var(--txt3);">ENC</span>`
-  }[g.status] || '';
+  const statusBadge = g.status === 'pre'  ? '<span class="sb-badge" style="background:rgba(255,214,0,.1);color:var(--ylw);">PRÉ</span>'
+    : g.status === 'live' ? '<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">● LIVE</span>'
+    : g.resultado > 0     ? '<span class="sb-badge" style="background:rgba(0,201,110,.1);color:var(--grn);">+R$'+g.resultado.toFixed(0)+'</span>'
+    : g.resultado < 0     ? '<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">-R$'+Math.abs(g.resultado).toFixed(0)+'</span>'
+    : '<span class="sb-badge" style="background:rgba(58,85,112,.2);color:var(--txt3);">ENC</span>';
 
-  const clusterInfo = g.cluster && g.cluster.length > 0
-    ? `<div class="sb-cluster">${g.cluster.map(s=>s.score).join('→')}</div>`
-    : '';
-
-  const placarInfo = g.status === 'live' || g.status === 'enc'
-    ? `<span style="color:var(--ylw);font-size:8px;font-family:'Space Mono',monospace;">${g.placar}</span> `
-    : '';
-
-  // Split name into teams for better display
   var nameParts = g.name ? g.name.split(' vs ') : [g.name, ''];
   var teamA = nameParts[0] || g.name;
   var teamB = nameParts[1] || '';
@@ -835,28 +824,30 @@ function sbGameCard(g) {
     ? '<div class="sb-name">'+teamA+'</div><div style="font-family:Space Mono,monospace;font-size:6px;color:var(--txt3);margin:1px 0;letter-spacing:1px;">vs</div><div class="sb-name" style="color:var(--txt2);">'+teamB+'</div>'
     : '<div class="sb-name">'+teamA+'</div>';
 
-  // Cluster: show only top 3 scores cleanly
   var clusterShort = g.cluster && g.cluster.length > 0
     ? '<div class="sb-cluster">'+g.cluster.slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
     : '';
 
-  return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" onclick="selectSbGame(\''+g.id+'\')">'+ 
+  var placarInfo = (g.status === 'live' || g.status === 'enc')
+    ? '<span style="color:var(--ylw);font-size:8px;font-family:Space Mono,monospace;">'+g.placar+'</span> '
+    : '';
+
+  var btns = '';
+  if(g.status === 'live') btns += '<button data-action="fim"    data-gid="'+gid+'" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">FIM</button>';
+  if(g.status === 'pre')  btns += '<button data-action="live"   data-gid="'+gid+'" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>';
+  if(g.status === 'enc')  btns += '<button data-action="result" data-gid="'+gid+'" style="background:rgba(0,201,110,.08);border:1px solid rgba(0,201,110,.2);border-radius:4px;padding:2px 6px;color:var(--grn);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">R$</button>';
+  btns += '<button data-action="del" data-gid="'+gid+'" style="background:transparent;border:none;padding:2px 6px;color:var(--txt3);font-size:11px;cursor:pointer;opacity:.6;line-height:1;" title="Remover">✕</button>';
+
+  return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" data-gid="'+gid+'">'+
     '<div style="display:flex;gap:8px;align-items:flex-start;">'+
       statusDot+
       '<div style="flex:1;min-width:0;">'+
         displayName+
-        '<div class="sb-info">'+
-          '<span style="color:var(--txt3);">'+(g.comp||'CS Trading')+'</span>'+
-          (g.hora ? '<span style="color:var(--border);">•</span><span style="color:var(--acc);">'+g.hora+'</span>' : '')+
-        '</div>'+
+        '<div class="sb-info"><span style="color:var(--txt3);">'+(g.comp||'CS Trading')+'</span>'+(g.hora?'<span style="color:var(--border);">•</span><span style="color:var(--acc);">'+g.hora+'</span>':'')+'</div>'+
         clusterShort+
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">'+
           '<div>'+placarInfo+statusBadge+'</div>'+
-          '<div style="display:flex;gap:3px;">'+
-            (g.status === 'live' ? '<button onclick="event.stopPropagation();encerrarJogo(\''+g.id+'\')" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">FIM</button>' : '')+
-            (g.status === 'pre' ? '<button onclick="event.stopPropagation();iniciarLive(\''+g.id+'\')" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">▶ LIVE</button>' : '')+
-            '<button onclick="event.stopPropagation();deleteGame(\''+g.id+'\')" style="background:transparent;border:none;border-radius:4px;padding:2px 5px;color:var(--txt3);font-size:9px;cursor:pointer;opacity:.5;transition:opacity .15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5" title="Remover">✕</button>'+
-          '</div>'+
+          '<div style="display:flex;gap:3px;">'+btns+'</div>'+
         '</div>'+
       '</div>'+
     '</div>'+
@@ -2059,22 +2050,9 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
   // Show EPIC loading
   const out = document.getElementById('resultado-out');
   const badge = document.getElementById('res-badge');
-  // Mostrar alerta quando favorito é visitante
-  if(favEhVisitanteReal) {
-    var favAlert = document.getElementById('fav-visitante-alert');
-    if(!favAlert) {
-      var outCard = document.getElementById('resultado-card');
-      if(outCard) {
-        favAlert = document.createElement('div');
-        favAlert.id = 'fav-visitante-alert';
-        favAlert.innerHTML = '<div style="background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.4);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-family:Space Mono,monospace;font-size:9px;color:rgba(180,150,255,.9);">⚠️ FAVORITO DETECTADO COMO VISITANTE — scores ajustados automaticamente</div>';
-        outCard.insertBefore(favAlert, outCard.firstChild);
-      }
-    }
-  } else {
-    var old = document.getElementById('fav-visitante-alert');
-    if(old) old.remove();
-  }
+  // Favorito visitante detectado internamente — sem aviso visual ao usuário
+  var oldFavAlert = document.getElementById('fav-visitante-alert');
+  if(oldFavAlert) oldFavAlert.remove();
   if(out) out.innerHTML = [
     '<div style="padding:30px 20px;text-align:center;">',
       '<div style="position:relative;width:64px;height:64px;margin:0 auto 20px;">',
@@ -3720,6 +3698,66 @@ function limparHist() {
 }
 
 // ===== INIT =====
+// ===== SIDEBAR EVENT DELEGATION =====
+document.addEventListener('click', function(e) {
+  // Botões com data-action
+  var btn = e.target.closest('[data-action]');
+  if(btn) {
+    e.stopPropagation();
+    var action = btn.getAttribute('data-action');
+    var gid    = btn.getAttribute('data-gid');
+    if(action === 'del')    { deleteGame(gid); return; }
+    if(action === 'fim')    { encerrarJogo(gid); return; }
+    if(action === 'live')   { iniciarLive(gid); return; }
+    if(action === 'result') { abrirResultado(gid); return; }
+  }
+  // Clique no card do jogo (selecionar)
+  var card = e.target.closest('.sb-game[data-gid]');
+  if(card && !e.target.closest('[data-action]')) {
+    var gid = card.getAttribute('data-gid');
+    if(gid) selectSbGame(gid);
+  }
+});
+
+// Abrir modal de resultado
+function abrirResultado(id) {
+  var g = S.games.find(function(x){ return x.id === id; });
+  if(!g) return;
+  var atual = g.resultado || 0;
+  var val = prompt('Resultado da operação (ex: +42.50 ou -30):\nJogo: '+g.name, atual !== 0 ? atual : '');
+  if(val === null) return;
+  var num = parseFloat(val.replace(',','.'));
+  if(isNaN(num)) { notify('ERRO', 'Valor inválido', 'var(--red)'); return; }
+  g.resultado = num;
+  g.status = 'enc';
+  saveGames();
+  renderSidebar();
+  // Registrar no histórico de performance automaticamente
+  var jaExiste = S.hist.find(function(h){ return h.gameId === id; });
+  if(!jaExiste) {
+    S.hist.push({
+      ts: Date.now(),
+      gameId: id,
+      j: g.name,
+      c: g.comp||'',
+      d: g.data||td(),
+      s: g.stake||S.stake,
+      v: num,
+      sc: g.placar||''
+    });
+    save();
+    updHdr();
+    renderPerf();
+    notify(num>=0?'✅ GREEN':'❌ RED', (num>=0?'+':'')+num.toFixed(2)+' registrado', num>=0?'var(--grn)':'var(--red)');
+  } else {
+    jaExiste.v = num;
+    save();
+    updHdr();
+    renderPerf();
+    notify('✅ ATUALIZADO', (num>=0?'+':'')+num.toFixed(2), num>=0?'var(--grn)':'var(--red)');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   try {
     const t=new Date(), y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
