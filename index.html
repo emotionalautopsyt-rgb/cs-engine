@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧠 Gênio dos Placares — CS Trading</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@600;700;800&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#06080f;--card:#0d1520;--border:#162030;--acc:#00d4ff;--acc2:#00b8e0;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffc740;--org:#ff7a35;--pur:#7c5cfc;--txt:#d8eaf8;--txt2:#5a7a96;--txt3:#2e4a62;}
 body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-size:13px;min-height:100vh;}
@@ -291,6 +291,186 @@ select{cursor:pointer;appearance:none;}
 }
 
 @media(max-width:720px){.g2,.g3,.g4{grid-template-columns:1fr;}.main{padding:11px;}.genio-analisar-btn span{white-space:normal;text-align:center;}}
+
+
+/* =========================================================
+   PREMIUM VISUAL PATCH — GÊNIO DOS PLACARES
+   Apenas camada visual/UX. Motor, parser e lógica intactos.
+========================================================= */
+body{
+  background:
+    radial-gradient(circle at 18% 8%,rgba(0,212,255,.105),transparent 32%),
+    radial-gradient(circle at 86% 16%,rgba(255,199,64,.075),transparent 30%),
+    radial-gradient(circle at 50% 100%,rgba(0,201,110,.065),transparent 35%),
+    linear-gradient(180deg,#050812 0%,#070b13 44%,#04070c 100%) !important;
+  font-family:'Rajdhani','Barlow',sans-serif !important;
+  letter-spacing:.15px;
+}
+.hdr{
+  background:linear-gradient(180deg,rgba(9,17,29,.96),rgba(5,8,15,.94)) !important;
+  backdrop-filter:blur(14px);
+  box-shadow:0 10px 35px rgba(0,0,0,.42),0 0 36px rgba(0,212,255,.045) !important;
+}
+.lname,.card-title,.sb-title,.modal-title{
+  font-family:'Orbitron','Barlow Condensed',sans-serif !important;
+}
+.lname{
+  letter-spacing:3px !important;
+  text-shadow:0 0 18px rgba(0,212,255,.24);
+}
+.lbox{
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 0 22px rgba(0,212,255,.32),0 0 34px rgba(124,92,252,.16) !important;
+}
+.tabs{
+  background:rgba(4,8,15,.88) !important;
+  backdrop-filter:blur(10px);
+}
+.tab{
+  border-radius:10px 10px 0 0;
+  margin-top:4px;
+}
+.tab.act{
+  color:#0ff !important;
+  background:linear-gradient(180deg,rgba(0,212,255,.10),rgba(0,212,255,.025)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 18px rgba(0,212,255,.08);
+}
+.card{
+  background:
+    linear-gradient(135deg,rgba(13,21,32,.92),rgba(7,13,21,.96)) !important;
+  border:1px solid rgba(0,212,255,.14) !important;
+  box-shadow:
+    0 8px 26px rgba(0,0,0,.26),
+    inset 0 1px 0 rgba(255,255,255,.035),
+    0 0 22px rgba(0,212,255,.025) !important;
+}
+.card:hover{
+  border-color:rgba(0,212,255,.25) !important;
+  box-shadow:0 10px 32px rgba(0,0,0,.32),0 0 28px rgba(0,212,255,.045) !important;
+}
+.card-title{
+  color:#00e7ff !important;
+  text-shadow:0 0 12px rgba(0,212,255,.22);
+}
+/* Cards de métricas dentro da Performance */
+#perf-view-geral > .g4 > .card{
+  position:relative;
+  overflow:hidden;
+  border-color:rgba(0,212,255,.22) !important;
+  background:
+    radial-gradient(circle at 50% -20%,rgba(0,212,255,.13),transparent 42%),
+    linear-gradient(135deg,rgba(9,18,29,.96),rgba(8,13,22,.96)) !important;
+}
+#perf-view-geral > .g4 > .card::after{
+  content:'';
+  position:absolute;
+  inset:auto 12% 0 12%;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,.7),transparent);
+  opacity:.65;
+}
+#perf-view-geral > .g4 > .card div[id^='p-']{
+  font-size:34px !important;
+  line-height:1 !important;
+  text-shadow:0 0 18px currentColor;
+}
+#p-saldo,#p-hoje,#p-roi,#p-wr{
+  font-family:'Orbitron','Barlow Condensed',sans-serif !important;
+}
+/* Calibração */
+#cal-bar-wrap{
+  height:10px !important;
+  background:rgba(10,21,32,.9) !important;
+  border:1px solid rgba(0,212,255,.12);
+  box-shadow:inset 0 0 14px rgba(0,0,0,.45);
+}
+#cal-bar{
+  background:linear-gradient(90deg,#00d4ff,#00ffb3,#ffd66b) !important;
+  box-shadow:0 0 16px rgba(0,255,179,.34);
+}
+#cal-total,#cal-cov,#cal-roi,#cal-status{
+  font-family:'Orbitron','Barlow Condensed',sans-serif !important;
+  text-shadow:0 0 14px currentColor;
+}
+/* Gráfico */
+#perf-chart svg{
+  background:
+    radial-gradient(circle at 50% 10%,rgba(0,212,255,.08),transparent 42%),
+    linear-gradient(180deg,rgba(7,18,29,.95),rgba(5,10,17,.98)) !important;
+  border:1px solid rgba(0,212,255,.18) !important;
+  box-shadow:inset 0 0 28px rgba(0,212,255,.035),0 0 26px rgba(0,212,255,.04);
+}
+/* Linhas / listas */
+.mr,.hist-row{
+  background:linear-gradient(90deg,rgba(10,21,32,.68),rgba(7,14,23,.46)) !important;
+  border:1px solid rgba(0,212,255,.08) !important;
+  border-radius:10px !important;
+  padding:11px 12px !important;
+  margin-bottom:8px !important;
+  transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.mr:hover,.hist-row:hover{
+  transform:translateX(3px);
+  border-color:rgba(0,212,255,.22) !important;
+  box-shadow:0 0 18px rgba(0,212,255,.035);
+}
+.ml{color:#638aa8 !important;}
+.mv{font-family:'Orbitron','Space Mono',monospace !important;}
+#perf-month-list > div{
+  background:linear-gradient(90deg,rgba(8,21,32,.95),rgba(7,13,21,.95)) !important;
+  border-color:rgba(0,212,255,.15) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+}
+#perf-camps-grid .card{
+  min-height:118px;
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+#perf-camps-grid .card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 12px 34px rgba(0,0,0,.36),0 0 28px rgba(0,212,255,.07) !important;
+}
+/* Botões dashboard */
+#perf-tab-geral,#perf-tab-camps,.btn-gh{
+  border-radius:9px !important;
+}
+.btn-gh:hover{
+  box-shadow:0 0 16px rgba(0,212,255,.10);
+}
+/* Estado financeiro */
+[style*="color:var(--grn)"]{
+  text-shadow:0 0 10px rgba(0,201,110,.18);
+}
+[style*="color:var(--red)"]{
+  text-shadow:0 0 10px rgba(255,77,106,.14);
+}
+/* Sidebar mais premium */
+.sidebar{
+  background:linear-gradient(180deg,rgba(5,10,16,.98),rgba(3,7,12,.98)) !important;
+  box-shadow:8px 0 28px rgba(0,0,0,.22);
+}
+.sb-game{
+  background:linear-gradient(135deg,rgba(12,25,38,.94),rgba(8,16,26,.96)) !important;
+  border-color:rgba(0,212,255,.09) !important;
+}
+.sb-game:hover,.sb-game.act{
+  box-shadow:0 0 20px rgba(0,212,255,.08) !important;
+}
+/* Botão dourado ainda mais assinatura */
+.genio-analisar-btn{
+  font-family:'Orbitron','Barlow Condensed',sans-serif !important;
+  font-size:12px !important;
+  border:1px solid rgba(255,255,255,.28) !important;
+  box-shadow:
+    0 0 24px rgba(255,184,0,.30),
+    0 10px 28px rgba(0,0,0,.32),
+    inset 0 1px 0 rgba(255,255,255,.45) !important;
+}
+.genio-analisar-btn:hover{
+  box-shadow:
+    0 0 40px rgba(255,184,0,.46),
+    0 12px 34px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.5) !important;
+}
 </style>
 </head>
 <body>
@@ -3918,7 +4098,7 @@ function renderPerf() {
   set('cal-total', total);
   setC('cal-cov', wr+'%', wr>=55?'var(--grn)':wr>=45?'var(--ylw)':'var(--red)');
   setC('cal-roi', (parseFloat(roi)>=0?'+':'')+roi+'%', parseFloat(roi)>=0?'var(--grn)':'var(--red)');
-  if(total < 30) setC('cal-status','EM CALIBRAÇÃO','var(--ylw)');
+  if(total < 30) setC('cal-status','IA EVOLUINDO','var(--ylw)');
   else if(wr>=55) setC('cal-status','✅ CONFIÁVEL','var(--grn)');
   else if(wr>=45) setC('cal-status','⚠️ ATENÇÃO','var(--ylw)');
   else setC('cal-status','❌ REVISAR','var(--red)');
@@ -3944,12 +4124,28 @@ function renderPerf() {
   }).join(' ');
   const chart = document.getElementById('perf-chart');
   if(chart) {
-    chart.innerHTML = '<svg viewBox="0 0 '+wSvg+' '+hSvg+'" style="width:100%;height:170px;background:#08121b;border:1px solid var(--border);border-radius:10px;">'+
-      '<line x1="'+pad+'" y1="'+(hSvg-pad)+'" x2="'+(wSvg-pad)+'" y2="'+(hSvg-pad)+'" stroke="#162030" stroke-width="1" />'+
-      '<polyline fill="none" stroke="#00d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+xy+'" />'+
-      '<circle cx="'+(points.length===1?pad:(pad+(wSvg-pad*2)))+'" cy="'+(hSvg-pad-((points[points.length-1].v-minV)/range)*(hSvg-pad*2)).toFixed(1)+'" r="4" fill="#00c96e" />'+
+    const lastX = points.length===1 ? pad : (pad+(wSvg-pad*2));
+    const lastY = (hSvg-pad-((points[points.length-1].v-minV)/range)*(hSvg-pad*2)).toFixed(1);
+    const area = xy ? (pad+','+(hSvg-pad)+' '+xy+' '+lastX+','+(hSvg-pad)) : '';
+    chart.innerHTML = '<svg viewBox="0 0 '+wSvg+' '+hSvg+'" style="width:100%;height:190px;border-radius:14px;">'+
+      '<defs>'+ 
+        '<linearGradient id="bankLine" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#00d4ff"/><stop offset="55%" stop-color="#00ffb3"/><stop offset="100%" stop-color="#ffd66b"/></linearGradient>'+ 
+        '<linearGradient id="bankArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(0,255,179,.26)"/><stop offset="100%" stop-color="rgba(0,212,255,0)"/></linearGradient>'+ 
+        '<filter id="glow"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'+ 
+      '</defs>'+ 
+      '<g opacity=".16">'+
+        '<line x1="'+pad+'" y1="35" x2="'+(wSvg-pad)+'" y2="35" stroke="#00d4ff" stroke-width=".7" />'+
+        '<line x1="'+pad+'" y1="75" x2="'+(wSvg-pad)+'" y2="75" stroke="#00d4ff" stroke-width=".7" />'+
+        '<line x1="'+pad+'" y1="115" x2="'+(wSvg-pad)+'" y2="115" stroke="#00d4ff" stroke-width=".7" />'+
+      '</g>'+
+      '<line x1="'+pad+'" y1="'+(hSvg-pad)+'" x2="'+(wSvg-pad)+'" y2="'+(hSvg-pad)+'" stroke="#203449" stroke-width="1" />'+
+      '<polygon fill="url(#bankArea)" points="'+area+'" />'+
+      '<polyline fill="none" stroke="rgba(0,212,255,.25)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" points="'+xy+'" />'+
+      '<polyline fill="none" stroke="url(#bankLine)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" points="'+xy+'" />'+
+      '<circle cx="'+lastX+'" cy="'+lastY+'" r="7" fill="rgba(0,255,179,.18)" />'+
+      '<circle cx="'+lastX+'" cy="'+lastY+'" r="4.5" fill="#00ffb3" filter="url(#glow)" />'+
       '</svg>'+
-      '<div style="display:flex;justify-content:space-between;margin-top:8px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);"><span>Início</span><span>Saldo atual: <b style="color:'+color(saldo)+'">'+fmt(saldo)+'</b></span></div>';
+      '<div style="display:flex;justify-content:space-between;margin-top:10px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);"><span>Início</span><span>Saldo atual: <b style="color:'+color(saldo)+'">'+fmt(saldo)+'</b></span></div>';
   }
 
   // Months aggregation
