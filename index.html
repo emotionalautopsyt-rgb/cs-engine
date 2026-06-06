@@ -294,6 +294,7 @@ select{cursor:pointer;appearance:none;}
 <div class="tabs">
   <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
   <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
+  <button class="tab" onclick="showTab('hist',this)" id="tab-hist">📅 Histórico</button>
 </div>
 
 <!-- HIST MODAL -->
@@ -333,7 +334,7 @@ select{cursor:pointer;appearance:none;}
     <div class="sb-list" id="sb-other-list"></div>
   </div>
   <div class="sb-footer">
-    <button class="sb-hist-btn" onclick="openHistModal()">📅 HISTÓRICO DE DIAS</button>
+    <button class="sb-hist-btn" onclick="showTab('hist',document.getElementById('tab-hist'))">📅 HISTÓRICO</button>
   </div>
 </div>
 
@@ -604,6 +605,25 @@ e garantir que o DNA seja lido corretamente."></textarea>
   </div>
 </div>
 
+<!-- ===== HISTÓRICO ===== -->
+<div class="panel" id="panel-hist">
+  <div class="card" style="border-color:rgba(0,212,255,.25);box-shadow:0 0 22px rgba(0,212,255,.05);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+      <div>
+        <div class="card-title" style="margin-bottom:4px;font-size:13px;letter-spacing:3px;">📅 Histórico Financeiro</div>
+        <div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;">Resumo por mês, dias operados e jogos finalizados</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-gh btn-sm" onclick="exportCSV()">📥 CSV</button>
+        <button class="btn btn-gh btn-sm" onclick="renderHistPanel()">↻ ATUALIZAR</button>
+      </div>
+    </div>
+
+    <div id="hist-overview" class="g4" style="margin-bottom:14px;"></div>
+    <div id="hist-months"></div>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <script>
@@ -651,6 +671,7 @@ function showTab(t, el) {
     if(p) p.classList.add('act');
     if(el) el.classList.add('act');
     if(t === 'perf') renderPerf();
+    if(t === 'hist') renderHistPanel();
   } catch(e) {}
 }
 
@@ -3690,6 +3711,108 @@ function regResult() {
   notify('SALVO',j+' — '+(v>=0?'+':'')+' R$ '+v.toFixed(2),v>=0?'var(--grn)':'var(--red)');
 }
 
+
+function renderHistPanel() {
+  const overview = document.getElementById('hist-overview');
+  const monthsEl = document.getElementById('hist-months');
+  if(!overview || !monthsEl) return;
+
+  const h = (S.hist || []).slice().sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
+  const totalJogos = h.length;
+  const saldoTotal = h.reduce(function(a,r){ return a + (parseFloat(r.v)||0); }, 0);
+  const wins = h.filter(function(r){ return (parseFloat(r.v)||0) > 0; }).length;
+  const losses = h.filter(function(r){ return (parseFloat(r.v)||0) < 0; }).length;
+  const valid = h.filter(function(r){ return r.r !== 'void'; }).length;
+  const wr = valid ? Math.round(wins / valid * 100) : 0;
+  const avg = totalJogos ? saldoTotal / totalJogos : 0;
+
+  const cardMini = function(label, value, sub, color){
+    return '<div class="card" style="margin:0;text-align:center;padding:14px;background:linear-gradient(135deg,#0a1520,#0d1825);">'+
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);letter-spacing:1.5px;margin-bottom:5px;">'+label+'</div>'+ 
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:900;color:'+color+';">'+value+'</div>'+ 
+      '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-top:3px;">'+sub+'</div>'+ 
+    '</div>';
+  };
+
+  overview.innerHTML =
+    cardMini('SALDO TOTAL', (saldoTotal>=0?'+':'')+'R$ '+saldoTotal.toFixed(2), totalJogos+' jogo(s)', saldoTotal>=0?'var(--grn)':'var(--red)')+
+    cardMini('WINRATE', wr+'%', wins+' green / '+losses+' red', 'var(--ylw)')+
+    cardMini('MÉDIA / JOGO', (avg>=0?'+':'')+'R$ '+avg.toFixed(2), 'ticket médio operacional', avg>=0?'var(--grn)':'var(--red)')+
+    cardMini('MESES', (new Set(h.map(function(r){ return String(r.d||td()).slice(0,7); }))).size, 'com registros', 'var(--acc)');
+
+  if(!h.length) {
+    monthsEl.innerHTML = '<div style="text-align:center;padding:36px;color:var(--txt3);font-size:12px;border:1px dashed var(--border);border-radius:12px;">Nenhum jogo finalizado ainda. Quando você salvar um resultado financeiro, ele aparecerá aqui por mês.</div>';
+    return;
+  }
+
+  const byMonth = {};
+  h.forEach(function(r){
+    const d = r.d || td();
+    const mk = String(d).slice(0,7);
+    if(!byMonth[mk]) byMonth[mk] = [];
+    byMonth[mk].push(r);
+  });
+
+  const sortedMonths = Object.keys(byMonth).sort(function(a,b){ return b.localeCompare(a); });
+  const monthName = function(mk){
+    const parts = mk.split('-');
+    const nomes = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+    const mi = parseInt(parts[1],10)-1;
+    return (nomes[mi]||parts[1])+' / '+parts[0];
+  };
+
+  monthsEl.innerHTML = sortedMonths.map(function(mk){
+    const arr = byMonth[mk];
+    const monthTotal = arr.reduce(function(a,r){ return a + (parseFloat(r.v)||0); },0);
+    const monthWins = arr.filter(function(r){ return (parseFloat(r.v)||0)>0; }).length;
+    const monthLoss = arr.filter(function(r){ return (parseFloat(r.v)||0)<0; }).length;
+    const monthValid = arr.filter(function(r){ return r.r !== 'void'; }).length;
+    const monthWr = monthValid ? Math.round(monthWins/monthValid*100) : 0;
+
+    const byDay = {};
+    arr.forEach(function(r){ const d = r.d || td(); if(!byDay[d]) byDay[d]=[]; byDay[d].push(r); });
+    const days = Object.keys(byDay).sort(function(a,b){ return b.localeCompare(a); });
+
+    return '<div style="border:1px solid rgba(0,212,255,.16);border-radius:14px;margin-bottom:14px;overflow:hidden;background:linear-gradient(135deg,rgba(0,212,255,.035),rgba(124,92,252,.025));">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.16);">'+
+        '<div>'+ 
+          '<div style="font-family:Barlow Condensed,sans-serif;font-size:18px;font-weight:900;letter-spacing:3px;color:var(--acc);">'+monthName(mk)+'</div>'+ 
+          '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-top:3px;">'+arr.length+' jogo(s) • '+monthWins+' green / '+monthLoss+' red • WR '+monthWr+'%</div>'+ 
+        '</div>'+ 
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:26px;font-weight:900;color:'+(monthTotal>=0?'var(--grn)':'var(--red)')+';white-space:nowrap;">'+(monthTotal>=0?'+':'')+'R$ '+monthTotal.toFixed(2)+'</div>'+ 
+      '</div>'+
+      '<div style="padding:12px 14px;">'+
+        days.map(function(d){
+          const games = byDay[d].sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+          const dayTotal = games.reduce(function(a,r){ return a + (parseFloat(r.v)||0); },0);
+          return '<div style="margin-bottom:12px;border:1px solid rgba(255,255,255,.04);border-radius:10px;background:#08111b;overflow:hidden;">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-bottom:1px solid var(--border);background:#0a1520;">'+
+              '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;color:var(--txt);">'+fd(d)+'</div>'+ 
+              '<div style="font-family:Space Mono,monospace;font-size:11px;font-weight:900;color:'+(dayTotal>=0?'var(--grn)':'var(--red)')+';">'+(dayTotal>=0?'+':'')+'R$ '+dayTotal.toFixed(2)+'</div>'+ 
+            '</div>'+
+            games.map(function(r){
+              const val = parseFloat(r.v)||0;
+              const valColor = val>0?'var(--grn)':val<0?'var(--red)':'var(--txt3)';
+              const score = r.sc ? ' • Score '+r.sc : '';
+              const comp = r.c ? r.c+' • ' : '';
+              return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:10px 11px;border-bottom:1px solid rgba(255,255,255,.035);">'+
+                '<div style="min-width:0;">'+
+                  '<div style="font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(r.j||'Jogo')+'</div>'+ 
+                  '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-top:2px;">'+comp+'stake R$ '+(r.s||0)+score+'</div>'+ 
+                '</div>'+ 
+                '<div style="text-align:right;">'+
+                  '<div style="font-family:Space Mono,monospace;font-size:12px;font-weight:900;color:'+valColor+';white-space:nowrap;">'+(val>0?'+':'')+'R$ '+val.toFixed(2)+'</div>'+ 
+                  '<button onclick="delR('+(r.ts||0)+'); renderHistPanel();" style="background:none;border:none;color:var(--txt3);font-family:Space Mono,monospace;font-size:7px;cursor:pointer;margin-top:2px;">remover</button>'+ 
+                '</div>'+ 
+              '</div>';
+            }).join('')+
+          '</div>';
+        }).join('')+
+      '</div>'+ 
+    '</div>';
+  }).join('');
+}
+
 function renderPerf() {
   const h=S.hist;
 
@@ -3790,7 +3913,7 @@ function renderPerf() {
   }
 }
 
-function delR(ts) { S.hist=S.hist.filter(r=>r.ts!==ts); save(); renderPerf(); updHdr(); }
+function delR(ts) { S.hist=S.hist.filter(r=>r.ts!==ts); save(); renderPerf(); updHdr(); if(document.getElementById('panel-hist')?.classList.contains('act')) renderHistPanel(); }
 
 function updHdr() {
   // Fix any entries saved with wrong UTC date (common when saving after 21:00 BRT)
