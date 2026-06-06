@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧠 Gênio dos Placares — CS Trading</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#06080f;--card:#0d1520;--border:#162030;--acc:#00d4ff;--acc2:#00b8e0;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffc740;--org:#ff7a35;--pur:#7c5cfc;--txt:#d8eaf8;--txt2:#5a7a96;--txt3:#2e4a62;}
 body{background:var(--bg);color:var(--txt);font-family:'Segoe UI', 'Inter', Arial, sans-serif;font-size:13px;min-height:100vh;}
@@ -485,6 +485,231 @@ canvas{
 }
 .card, .panel, .metric-card{
     backdrop-filter: blur(6px);
+}
+</style>
+
+
+<style>
+/* =========================================================
+   PATCH VISUAL CLEAN PREMIUM — Trading/SaaS profissional
+   Remove excesso de neon/glow e melhora legibilidade
+   ========================================================= */
+
+:root{
+  --bg:#070b12;
+  --card:#0b1420;
+  --border:#153246;
+  --acc:#00c8f8;
+  --acc2:#00a8d8;
+  --grn:#00d084;
+  --red:#ff4d6d;
+  --ylw:#f5c542;
+  --txt:#e3edf7;
+  --txt2:#8aa4b8;
+  --txt3:#456477;
+}
+
+body{
+  font-family:'Inter','Manrope',Arial,sans-serif!important;
+  background:
+    radial-gradient(circle at top left, rgba(0,200,248,.06), transparent 32%),
+    linear-gradient(180deg,#060a10,#070b12 45%,#05080d);
+}
+
+/* Header mais sério */
+.hdr{
+  background:linear-gradient(180deg,#0b121d,#070b12)!important;
+  box-shadow:0 1px 18px rgba(0,0,0,.28)!important;
+}
+
+.lname{
+  font-family:'Manrope','Inter',sans-serif!important;
+  font-size:19px!important;
+  letter-spacing:2px!important;
+  font-weight:800!important;
+  background:none!important;
+  -webkit-text-fill-color:var(--txt)!important;
+  color:var(--txt)!important;
+  animation:none!important;
+}
+
+/* Cards sólidos, sem glow exagerado */
+.card{
+  background:linear-gradient(180deg,#0b1420,#09111b)!important;
+  border:1px solid rgba(0,200,248,.18)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.18)!important;
+}
+
+.card:hover{
+  box-shadow:0 10px 28px rgba(0,0,0,.25)!important;
+}
+
+/* Títulos mais limpos */
+.card-title,
+.sb-title{
+  font-family:'Manrope','Inter',sans-serif!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  letter-spacing:1.6px!important;
+  color:#16d4ff!important;
+  text-shadow:none!important;
+}
+
+/* Abas */
+.tab{
+  font-family:'Manrope','Inter',sans-serif!important;
+  letter-spacing:1.2px!important;
+  font-weight:700!important;
+}
+
+.tab.act{
+  color:#13d3ff!important;
+  border-bottom-color:#13d3ff!important;
+  text-shadow:none!important;
+}
+
+/* Inputs mais premium */
+input,select,textarea{
+  font-family:'Inter','Manrope',Arial,sans-serif!important;
+  background:#08131f!important;
+  border:1px solid rgba(0,200,248,.15)!important;
+  color:var(--txt)!important;
+}
+
+input:focus,select:focus,textarea:focus{
+  border-color:#13d3ff!important;
+  box-shadow:0 0 0 2px rgba(19,211,255,.08)!important;
+}
+
+/* Remover glow em números e textos */
+.hsv,
+.mv,
+.sc-score,
+.sc-odd,
+.sc-lucro,
+#p-saldo,
+#p-wr,
+#p-roi,
+#p-hoje,
+#cal-total,
+#cal-cov,
+#cal-roi,
+#cal-status{
+  text-shadow:none!important;
+  filter:none!important;
+}
+
+/* Métricas principais: grandes, legíveis e sem neon excessivo */
+#perf-view-geral .g4 .card{
+  min-height:105px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+
+#p-saldo,
+#p-wr,
+#p-roi,
+#p-hoje{
+  font-family:'Manrope','Inter',sans-serif!important;
+  font-size:34px!important;
+  line-height:1.05!important;
+  font-weight:800!important;
+  letter-spacing:-.5px!important;
+}
+
+#p-total,
+#p-wrd,
+#p-stake-t,
+#p-hojej{
+  font-family:'Inter','Manrope',Arial,sans-serif!important;
+  font-size:12px!important;
+  color:var(--txt2)!important;
+  letter-spacing:.2px!important;
+  opacity:.9!important;
+}
+
+/* Cores sólidas */
+#p-saldo,#cal-roi{color:var(--grn)!important;}
+#p-wr,#cal-cov,#cal-status{color:var(--ylw)!important;}
+#p-roi{color:var(--grn)!important;}
+#p-hoje{color:var(--red)!important;}
+
+/* Calibração mais clean */
+#cal-bar{
+  background:linear-gradient(90deg,#13d3ff,#00d084,#f5c542)!important;
+  box-shadow:none!important;
+}
+
+#cal-bar-wrap{
+  background:#07111b!important;
+  border:1px solid rgba(255,255,255,.04)!important;
+}
+
+/* Gráfico clean, sem glow */
+#perf-chart svg,
+#perf-chart canvas{
+  filter:none!important;
+}
+
+#perf-chart{
+  background:#08131f!important;
+  border:1px solid rgba(0,200,248,.16)!important;
+  border-radius:14px!important;
+  padding:10px!important;
+}
+
+/* Últimos jogos e listas */
+.hist-row,
+#hist-list > div,
+#perf-month-list > div,
+#perf-best-box > div,
+#perf-camps-ranking > div{
+  background:#08131f!important;
+  border:1px solid rgba(0,200,248,.12)!important;
+  box-shadow:none!important;
+}
+
+/* Botão dourado: premium, sem exagero */
+.genio-analisar-btn{
+  background:linear-gradient(135deg,#f8d15c,#f2b52f,#d99016)!important;
+  box-shadow:0 8px 20px rgba(217,144,22,.18), inset 0 1px 0 rgba(255,255,255,.35)!important;
+  font-family:'Manrope','Inter',sans-serif!important;
+  color:#071018!important;
+  letter-spacing:1.4px!important;
+  font-size:13px!important;
+}
+
+.genio-analisar-btn::before{
+  animation:none!important;
+  display:none!important;
+}
+
+.genio-analisar-btn:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:0 10px 24px rgba(217,144,22,.24), inset 0 1px 0 rgba(255,255,255,.45)!important;
+}
+
+/* Score cards mais sérios */
+.score-card{
+  background:#08131f!important;
+  border:1px solid rgba(0,200,248,.16)!important;
+  box-shadow:none!important;
+}
+
+.score-card:hover{
+  transform:translateY(-2px)!important;
+  box-shadow:0 8px 20px rgba(0,0,0,.24)!important;
+}
+
+/* Remover animações fortes desnecessárias */
+*{
+  animation-duration:.2s;
+}
+
+@media(max-width:720px){
+  #p-saldo,#p-wr,#p-roi,#p-hoje{font-size:28px!important;}
 }
 </style>
 
@@ -4437,6 +4662,66 @@ document.addEventListener('DOMContentLoaded', ()=>{
     n.style.textShadow='0 0 6px rgba(0,255,180,.18)';
   });
 });
+</script>
+
+
+<script>
+(function(){
+  function cleanPremiumVisual(){
+    // Remove sombras e filtros inline criados por versões anteriores
+    document.querySelectorAll('*').forEach(function(el){
+      const st = el.getAttribute('style') || '';
+      if(st.includes('text-shadow') || st.includes('filter:drop-shadow') || st.includes('filter: drop-shadow')){
+        el.style.textShadow = 'none';
+        el.style.filter = 'none';
+      }
+    });
+
+    // Ajusta valores de métricas para visual sólido
+    ['p-saldo','p-wr','p-roi','p-hoje'].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el){
+        el.style.textShadow = 'none';
+        el.style.filter = 'none';
+      }
+    });
+
+    // Se houver SVG do gráfico, limpa glow e reforça linha
+    const chart = document.getElementById('perf-chart');
+    if(chart){
+      chart.querySelectorAll('path,polyline,line,circle,text').forEach(function(el){
+        el.style.filter = 'none';
+        el.style.textShadow = 'none';
+      });
+      chart.querySelectorAll('path,polyline').forEach(function(el){
+        if(!el.getAttribute('stroke-width')) el.setAttribute('stroke-width','3');
+      });
+      chart.querySelectorAll('text').forEach(function(el){
+        el.setAttribute('fill','#8aa4b8');
+        el.setAttribute('font-size','10');
+        el.setAttribute('font-family','Inter,Arial,sans-serif');
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', cleanPremiumVisual);
+  const oldRenderPerf = window.renderPerf;
+  if(typeof oldRenderPerf === 'function'){
+    window.renderPerf = function(){
+      const r = oldRenderPerf.apply(this, arguments);
+      setTimeout(cleanPremiumVisual, 50);
+      return r;
+    }
+  }
+  const oldShowTab = window.showTab;
+  if(typeof oldShowTab === 'function'){
+    window.showTab = function(t, el){
+      const r = oldShowTab.apply(this, arguments);
+      setTimeout(cleanPremiumVisual, 50);
+      return r;
+    }
+  }
+})();
 </script>
 
 </body>
