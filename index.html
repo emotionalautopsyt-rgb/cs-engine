@@ -306,8 +306,42 @@ select{cursor:pointer;appearance:none;}
   <div class="modal">
     <div class="modal-title">NOVO JOGO</div>
     <div class="g2" style="gap:10px;">
-      <div><label>Time Casa</label><input id="nj-c" placeholder="ex: Bahia"></div>
-      <div><label>Time Fora</label><input id="nj-f" placeholder="ex: Cruzeiro"></div>
+      <div><label>Time Casa</label><input id="nj-c" placeholder="ex: Brasil"></div>
+      <div><label>Time Fora</label><input id="nj-f" placeholder="ex: França"></div>
+    </div>
+    <div>
+      <label>Campeonato</label>
+      <select id="nj-comp">
+        <option value="">Selecionar campeonato</option>
+        <option value="Copa do Mundo 2026">🌍 Copa do Mundo 2026</option>
+        <option value="Copa do Mundo">🌍 Copa do Mundo</option>
+        <option value="Mundial de Clubes">🏆 Mundial de Clubes</option>
+        <option value="Champions League">🇪🇺 Champions League</option>
+        <option value="Europa League">🇪🇺 Europa League</option>
+        <option value="Conference League">🇪🇺 Conference League</option>
+        <option value="Premier League">🏴 Premier League</option>
+        <option value="La Liga">🇪🇸 La Liga</option>
+        <option value="Bundesliga">🇩🇪 Bundesliga</option>
+        <option value="Serie A Italiana">🇮🇹 Serie A Italiana</option>
+        <option value="Ligue 1">🇫🇷 Ligue 1</option>
+        <option value="Eredivisie">🇳🇱 Eredivisie</option>
+        <option value="Liga Portugal">🇵🇹 Liga Portugal</option>
+        <option value="Brasileirão Série A">🇧🇷 Brasileirão Série A</option>
+        <option value="Brasileirão Série B">🇧🇷 Brasileirão Série B</option>
+        <option value="Copa do Brasil">🇧🇷 Copa do Brasil</option>
+        <option value="Libertadores">🏆 Libertadores</option>
+        <option value="Sul-Americana">🏆 Sul-Americana</option>
+        <option value="Eliminatórias Copa do Mundo">🌎 Eliminatórias Copa do Mundo</option>
+        <option value="Eurocopa">🇪🇺 Eurocopa</option>
+        <option value="Copa América">🌎 Copa América</option>
+        <option value="Copa Africana de Nações">🌍 Copa Africana de Nações</option>
+        <option value="AFC Asian Cup">🌏 AFC Asian Cup</option>
+        <option value="MLS">🇺🇸 MLS</option>
+        <option value="Saudi Pro League">🇸🇦 Saudi Pro League</option>
+        <option value="Amistosos de Seleções">🤝 Amistosos de Seleções</option>
+        <option value="Amistosos de Clubes">🤝 Amistosos de Clubes</option>
+        <option value="Outros Campeonatos">📌 Outros Campeonatos</option>
+      </select>
     </div>
     <div class="g2" style="gap:10px;">
       <div><label>Stake R$</label><input id="nj-s" type="number" placeholder="40"></div>
@@ -699,6 +733,8 @@ function openModal() {
     if(c) { c.value=''; c.focus(); }
     const f=document.getElementById('nj-f');
     if(f) f.value='';
+    const comp=document.getElementById('nj-comp');
+    if(comp) comp.value='';
     const h=document.getElementById('nj-h');
     if(h) h.value='';
     // Sempre forçar hoje ao abrir o modal
@@ -732,11 +768,12 @@ function criarJogo() {
     if(!c && !f) { notify('ERRO', 'Preencha ao menos um time', 'var(--red)'); return; }
     const sk = parseFloat(document.getElementById('nj-s')?.value) || S.stake;
     const hora = document.getElementById('nj-h')?.value || '';
+    const comp = document.getElementById('nj-comp')?.value?.trim() || '';
     const dataVal = document.getElementById('nj-data')?.value || td();
     const game = {
       id: Date.now().toString(),
       name: (c||'Casa')+' vs '+(f||'Fora'),
-      casa: c, fora: f, comp: '', hora: hora, stake: sk,
+      casa: c, fora: f, comp: comp, hora: hora, stake: sk,
       placar: '0-0', min: 0, cluster: [], status: 'pre',
       data: dataVal, resultado: 0
     };
@@ -749,7 +786,7 @@ function criarJogo() {
     applyStake(sk);
     closeModal();
     renderSidebar();
-    notify('JOGO CRIADO', S.currentGame.name, 'var(--grn)');
+    notify('JOGO CRIADO', S.currentGame.name + (comp ? ' — '+comp : ''), 'var(--grn)');
   } catch(e) { notify('ERRO', e.message, 'var(--red)'); }
 }
 
@@ -864,6 +901,10 @@ function sbGameCard(g) {
   // Cluster
   var cls = g.cluster && g.cluster.length
     ? '<div class="sb-cluster">'+g.cluster.slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
+    : '';
+
+  var compLine = g.comp
+    ? '<div style="font-family:Space Mono,monospace;font-size:6px;color:rgba(255,199,64,.75);margin-top:3px;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 '+g.comp+'</div>'
     : '';
 
   // Placar ao vivo
