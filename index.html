@@ -859,7 +859,7 @@ function sbGameCard(g) {
   if(g.status === 'pre')  actBtns += '<button data-action="live" data-gid="'+gid+'" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>';
 
   // Botão ✕ sempre presente
-  var delBtn = '<button data-action="del" data-gid="'+gid+'" style="background:transparent;border:none;padding:2px 7px;color:var(--txt3);font-size:13px;font-weight:300;cursor:pointer;line-height:1;transition:color .15s;" title="Remover jogo">✕</button>';
+  var delBtn = '<button data-action="del" data-gid="'+gid+'" onclick="event.stopPropagation(); deleteGame(\''+gid+'\'); return false;" style="background:transparent;border:none;padding:2px 7px;color:var(--txt3);font-size:13px;font-weight:300;cursor:pointer;line-height:1;transition:color .15s;" title="Remover jogo">✕</button>';
 
   return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" data-gid="'+gid+'">'
     + '<div style="display:flex;gap:8px;align-items:flex-start;">'
