@@ -1709,7 +1709,17 @@ REGRAS DO JSON:
 
 // ===== CS ENGINE — MOTOR DETERMINÍSTICO =====
 // Scores, âncora e pirâmide calculados por código. IA só escreve a narrativa.
-function analyzeCSGame(fav, over, btts, csOdds) {
+function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
+  favEhVisitante = favEhVisitante || false;
+
+  // Função para inverter score quando favorito é visitante
+  // Ex: '2-0' vira '0-2', '1-0' vira '0-1', '2-1' vira '1-2'
+  function inv(score) {
+    if(!score || !score.includes('-')) return score;
+    var p = score.split('-');
+    return p[1]+'-'+p[0];
+  }
+  function invArr(arr) { return arr.map(inv); }
   csOdds = csOdds || {};
 
   // ── PERFIL ──────────────────────────────────────────────
@@ -1869,6 +1879,13 @@ function analyzeCSGame(fav, over, btts, csOdds) {
   if(profileId === 'GOLEADA') tipo10 = 'caminho_fraco';
   else if(odd10 > 9.0) tipo10 = 'caminho_leverage';
 
+  // ── Inverter scores se favorito é visitante ─────────────
+  if(favEhVisitante) {
+    mainScores = invArr(mainScores);
+    protection = invArr(protection);
+    ancora     = inv(ancora);
+  }
+
   return {
     profileId, profileLabel, mainScores, protection,
     ancora, pyramidType, retornoSimples,
@@ -1876,7 +1893,8 @@ function analyzeCSGame(fav, over, btts, csOdds) {
     caminhoPeso: (profileId === 'GOLEADA') ? 'fraco' : 'normal',
     high01: btts < 1.85,
     tipo10: tipo10,
-    odd10Used: odd10
+    odd10Used: odd10,
+    favEhVisitante: favEhVisitante
   };
 }
 
@@ -1987,8 +2005,31 @@ async function analisarJogo() {
     ? '\n\nODDS BETFAIR (correct score):\n' + Object.entries(S.csOdds).sort((a,b)=>a[1]-b[1]).map(([sc,od])=>`${sc}: @${od} (prob ${calcProb(od)}%)`).join('\n')
     : '';
 
+  // ── Detectar favorito real pelas odds CS ─────────────────
+  // Compara odds de vitória casa (1-0,2-0,2-1) vs visitante (0-1,0-2,1-2)
+  // O time com odds MENORES é o favorito real do mercado
+  function avgOdds(scores) {
+    const vals = scores.map(s => S.csOdds[s]).filter(o => o && o > 0);
+    if(!vals.length) return 999;
+    return vals.reduce((a,b) => a+b, 0) / vals.length;
+  }
+  const avgCasa      = avgOdds(['1-0','2-0','2-1','3-0','3-1']);
+  const avgVisitante = avgOdds(['0-1','0-2','1-2','0-3','1-3']);
+  // Se visitante tem odds menores = visitante é o favorito real
+  const favEhVisitante = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.75);
+  // Também detectar pelo texto da análise
+  const textoLower = texto.toLowerCase();
+  const favVisTextual = (
+    textoLower.includes('joga fora') ||
+    textoLower.includes('time visitante') ||
+    textoLower.includes('favorito fora') ||
+    textoLower.includes('como visitante') ||
+    textoLower.includes('fora de casa como favorito')
+  );
+  const favEhVisitanteReal = favEhVisitante || (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85 && favVisTextual);
+
   // ── Motor determinístico — calcular scores por código ──────
-  const engine = analyzeCSGame(fav, over, btts, S.csOdds);
+  const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal);
 
   const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
 
@@ -1998,7 +2039,7 @@ ${texto}
 CAMPO 2 — ODDS CORRECT SCORE BETFAIR (odds BACK reais):
 ${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use estimativas e indique.'}
 
-FILTRO DE ENTRADA: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
+FILTRO DE ENTRADA: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}${favEhVisitanteReal ? ' | ⚠️ FAVORITO É O VISITANTE — scores invertidos' : ' | Favorito é o time da CASA'}
 STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
 
 Use o Campo 1 para identificar padrão de resultados e contexto.
@@ -2018,6 +2059,22 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
   // Show EPIC loading
   const out = document.getElementById('resultado-out');
   const badge = document.getElementById('res-badge');
+  // Mostrar alerta quando favorito é visitante
+  if(favEhVisitanteReal) {
+    var favAlert = document.getElementById('fav-visitante-alert');
+    if(!favAlert) {
+      var outCard = document.getElementById('resultado-card');
+      if(outCard) {
+        favAlert = document.createElement('div');
+        favAlert.id = 'fav-visitante-alert';
+        favAlert.innerHTML = '<div style="background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.4);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-family:Space Mono,monospace;font-size:9px;color:rgba(180,150,255,.9);">⚠️ FAVORITO DETECTADO COMO VISITANTE — scores ajustados automaticamente</div>';
+        outCard.insertBefore(favAlert, outCard.firstChild);
+      }
+    }
+  } else {
+    var old = document.getElementById('fav-visitante-alert');
+    if(old) old.remove();
+  }
   if(out) out.innerHTML = [
     '<div style="padding:30px 20px;text-align:center;">',
       '<div style="position:relative;width:64px;height:64px;margin:0 auto 20px;">',
