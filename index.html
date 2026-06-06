@@ -234,7 +234,63 @@ select{cursor:pointer;appearance:none;}
 #resultado-out *{text-transform:none!important;text-align:left!important;font-size:14px;line-height:1.85;font-weight:400;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-@media(max-width:720px){.g2,.g3,.g4{grid-template-columns:1fr;}.main{padding:11px;}}
+
+/* BOTÃO PRINCIPAL — ANÁLISE DO GÊNIO */
+.genio-analisar-btn{
+  margin-top:6px;
+  padding:16px 18px;
+  width:100%;
+  border:none;
+  border-radius:12px;
+  cursor:pointer;
+  background:linear-gradient(135deg,#ffd66b 0%,#ffb800 42%,#ff8c1a 100%);
+  color:#071018;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:2.4px;
+  text-transform:uppercase;
+  box-shadow:0 0 18px rgba(255,184,0,.24), inset 0 1px 0 rgba(255,255,255,.35);
+  position:relative;
+  overflow:hidden;
+  transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.genio-analisar-btn::before{
+  content:'';
+  position:absolute;
+  top:0;
+  left:-90%;
+  width:55%;
+  height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  transform:skewX(-18deg);
+  animation:goldSweep 3.8s ease-in-out infinite;
+}
+.genio-analisar-btn span{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  white-space:nowrap;
+}
+.genio-analisar-btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 0 28px rgba(255,184,0,.38), 0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.45);
+  filter:saturate(1.08);
+}
+.genio-analisar-btn:active{
+  transform:translateY(0);
+}
+@keyframes goldSweep{
+  0%{left:-90%;opacity:0;}
+  18%{opacity:1;}
+  42%{left:130%;opacity:0;}
+  100%{left:130%;opacity:0;}
+}
+
+@media(max-width:720px){.g2,.g3,.g4{grid-template-columns:1fr;}.main{padding:11px;}.genio-analisar-btn span{white-space:normal;text-align:center;}}
 </style>
 </head>
 <body>
@@ -418,8 +474,8 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
         <div id="cs-status" style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:8px;"></div>
 
-        <button class="btn btn-full" id="btn-analisar" onclick="analisarJogo()" style="margin-top:4px;padding:14px;background:linear-gradient(135deg,#00d4ff,#7c5cfc,#00c96e);background-size:200% auto;font-size:12px;letter-spacing:2px;color:#000;font-weight:900;border-radius:10px;box-shadow:0 0 20px rgba(0,212,255,.25);animation:shimmer 3s linear infinite;transition:all .2s;position:relative;overflow:hidden;">
-          🧠 ANALISAR E GERAR CLUSTER
+        <button class="genio-analisar-btn" id="btn-analisar" onclick="analisarJogo()">
+          <span>🧠 GERAR ANÁLISE DO GÊNIO</span>
         </button>
       </div>
     </div>
@@ -469,137 +525,94 @@ e garantir que o DNA seja lido corretamente."></textarea>
 
 <!-- ===== PERFORMANCE ===== -->
 <div class="panel" id="panel-perf">
+  <div class="card" style="border-color:rgba(0,212,255,.25);box-shadow:0 0 22px rgba(0,212,255,.05);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+      <div>
+        <div class="card-title" style="margin-bottom:4px;font-size:13px;letter-spacing:3px;">📈 Performance do Gênio</div>
+        <div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;">Dashboard limpo com resultado geral, evolução e desempenho por campeonato</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <button class="btn btn-gh btn-sm" id="perf-tab-geral" onclick="showPerfView('geral')" style="border-color:var(--acc);color:var(--acc);">GERAL</button>
+        <button class="btn btn-gh btn-sm" id="perf-tab-camps" onclick="showPerfView('camps')">CAMPEONATOS</button>
+        <button class="btn btn-gh btn-sm" onclick="exportCSV()">📥 CSV</button>
+      </div>
+    </div>
 
-  <!-- CALIBRAÇÃO 30 TRADES -->
-  <div class="card" style="margin-bottom:14px;border-color:rgba(0,212,255,.3);">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div class="card-title" style="margin:0;">🎯 Calibração do Sistema</div>
-      <div id="cal-badge" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">META: 30 TRADES</div>
-    </div>
-    <div id="cal-bar-wrap" style="background:#0a1520;border-radius:6px;height:8px;margin-bottom:10px;overflow:hidden;">
-      <div id="cal-bar" style="height:100%;background:var(--acc);border-radius:6px;width:0%;transition:width .3s;"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
-      <div style="background:#0a1520;border-radius:8px;padding:8px;">
-        <div id="cal-total" style="font-size:20px;font-weight:700;color:var(--acc);">0</div>
-        <div style="font-size:8px;color:var(--txt3);">TRADES</div>
-      </div>
-      <div style="background:#0a1520;border-radius:8px;padding:8px;">
-        <div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div>
-        <div style="font-size:8px;color:var(--txt3);">COBERTOS</div>
-      </div>
-      <div style="background:#0a1520;border-radius:8px;padding:8px;">
-        <div id="cal-roi" style="font-size:20px;font-weight:700;">0%</div>
-        <div style="font-size:8px;color:var(--txt3);">ROI</div>
-      </div>
-      <div style="background:#0a1520;border-radius:8px;padding:8px;">
-        <div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">EM CALIBRAÇÃO</div>
-        <div style="font-size:8px;color:var(--txt3);">STATUS</div>
-      </div>
-    </div>
-    <div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace;text-align:center;">
-      Mínimo para lucro: 45% cobertura | Confiável após 30 trades
-    </div>
-  </div>
-
-  <!-- REGISTRO DE RESULTADO -->
-  <div class="card" style="margin-bottom:14px;">
-    <div class="card-title">⚡ Registro de Resultado</div>
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end;">
-      <div><label>Jogo</label><input id="r-j" placeholder="Bahia vs Cruzeiro" style="margin:0;"></div>
-      <div><label>Stake R$</label><input id="r-s" type="number" placeholder="40" style="margin:0;"></div>
-      <div><label>Resultado R$</label><input id="r-v" type="number" step="0.01" placeholder="+48 ou -36" style="margin:0;"></div>
-      <div><label>Score Final</label><input id="r-sc" placeholder="2-1" style="margin:0;"></div>
-      <button class="btn btn-p btn-sm" style="height:36px;margin-top:14px;" onclick="regResult()">SALVAR</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
-      <div><label>Competição</label><input id="r-c" placeholder="Brasileirão" style="margin:0;"></div>
-      <div><label>Resultado</label>
-        <select id="r-r" style="margin:0;">
-          <option value="lucro">✅ Lucro</option>
-          <option value="loss">❌ Loss</option>
-          <option value="be">➡️ Break Even</option>
-          <option value="void">⚪ Void</option>
-        </select>
-      </div>
-      <div><label>Data</label><input id="r-d" type="date" style="margin:0;"></div>
-    </div>
-  </div>
-
-  <!-- NÃO OPERADO TRACKER -->
-  <div class="card" style="margin-bottom:14px;border-color:rgba(255,184,48,.2);">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div class="card-title" style="margin:0;color:var(--ylw);">🚫 Não Operado</div>
-      <div id="nao-count" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">0 registros</div>
-    </div>
-    <div style="display:grid;grid-template-columns:2fr 2fr auto;gap:8px;align-items:end;margin-bottom:8px;">
-      <div><label>Jogo</label><input id="nao-j" placeholder="Arsenal vs Chelsea" style="margin:0;"></div>
-      <div><label>Motivo</label>
-        <select id="nao-m" style="margin:0;">
-          <option value="filtro">Filtro não passou</option>
-          <option value="rotacao">Rotação detectada</option>
-          <option value="escalacao">Escalação não confirmada</option>
-          <option value="motivacao">Motivação baixa</option>
-          <option value="liquidez">Sem liquidez CS</option>
-          <option value="valor">Meta CS não atingida</option>
-          <option value="outro">Outro</option>
-        </select>
-      </div>
-      <button class="btn btn-y btn-sm" style="height:36px;margin-top:14px;" onclick="regNaoOperado()">SALVAR</button>
-    </div>
-    <div><label>Score real do jogo (preencher depois)</label><input id="nao-sc" placeholder="ex: 2-1 (preencha após o jogo)" style="margin:0;width:100%;"></div>
-    <div id="nao-list" style="margin-top:10px;max-height:120px;overflow-y:auto;"></div>
-  </div>
-
-  <div class="g4" style="margin-bottom:14px;">
-    <div class="card" style="text-align:center;padding:16px;">
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">HOJE</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;" id="p-hoje">R$ 0</div>
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-hojej">0 jogos</div>
-    </div>
-    <div class="card" style="text-align:center;padding:16px;">
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">SALDO</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;" id="p-saldo">R$ 0</div>
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-total">0 jogos</div>
-    </div>
-    <div class="card" style="text-align:center;padding:16px;">
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">WINRATE</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--ylw);" id="p-wr">0%</div>
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-wrd">0W / 0L</div>
-    </div>
-    <div class="card" style="text-align:center;padding:16px;">
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">ROI</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--acc);" id="p-roi">0%</div>
-      <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-stake-t">Stake R$0</div>
-    </div>
-  </div>
-
-  <div class="g2">
-    <div>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <div class="card-title" style="margin-bottom:0;">Histórico</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-gh btn-sm" onclick="exportCSV()">📥 CSV</button>
-            <button class="btn btn-gh btn-sm" style="color:var(--red);" onclick="limparHist()">LIMPAR</button>
-          </div>
+    <!-- VISÃO GERAL -->
+    <div id="perf-view-geral">
+      <div class="g4" style="margin-bottom:14px;">
+        <div class="card" style="text-align:center;padding:16px;margin:0;background:linear-gradient(135deg,#0a1520,#0d1825);">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">SALDO TOTAL</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:900;" id="p-saldo">R$ 0</div>
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-total">0 jogos</div>
         </div>
-        <div id="hist-list"><div style="color:var(--txt3);text-align:center;padding:14px;font-size:11px;">Nenhum resultado</div></div>
+        <div class="card" style="text-align:center;padding:16px;margin:0;background:linear-gradient(135deg,#0a1520,#0d1825);">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">WINRATE</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:900;color:var(--ylw);" id="p-wr">0%</div>
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-wrd">0W / 0L</div>
+        </div>
+        <div class="card" style="text-align:center;padding:16px;margin:0;background:linear-gradient(135deg,#0a1520,#0d1825);">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">ROI</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:900;color:var(--acc);" id="p-roi">0%</div>
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-stake-t">Stake R$0</div>
+        </div>
+        <div class="card" style="text-align:center;padding:16px;margin:0;background:linear-gradient(135deg,#0a1520,#0d1825);">
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:4px;">HOJE</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:900;" id="p-hoje">R$ 0</div>
+          <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--txt3);margin-top:3px;" id="p-hojej">0 jogos</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px;border-color:rgba(0,212,255,.18);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="card-title" style="margin:0;">🎯 Calibração do Sistema</div>
+          <div id="cal-badge" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">META: 30 TRADES</div>
+        </div>
+        <div id="cal-bar-wrap" style="background:#0a1520;border-radius:6px;height:8px;margin-bottom:10px;overflow:hidden;">
+          <div id="cal-bar" style="height:100%;background:linear-gradient(90deg,var(--acc),var(--grn));border-radius:6px;width:0%;transition:width .3s;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-total" style="font-size:20px;font-weight:700;color:var(--acc);">0</div><div style="font-size:8px;color:var(--txt3);">TRADES</div></div>
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div><div style="font-size:8px;color:var(--txt3);">GREEN RATE</div></div>
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-roi" style="font-size:20px;font-weight:700;">0%</div><div style="font-size:8px;color:var(--txt3);">ROI</div></div>
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">EM CALIBRAÇÃO</div><div style="font-size:8px;color:var(--txt3);">STATUS</div></div>
+        </div>
+        <div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace;text-align:center;">Leitura confiável após 30 jogos finalizados.</div>
+      </div>
+
+      <div class="g2">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">📊 Evolução da Banca</div>
+          <div id="perf-chart" style="min-height:170px;"></div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">🏆 Melhor Momento</div>
+          <div id="perf-best-box"></div>
+        </div>
+      </div>
+
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">📅 Performance Mensal</div>
+          <div id="perf-month-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚽ Últimos Jogos Finalizados</div>
+          <div id="hist-list"><div style="color:var(--txt3);text-align:center;padding:14px;font-size:11px;">Nenhum resultado</div></div>
+        </div>
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-title">Estatísticas</div>
-        <div class="mr"><span class="ml">Vencedores</span><span class="mv" style="color:var(--grn);" id="s-w">0</span></div>
-        <div class="mr"><span class="ml">Perdedores</span><span class="mv" style="color:var(--red);" id="s-l">0</span></div>
-        <div class="mr"><span class="ml">Maior Lucro</span><span class="mv" style="color:var(--grn);" id="s-mw">R$ 0</span></div>
-        <div class="mr"><span class="ml">Maior Loss</span><span class="mv" style="color:var(--red);" id="s-ml">R$ 0</span></div>
-        <div class="mr"><span class="ml">Média/Jogo</span><span class="mv" id="s-avg">R$ 0</span></div>
-        <div class="mr"><span class="ml">Stake Total</span><span class="mv" id="s-st">R$ 0</span></div>
+
+    <!-- CAMPEONATOS -->
+    <div id="perf-view-camps" style="display:none;">
+      <div class="ab ab-b" style="margin-bottom:14px;">
+        <div class="ab-title" style="color:var(--acc);">DESEMPENHO POR COMPETIÇÃO</div>
+        <div class="ab-text">Use essa área para identificar onde o Gênio está performando melhor. Jogos sem competição preenchida entram como “Sem competição”.</div>
       </div>
-      <div class="card">
-        <div class="card-title" id="week-t">Esta Semana</div>
-        <div id="week-out"><div style="color:var(--txt3);text-align:center;padding:11px;font-size:11px;">Sem dados</div></div>
+      <div id="perf-camps-grid" class="g3"></div>
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">📋 Ranking de Campeonatos</div>
+        <div id="perf-camps-ranking"></div>
       </div>
     </div>
   </div>
@@ -3813,104 +3826,158 @@ function renderHistPanel() {
   }).join('');
 }
 
-function renderPerf() {
-  const h=S.hist;
+function showPerfView(view) {
+  try {
+    const geral = document.getElementById('perf-view-geral');
+    const camps = document.getElementById('perf-view-camps');
+    const bG = document.getElementById('perf-tab-geral');
+    const bC = document.getElementById('perf-tab-camps');
+    if(geral) geral.style.display = view === 'camps' ? 'none' : 'block';
+    if(camps) camps.style.display = view === 'camps' ? 'block' : 'none';
+    if(bG) { bG.style.borderColor = view === 'camps' ? 'var(--border)' : 'var(--acc)'; bG.style.color = view === 'camps' ? 'var(--txt2)' : 'var(--acc)'; }
+    if(bC) { bC.style.borderColor = view === 'camps' ? 'var(--acc)' : 'var(--border)'; bC.style.color = view === 'camps' ? 'var(--acc)' : 'var(--txt2)'; }
+    renderPerf();
+  } catch(e) {}
+}
 
-  // ── Update calibration tracker ────────────────────────────────────────
-  const calTotal = h.filter(r=>r.r!=='void').length;
-  const calWins = h.filter(r=>r.v>0).length;
-  const calSaldo = h.reduce((a,r)=>a+r.v,0);
-  const calStake = h.reduce((a,r)=>a+(r.s||0),0);
-  const calCov = calTotal>0?Math.round(calWins/calTotal*100):0;
-  const calRoi = calStake>0?((calSaldo/calStake)*100).toFixed(1):0;
-  const calPct = Math.min(calTotal/30*100,100);
+function renderPerf() {
+  const h = (S.hist || []).slice().sort(function(a,b){ return (a.ts||0) - (b.ts||0); });
+  const fmt = function(v){ return (v>=0?'+':'')+'R$ '+Number(v||0).toFixed(2); };
+  const color = function(v){ return v>=0 ? 'var(--grn)' : 'var(--red)'; };
+  const set = function(id,v){ const e=document.getElementById(id); if(e) e.textContent=v; };
+  const setC = function(id,v,c){ const e=document.getElementById(id); if(e){ e.textContent=v; e.style.color=c; } };
+
+  const valid = h.filter(function(r){ return r.r !== 'void'; });
+  const total = valid.length;
+  const wins = valid.filter(function(r){ return Number(r.v||0) > 0; }).length;
+  const losses = valid.filter(function(r){ return Number(r.v||0) < 0; }).length;
+  const saldo = h.reduce(function(a,r){ return a + Number(r.v||0); }, 0);
+  const stake = h.reduce(function(a,r){ return a + Number(r.s||0); }, 0);
+  const wr = total ? Math.round(wins / total * 100) : 0;
+  const roi = stake ? ((saldo / stake) * 100).toFixed(1) : '0.0';
+  const today = td();
+  const th = h.filter(function(r){ return r.d === today; });
+  const todaySaldo = th.reduce(function(a,r){ return a + Number(r.v||0); }, 0);
+
+  // Top cards
+  setC('p-saldo', fmt(saldo), color(saldo));
+  set('p-total', total+' jogo(s)');
+  setC('p-wr', wr+'%', wr>=55?'var(--grn)':wr>=45?'var(--ylw)':'var(--red)');
+  set('p-wrd', wins+'W / '+losses+'L');
+  setC('p-roi', (parseFloat(roi)>=0?'+':'')+roi+'%', parseFloat(roi)>=0?'var(--grn)':'var(--red)');
+  set('p-stake-t','Stake total R$ '+stake.toFixed(2));
+  setC('p-hoje', fmt(todaySaldo), color(todaySaldo));
+  set('p-hojej', th.length+' jogo(s)');
+
+  // Calibration
+  const calPct = Math.min(total/30*100,100);
   const bar = document.getElementById('cal-bar');
   if(bar) bar.style.width = calPct+'%';
-  const badge = document.getElementById('cal-badge');
-  if(badge) badge.textContent = calTotal+'/30 TRADES';
-  const setEl = (id,v,col)=>{const e=document.getElementById(id);if(e){e.textContent=v;if(col)e.style.color=col;}};
-  setEl('cal-total', calTotal);
-  setEl('cal-cov', calCov+'%', calCov>=55?'var(--grn)':calCov>=45?'var(--ylw)':'var(--red)');
-  setEl('cal-roi', (calRoi>=0?'+':'')+calRoi+'%', calRoi>=0?'var(--grn)':'var(--red)');
-  if(calTotal<30) {
-    setEl('cal-status','EM CALIBRAÇÃO','var(--ylw)');
-  } else if(calCov>=55) {
-    setEl('cal-status','✅ CONFIÁVEL','var(--grn)');
-  } else if(calCov>=45) {
-    setEl('cal-status','⚠️ BORDERLINE','var(--ylw)');
-  } else {
-    setEl('cal-status','❌ REVISAR','var(--red)');
+  set('cal-badge', total+'/30 TRADES');
+  set('cal-total', total);
+  setC('cal-cov', wr+'%', wr>=55?'var(--grn)':wr>=45?'var(--ylw)':'var(--red)');
+  setC('cal-roi', (parseFloat(roi)>=0?'+':'')+roi+'%', parseFloat(roi)>=0?'var(--grn)':'var(--red)');
+  if(total < 30) setC('cal-status','EM CALIBRAÇÃO','var(--ylw)');
+  else if(wr>=55) setC('cal-status','✅ CONFIÁVEL','var(--grn)');
+  else if(wr>=45) setC('cal-status','⚠️ ATENÇÃO','var(--ylw)');
+  else setC('cal-status','❌ REVISAR','var(--red)');
+
+  // Empty state
+  if(!h.length) {
+    const empty = '<div style="color:var(--txt3);text-align:center;padding:20px;font-size:11px;border:1px dashed var(--border);border-radius:10px;">Nenhum jogo finalizado ainda.</div>';
+    ['hist-list','perf-month-list','perf-chart','perf-best-box','perf-camps-grid','perf-camps-ranking'].forEach(function(id){ const e=document.getElementById(id); if(e) e.innerHTML=empty; });
+    return;
   }
 
-  if(!h.length) return;
-  const w=h.filter(r=>r.v>0).length, l=h.filter(r=>r.v<0).length;
-  const saldo=h.reduce((a,r)=>a+r.v,0), stake=h.reduce((a,r)=>a+(r.s||0),0);
-  const tot=h.filter(r=>r.r!=='void').length;
-  const wr=tot>0?Math.round(w/tot*100):0;
-  const roi=stake>0?((saldo/stake)*100).toFixed(1):0;
-  const mw=Math.max(...h.map(r=>r.v)), ml=Math.min(...h.map(r=>r.v));
-  const avg=tot>0?(saldo/tot).toFixed(2):0;
-  const today=td(), th=h.filter(r=>r.d===today), ts2=th.reduce((a,r)=>a+r.v,0);
+  // Chart cumulative bankroll
+  let cum = 0;
+  const points = h.map(function(r,i){ cum += Number(r.v||0); return {i:i, v:cum}; });
+  const vals = points.map(function(p){ return p.v; });
+  const minV = Math.min(0, ...vals), maxV = Math.max(0, ...vals);
+  const range = Math.max(1, maxV-minV);
+  const wSvg = 520, hSvg = 155, pad = 18;
+  const xy = points.map(function(p){
+    const x = pad + (points.length===1 ? 0 : p.i/(points.length-1))*(wSvg-pad*2);
+    const y = hSvg-pad - ((p.v-minV)/range)*(hSvg-pad*2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  const chart = document.getElementById('perf-chart');
+  if(chart) {
+    chart.innerHTML = '<svg viewBox="0 0 '+wSvg+' '+hSvg+'" style="width:100%;height:170px;background:#08121b;border:1px solid var(--border);border-radius:10px;">'+
+      '<line x1="'+pad+'" y1="'+(hSvg-pad)+'" x2="'+(wSvg-pad)+'" y2="'+(hSvg-pad)+'" stroke="#162030" stroke-width="1" />'+
+      '<polyline fill="none" stroke="#00d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+xy+'" />'+
+      '<circle cx="'+(points.length===1?pad:(pad+(wSvg-pad*2)))+'" cy="'+(hSvg-pad-((points[points.length-1].v-minV)/range)*(hSvg-pad*2)).toFixed(1)+'" r="4" fill="#00c96e" />'+
+      '</svg>'+
+      '<div style="display:flex;justify-content:space-between;margin-top:8px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);"><span>Início</span><span>Saldo atual: <b style="color:'+color(saldo)+'">'+fmt(saldo)+'</b></span></div>';
+  }
 
-  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-  const setC=(id,v,c)=>{const e=document.getElementById(id);if(e){e.textContent=v;e.style.color=c;}};
+  // Months aggregation
+  const byMonth = {};
+  h.forEach(function(r){ const mk=String(r.d||td()).slice(0,7); if(!byMonth[mk]) byMonth[mk]=[]; byMonth[mk].push(r); });
+  const monthKeys = Object.keys(byMonth).sort();
+  const monthName = function(mk){
+    const [yy,mm]=mk.split('-');
+    const names=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+    return names[(parseInt(mm,10)||1)-1]+' / '+yy;
+  };
+  let bestMonth = null;
+  const monthCards = monthKeys.slice().reverse().map(function(mk){
+    const arr=byMonth[mk], s=arr.reduce(function(a,r){return a+Number(r.v||0);},0);
+    const v=arr.filter(function(r){return r.r!=='void';});
+    const w=v.filter(function(r){return Number(r.v||0)>0;}).length;
+    const wrm=v.length?Math.round(w/v.length*100):0;
+    if(!bestMonth || s > bestMonth.s) bestMonth = {mk:mk, s:s, jogos:arr.length, wr:wrm};
+    return '<div style="display:grid;grid-template-columns:1.1fr .9fr .7fr .7fr;gap:8px;align-items:center;padding:10px 12px;background:#0a1520;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;">'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:900;letter-spacing:1px;color:var(--txt);">'+monthName(mk)+'</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:11px;font-weight:700;color:'+color(s)+';">'+fmt(s)+'</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+arr.length+' jogos</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--ylw);">'+wrm+'% WR</div>'+
+    '</div>';
+  }).join('');
+  const ml = document.getElementById('perf-month-list'); if(ml) ml.innerHTML = monthCards || '<div style="color:var(--txt3);">Sem meses</div>';
 
-  setC('p-saldo',(saldo>=0?'+':'')+' R$ '+saldo.toFixed(2),saldo>=0?'var(--grn)':'var(--red)');
-  set('p-total',h.length+' jogos');
-  set('p-wr',wr+'%');
-  set('p-wrd',w+'W / '+l+'L');
-  setC('p-roi',roi+'%',parseFloat(roi)>=0?'var(--grn)':'var(--red)');
-  set('p-stake-t','Stake R$ '+stake.toFixed(2));
-  setC('p-hoje',(ts2>=0?'+':'')+' R$ '+ts2.toFixed(2),ts2>=0?'var(--grn)':'var(--red)');
-  set('p-hojej',th.length+' jogo(s)');
-  set('s-w',w); set('s-l',l);
-  set('s-mw','+R$ '+(h.length?mw.toFixed(2):0));
-  set('s-ml','R$ '+(h.length?ml.toFixed(2):0));
-  setC('s-avg',(parseFloat(avg)>=0?'+':'')+' R$ '+avg,parseFloat(avg)>=0?'var(--grn)':'var(--red)');
-  set('s-st','R$ '+stake.toFixed(2));
+  const bestBox = document.getElementById('perf-best-box');
+  const avg = total ? saldo/total : 0;
+  const mw = Math.max(...h.map(function(r){return Number(r.v||0);}));
+  const mloss = Math.min(...h.map(function(r){return Number(r.v||0);}));
+  if(bestBox) bestBox.innerHTML =
+    '<div class="mr"><span class="ml">Melhor mês</span><span class="mv" style="color:'+(bestMonth?color(bestMonth.s):'var(--txt3)')+'">'+(bestMonth?monthName(bestMonth.mk)+' • '+fmt(bestMonth.s):'-')+'</span></div>'+
+    '<div class="mr"><span class="ml">Maior green</span><span class="mv" style="color:var(--grn)">+'+'R$ '+mw.toFixed(2)+'</span></div>'+
+    '<div class="mr"><span class="ml">Maior red</span><span class="mv" style="color:var(--red)">R$ '+mloss.toFixed(2)+'</span></div>'+
+    '<div class="mr"><span class="ml">Média por jogo</span><span class="mv" style="color:'+color(avg)+'">'+fmt(avg)+'</span></div>';
 
-  // Hist list
+  // Last games
   const hl=document.getElementById('hist-list');
-  if(hl) hl.innerHTML=[...h].reverse().map(function(r){
-    var vColor = r.v>0?'var(--grn)':r.v<0?'var(--red)':'var(--txt3)';
-    var vSign  = r.v>0?'+':'';
-    var scLine = r.sc ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Score: '+r.sc+'</div>' : '';
+  if(hl) hl.innerHTML=h.slice().reverse().slice(0,8).map(function(r){
+    const v = Number(r.v||0), vColor = color(v), vSign = v>0?'+':'';
+    const comp = r.c ? ' • '+r.c : '';
+    const scLine = r.sc ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Score: '+r.sc+'</div>' : '';
     return '<div class="hist-row">'+
-      '<div>'+
-        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+fd(r.d)+(r.c?' • '+r.c:'')+'</div>'+
-        '<div style="font-size:12px;font-weight:500;margin:2px 0;">'+r.j+'</div>'+
-        scLine+
-      '</div>'+
-      '<div style="text-align:right;">'+
-        '<div style="font-family:Space Mono,monospace;font-size:12px;font-weight:700;color:'+vColor+'">'+vSign+'R$ '+r.v.toFixed(2)+'</div>'+
-        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">stake R$ '+r.s+'</div>'+
-        '<button style="font-size:7px;color:var(--txt3);background:none;border:none;cursor:pointer;font-family:Space Mono,monospace;" onclick="delR('+r.ts+')">✕</button>'+
-      '</div>'+
+      '<div><div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+fd(r.d)+comp+'</div><div style="font-size:12px;font-weight:500;margin:2px 0;">'+r.j+'</div>'+scLine+'</div>'+
+      '<div style="text-align:right;"><div style="font-family:Space Mono,monospace;font-size:12px;font-weight:700;color:'+vColor+'">'+vSign+'R$ '+v.toFixed(2)+'</div><div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">stake R$ '+(r.s||0)+'</div></div>'+
     '</div>';
   }).join('');
 
-  // Weekly
-  const now=new Date(), dow=now.getDay()===0?6:now.getDay()-1;
-  const wks=new Date(now); wks.setDate(now.getDate()-dow); wks.setHours(0,0,0,0);
-  const wh=h.filter(r=>r.d&&new Date(r.d+'T00:00:00')>=wks);
-  const ws=wh.reduce((a,r)=>a+r.v,0), ww=wh.filter(r=>r.v>0).length;
-  const wt2=wh.filter(r=>r.r!=='void').length, wwr=wt2>0?Math.round(ww/wt2*100):0;
-  const ds=String(wks.getDate()).padStart(2,'0')+'/'+String(wks.getMonth()+1).padStart(2,'0');
-  const de=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0');
-  const wt=document.getElementById('week-t'); if(wt) wt.textContent='Semana — '+ds+' a '+de;
-  const wo=document.getElementById('week-out');
-  if(wo) {
-    if(wh.length===0) {
-      wo.innerHTML = '<div style="color:var(--txt3);text-align:center;padding:11px;font-size:11px;">Sem dados</div>';
-    } else {
-      var saldoColor = ws>=0 ? 'var(--grn)' : 'var(--red)';
-      var saldoSign  = ws>=0 ? '+' : '';
-      wo.innerHTML =
-        '<div class="mr"><span class="ml">Jogos</span><span class="mv">'+wh.length+'</span></div>' +
-        '<div class="mr"><span class="ml">Saldo</span><span class="mv" style="color:'+saldoColor+'">'+saldoSign+'R$ '+ws.toFixed(2)+'</span></div>' +
-        '<div class="mr"><span class="ml">Winrate</span><span class="mv" style="color:var(--ylw)">'+wwr+'%</span></div>';
-    }
-  }
+  // Championships
+  const byCamp = {};
+  h.forEach(function(r){ const c=(r.c||'Sem competição').trim()||'Sem competição'; if(!byCamp[c]) byCamp[c]=[]; byCamp[c].push(r); });
+  const camps = Object.keys(byCamp).map(function(c){
+    const arr=byCamp[c], s=arr.reduce(function(a,r){return a+Number(r.v||0);},0);
+    const v=arr.filter(function(r){return r.r!=='void';});
+    const w=v.filter(function(r){return Number(r.v||0)>0;}).length;
+    const wrp=v.length?Math.round(w/v.length*100):0;
+    const st=arr.reduce(function(a,r){return a+Number(r.s||0);},0);
+    const roip=st?((s/st)*100).toFixed(1):'0.0';
+    return {c:c, arr:arr, s:s, wr:wrp, roi:roip};
+  }).sort(function(a,b){ return b.s-a.s; });
+  const cg=document.getElementById('perf-camps-grid');
+  if(cg) cg.innerHTML=camps.map(function(x){ return '<div class="card" style="margin:0;padding:14px;background:linear-gradient(135deg,#0a1520,#0d1825);border-color:'+(x.s>=0?'rgba(0,201,110,.25)':'rgba(255,77,106,.25)')+';">'+
+    '<div style="font-family:Barlow Condensed,sans-serif;font-size:15px;font-weight:900;letter-spacing:1px;margin-bottom:8px;color:var(--txt);">'+x.c+'</div>'+
+    '<div style="font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:900;color:'+color(x.s)+';">'+fmt(x.s)+'</div>'+
+    '<div style="display:flex;gap:8px;margin-top:8px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);"><span>'+x.arr.length+' jogos</span><span style="color:var(--ylw)">'+x.wr+'% WR</span><span>'+x.roi+'% ROI</span></div>'+
+  '</div>'; }).join('');
+  const cr=document.getElementById('perf-camps-ranking');
+  if(cr) cr.innerHTML=camps.map(function(x,i){ return '<div class="mr"><span class="ml">#'+(i+1)+' '+x.c+'</span><span class="mv" style="color:'+color(x.s)+'">'+fmt(x.s)+' • '+x.arr.length+' jogos • '+x.wr+'% WR</span></div>'; }).join('');
 }
 
 function delR(ts) { S.hist=S.hist.filter(r=>r.ts!==ts); save(); renderPerf(); updHdr(); if(document.getElementById('panel-hist')?.classList.contains('act')) renderHistPanel(); }
