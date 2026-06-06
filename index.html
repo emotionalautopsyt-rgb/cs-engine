@@ -4585,5 +4585,110 @@ function injetarScoresNarrativa(texto, cluster) {
 })();
 </script>
 
+
+<script>
+/* =========================================================
+   PATCH — Botão de análise não fica travado em ANALISANDO
+   ========================================================= */
+(function(){
+  function getBtn(){
+    return document.getElementById('btn-analisar');
+  }
+
+  window.setGenioButtonLoading = function(isLoading){
+    const btn = getBtn();
+    if(!btn) return;
+    if(isLoading){
+      btn.dataset.loading = '1';
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ ANALISANDO...</span>';
+      btn.style.opacity = '0.92';
+      btn.style.cursor = 'wait';
+    }else{
+      btn.dataset.loading = '0';
+      btn.disabled = false;
+      btn.innerHTML = '<span>🧠 GERAR ANÁLISE DO GÊNIO</span>';
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    }
+  };
+
+  function forceResetButtonSoon(){
+    setTimeout(function(){
+      const btn = getBtn();
+      if(!btn) return;
+      const stillLoading = btn.dataset.loading === '1' || /ANALISANDO/i.test(btn.textContent || '');
+      if(stillLoading && !window.__genioActuallyRunning){
+        window.setGenioButtonLoading(false);
+      }
+    }, 250);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    window.__genioActuallyRunning = false;
+    window.setGenioButtonLoading(false);
+  });
+
+  const oldShowTab = window.showTab;
+  if(typeof oldShowTab === 'function'){
+    window.showTab = function(){
+      const r = oldShowTab.apply(this, arguments);
+      forceResetButtonSoon();
+      return r;
+    };
+  }
+
+  const oldSelectGame = window.selectGame;
+  if(typeof oldSelectGame === 'function'){
+    window.selectGame = function(){
+      const r = oldSelectGame.apply(this, arguments);
+      forceResetButtonSoon();
+      return r;
+    };
+  }
+
+  const oldResetCluster = window.resetCluster;
+  if(typeof oldResetCluster === 'function'){
+    window.resetCluster = function(){
+      const r = oldResetCluster.apply(this, arguments);
+      window.__genioActuallyRunning = false;
+      window.setGenioButtonLoading(false);
+      return r;
+    };
+  }
+
+  const oldAnalisar = window.analisarJogo;
+  if(typeof oldAnalisar === 'function'){
+    window.analisarJogo = async function(){
+      if(window.__genioActuallyRunning) return;
+      window.__genioActuallyRunning = true;
+      window.setGenioButtonLoading(true);
+      try{
+        const result = oldAnalisar.apply(this, arguments);
+        if(result && typeof result.then === 'function'){
+          await result;
+        }
+        return result;
+      }catch(e){
+        console.error(e);
+        throw e;
+      }finally{
+        window.__genioActuallyRunning = false;
+        window.setGenioButtonLoading(false);
+      }
+    };
+  }
+
+  // Segurança extra: se algum fluxo antigo deixar o texto preso, volta ao normal após alguns segundos.
+  setInterval(function(){
+    const btn = getBtn();
+    if(!btn) return;
+    if(!window.__genioActuallyRunning && /ANALISANDO/i.test(btn.textContent || '')){
+      window.setGenioButtonLoading(false);
+    }
+  }, 1200);
+})();
+</script>
+
 </body>
 </html>
