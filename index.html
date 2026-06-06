@@ -820,7 +820,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
 
       <div class="card" style="margin-bottom:14px;border-color:rgba(0,212,255,.18);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div class="card-title" style="margin:0;">🎯 Calibração do Sistema</div>
+          <div class="card-title" style="margin:0;">⚡ Leitura do Gênio</div>
           <div id="cal-badge" style="font-size:9px;font-family:'Space Mono',monospace;color:var(--txt3);">META: 30 JOGOS</div>
         </div>
         <div id="cal-bar-wrap" style="background:#0a1520;border-radius:6px;height:8px;margin-bottom:10px;overflow:hidden;">
@@ -830,9 +830,9 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-total" style="font-size:20px;font-weight:700;color:var(--acc);">0</div><div style="font-size:8px;color:var(--txt3);">JOGOS</div></div>
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-cov" style="font-size:20px;font-weight:700;color:var(--grn);">0%</div><div style="font-size:8px;color:var(--txt3);">TAXA DE ACERTO</div></div>
           <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-roi" style="font-size:20px;font-weight:700;">0%</div><div style="font-size:8px;color:var(--txt3);">ROI</div></div>
-          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">EM CALIBRAÇÃO</div><div style="font-size:8px;color:var(--txt3);">STATUS</div></div>
+          <div style="background:#0a1520;border-radius:8px;padding:8px;"><div id="cal-status" style="font-size:11px;font-weight:700;color:var(--ylw);">MOTOR ATIVO</div><div style="font-size:8px;color:var(--txt3);">STATUS</div></div>
         </div>
-        <div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace;text-align:center;">Leitura confiável após 30 jogos finalizados.</div>
+        <div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace;text-align:center;">O Gênio melhora sua leitura conforme mais jogos são analisados.</div>
       </div>
 
       <div class="g2">
@@ -3057,16 +3057,24 @@ function calcStakes(cluster, stake, analysisText) {
     const pcts = pyramids[prof] || pyramids.conservador;
     let dIdx=0, pbIdx=0;
 
-    // Auto-add "any other home win" for GOLEADA if Betfair odds available
-    // Trigger: GOLEADA profile + (H2H 4+ goals OR DNA > 3.5 OR Over < 1.60)
+    // Auto-add "any other win" para GOLEADA/EXPANSÃO usando o LADO CORRETO do favorito.
+    // Correção crítica:
+    // - favorito em casa     → any_other_home
+    // - favorito visitante   → any_other_away
+    // Trigger: perfil muito ofensivo + (H2H 4+ gols OR DNA > 3.5 OR Over < 1.60)
     const overForGol = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
-    const hasAnyOtherHome = cluster.some(s => s.score === 'any_other_home');
-    const aoOdd = S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0;
+    const favAwayExpansion = !!(typeof engine !== 'undefined' && engine && engine.favEhVisitante);
+    const expansionScore = favAwayExpansion ? 'any_other_away' : 'any_other_home';
+    const expansionOdd = favAwayExpansion
+      ? (S.csOdds['any_other_away'] || S.csOdds['QUALQUER OUTRA VITÓRIA DE VISITANTE'] || 0)
+      : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
+    const hasAnyOtherFav = cluster.some(s => s.score === expansionScore);
     const goleadaH2H = /H2H.*[4-9]-\d|[4-9]-\d.*H2H|4\+\s*gols|DNA.*3[.,][5-9]|3[.,][5-9].*gols/i.test(text);
-    if(!hasAnyOtherHome && aoOdd > 0 && (overForGol < 1.60 || goleadaH2H)) {
-      cluster.push({score:'any_other_home', odd:aoOdd, tipo:'expansao',
-        prob:calcProb(aoOdd), stake:0, lucro:0, oddPG:0,
-        _label:'🏠 GOLEADA', _covers:'4-0/4-1/5-0+'});
+    if(!hasAnyOtherFav && expansionOdd > 0 && (overForGol < 1.60 || goleadaH2H)) {
+      cluster.push({score:expansionScore, odd:expansionOdd, tipo:'expansao',
+        prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
+        _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
+        _covers:(favAwayExpansion ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+')});
     }
 
     if(prof === 'goleada') {
@@ -4139,7 +4147,7 @@ function renderPerf() {
   set('cal-total', total);
   setC('cal-cov', wr+'%', wr>=55?'var(--grn)':wr>=45?'var(--ylw)':'var(--red)');
   setC('cal-roi', (parseFloat(roi)>=0?'+':'')+roi+'%', parseFloat(roi)>=0?'var(--grn)':'var(--red)');
-  if(total < 30) setC('cal-status','EM CALIBRAÇÃO','var(--ylw)');
+  if(total < 30) setC('cal-status','MOTOR ATIVO','var(--ylw)');
   else if(wr>=55) setC('cal-status','✅ CONFIÁVEL','var(--grn)');
   else if(wr>=45) setC('cal-status','⚠️ ATENÇÃO','var(--ylw)');
   else setC('cal-status','❌ REVISAR','var(--red)');
