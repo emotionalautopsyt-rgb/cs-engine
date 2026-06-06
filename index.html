@@ -41,7 +41,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-
 .sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 .sb-list{padding:6px 8px;}
 .sb-game{padding:11px 12px;border-radius:10px;cursor:pointer;margin-bottom:7px;border:1px solid #0f1e2e;background:linear-gradient(135deg,#0b1520,#0d1825);transition:all .18s;position:relative;border-left:3px solid var(--ylw);}
-.sb-game::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,212,255,.03));opacity:0;transition:opacity .2s;}
+.sb-game::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,212,255,.03));opacity:0;transition:opacity .2s;pointer-events:none;}
 .sb-game:hover{background:linear-gradient(135deg,#0d1a28,#0f1e2e);border-color:rgba(0,212,255,.3);transform:translateX(2px);}
 .sb-game:hover::after{opacity:1;}
 .sb-game.act{background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,212,255,.03));border-color:var(--acc);border-left-color:var(--acc);box-shadow:0 0 12px rgba(0,212,255,.08);}
@@ -859,7 +859,7 @@ function sbGameCard(g) {
   if(g.status === 'pre')  actBtns += '<button data-action="live" data-gid="'+gid+'" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>';
 
   // Botão ✕ sempre presente
-  var delBtn = '<button data-action="del" data-gid="'+gid+'" onclick="event.stopPropagation(); deleteGame(\''+gid+'\'); return false;" style="background:transparent;border:none;padding:2px 7px;color:var(--txt3);font-size:13px;font-weight:300;cursor:pointer;line-height:1;transition:color .15s;" title="Remover jogo">✕</button>';
+  var delBtn = '<button type="button" data-action="del" data-gid="'+gid+'" onclick="event.preventDefault();event.stopPropagation();deleteGame(\''+gid+'\');return false;" style="background:transparent;border:none;padding:2px 7px;color:var(--red);font-size:13px;font-weight:700;cursor:pointer;line-height:1;transition:color .15s;position:relative;z-index:5;" title="Remover jogo">✕</button>';
 
   return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" data-gid="'+gid+'">'
     + '<div style="display:flex;gap:8px;align-items:flex-start;">'
@@ -879,25 +879,38 @@ function sbGameCard(g) {
 }
 
 function deleteGame(id) {
-  const g = S.games.find(x => x.id === id);
-  if(!g) return;
-  S.games = S.games.filter(x => x.id !== id);
-  if(S.currentGame?.id === id) {
-    S.currentGame = null;
-    S.currentCluster = [];
-    S.csOdds = {};
-    S.chatHistory = [];
-    const cc = document.getElementById('cluster-card');
-    if(cc) cc.style.display = 'none';
-    const out = document.getElementById('resultado-out');
-    if(out) out.innerHTML = '';
-    const lc = document.getElementById('live-cluster-cards');
-    if(lc) lc.innerHTML = '<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>';
+  try {
+    id = String(id);
+    const g = S.games.find(function(x){ return String(x.id) === id; });
+    if(!g) { notify('NÃO ENCONTRADO', 'Este jogo não está mais na lista.', 'var(--ylw)'); renderSidebar(); return; }
+
+    // Remove do menu/sistema
+    S.games = S.games.filter(function(x){ return String(x.id) !== id; });
+
+    // Se o jogo removido era o selecionado, limpa apenas a seleção visual
+    if(S.currentGame && String(S.currentGame.id) === id) {
+      S.currentGame = null;
+      S.currentCluster = [];
+      S.csOdds = {};
+      S.chatHistory = [];
+      const cc = document.getElementById('cluster-card');
+      if(cc) cc.style.display = 'none';
+      const out = document.getElementById('resultado-out');
+      if(out) out.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--txt3);"><div style="font-size:42px;margin-bottom:12px;">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:15px;font-weight:900;letter-spacing:2px;color:var(--acc);">JOGO REMOVIDO</div><div style="font-size:11px;margin-top:8px;color:var(--txt3);">Selecione ou crie outro jogo.</div></div>';
+      const lc = document.getElementById('live-cluster-cards');
+      if(lc) lc.innerHTML = '<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>';
+    }
+
+    saveGames();
+    renderSidebar();
+    updHdr();
+    notify('✓ Removido', g.name, 'var(--red)');
+  } catch(e) {
+    console.error(e);
+    notify('ERRO', 'Falha ao remover jogo.', 'var(--red)');
   }
-  saveGames();
-  renderSidebar();
-  notify('✓ Removido', g.name, 'var(--txt3)');
 }
+
 
 
 function insertTemplate() {
