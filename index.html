@@ -8,13 +8,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@600;700;800&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#06080f;--card:#0d1520;--border:#162030;--acc:#00d4ff;--acc2:#00b8e0;--grn:#00c96e;--red:#ff4d6a;--ylw:#ffc740;--org:#ff7a35;--pur:#7c5cfc;--txt:#d8eaf8;--txt2:#5a7a96;--txt3:#2e4a62;}
-body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;font-size:13px;min-height:100vh;}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI', 'Inter', Arial, sans-serif;font-size:13px;min-height:100vh;}
 
 /* HEADER */
 .hdr{background:linear-gradient(180deg,#080e18,#06080f);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 1px 20px rgba(0,0,0,.4);}
 .logo{display:flex;align-items:center;gap:10px;}
-.lbox{width:36px;height:36px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:#000;box-shadow:0 0 14px rgba(0,212,255,.3);}
-.lname{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,var(--acc),#fff,var(--acc));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite;}
+.lbox{width:36px;height:36px;background:linear-gradient(135deg,var(--acc),var(--pur));border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI', 'Inter', Arial, sans-serif;font-size:11px;font-weight:700;color:#000;box-shadow:0 0 14px rgba(0,212,255,.3);}
+.lname{font-family:'Segoe UI', 'Inter', Arial, sans-serif;font-size:22px;font-weight:900;letter-spacing:1.5px;background:linear-gradient(90deg,var(--acc),#fff,var(--acc));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite;}
 .lver{font-family:'Space Mono',monospace;font-size:7px;color:var(--acc);letter-spacing:1px;margin-top:1px;}
 .hstats{display:flex;gap:16px;align-items:center;}
 .hs{text-align:center;}
@@ -472,6 +472,22 @@ body{
     inset 0 1px 0 rgba(255,255,255,.5) !important;
 }
 </style>
+
+<style>
+.performance-chart canvas{
+    border-radius:16px;
+}
+canvas{
+    image-rendering:auto;
+}
+.metric-value{
+    font-weight:700 !important;
+}
+.card, .panel, .metric-card{
+    backdrop-filter: blur(6px);
+}
+</style>
+
 </head>
 <body>
 
@@ -3281,7 +3297,7 @@ function renderCluster(cluster, stake) {
       '<div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);">'+
         '<span class="bdg '+cardCol.badge+'" style="font-size:7px;letter-spacing:1.5px;">'+cardCol.label+'</span>'+
       '</div>'+
-      '<div style="font-family:Barlow Condensed,sans-serif;font-weight:900;letter-spacing:4px;color:'+smColor+';margin-top:22px;margin-bottom:4px;line-height:1;font-size:'+smFontSz+';">'+displayScore+'</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-weight:900;letter-spacing:1.5px;color:'+smColor+';margin-top:22px;margin-bottom:4px;line-height:1;font-size:'+smFontSz+';">'+displayScore+'</div>'+
       smCovers+
       '<div style="font-family:Space Mono,monospace;font-size:12px;color:var(--txt);margin-bottom:6px;font-weight:700;">@ '+oddDisplay+'</div>'+
       '<div style="background:var(--border);border-radius:3px;height:4px;margin:0 8px 4px;overflow:hidden;">'+
@@ -3348,7 +3364,7 @@ function renderCluster(cluster, stake) {
       '<div style="margin-top:12px;padding:18px 14px;background:linear-gradient(135deg,rgba(0,212,255,.07),rgba(0,212,255,.03));border:1px solid rgba(0,212,255,.2);border-radius:12px;text-align:center;">'+
       removed10Line+
       '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--acc);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase;">⚡ Rota do Jogo</div>'+
-      '<div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:var(--acc);letter-spacing:4px;line-height:1.4;animation:routeGlow 2s ease forwards;">'+routeStr+'</div>'+
+      '<div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:var(--acc);letter-spacing:1.5px;line-height:1.4;animation:routeGlow 2s ease forwards;">'+routeStr+'</div>'+
       '</div>';
 
     // WHY number of scores
@@ -4412,5 +4428,16 @@ function injetarScoresNarrativa(texto, cluster) {
 }
 </script>
 </div><!-- /app-body -->
+
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  const nums = document.querySelectorAll('.metric-value');
+  nums.forEach(n=>{
+    n.style.fontSize='clamp(28px,2.5vw,52px)';
+    n.style.textShadow='0 0 6px rgba(0,255,180,.18)';
+  });
+});
+</script>
+
 </body>
 </html>
