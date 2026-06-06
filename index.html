@@ -4480,5 +4480,110 @@ function injetarScoresNarrativa(texto, cluster) {
 })();
 </script>
 
+
+<script>
+/* =========================================================
+   PATCH CRÍTICO — Expansão de goleada no lado correto
+   Corrige qualquer any_other_home/away com base na rota real
+   do cluster antes de exibir/calcular.
+   ========================================================= */
+(function(){
+  function scoreSide(score){
+    if(!score || typeof score !== 'string') return 'none';
+    const m = score.match(/^(\d+)-(\d+)$/);
+    if(!m) return 'special';
+    const h = parseInt(m[1],10), a = parseInt(m[2],10);
+    if(h > a) return 'home';
+    if(a > h) return 'away';
+    return 'draw';
+  }
+
+  window.fixAnyOtherExpansionSide = function(cluster){
+    try{
+      if(!Array.isArray(cluster)) return cluster;
+
+      let homeWins = 0, awayWins = 0;
+      cluster.forEach(s=>{
+        if(!s || !s.score) return;
+        const side = scoreSide(s.score);
+        if(side === 'home') homeWins++;
+        if(side === 'away') awayWins++;
+      });
+
+      const favSide = awayWins > homeWins ? 'away' : 'home';
+      const correctScore = favSide === 'away' ? 'any_other_away' : 'any_other_home';
+      const wrongScore   = favSide === 'away' ? 'any_other_home' : 'any_other_away';
+
+      const correctOdd = favSide === 'away'
+        ? (S.csOdds['any_other_away'] || S.csOdds['QUALQUER OUTRA VITÓRIA DE VISITANTE'] || 0)
+        : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
+
+      const correctLabel = favSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
+      const correctCovers = favSide === 'away' ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+';
+
+      cluster.forEach(s=>{
+        if(!s || !s.score) return;
+
+        if(s.score === wrongScore || (s.tipo === 'expansao' && s.score !== correctScore)){
+          s.score = correctScore;
+          if(correctOdd > 0){
+            s.odd = correctOdd;
+            if(typeof calcProb === 'function') s.prob = calcProb(correctOdd);
+            s.oddPG = +(correctOdd / 2).toFixed(2);
+          }
+          s._label = correctLabel;
+          s._covers = correctCovers;
+        }
+
+        if(s.score === correctScore){
+          s._label = correctLabel;
+          s._covers = correctCovers;
+          if(correctOdd > 0){
+            s.odd = correctOdd;
+            if(typeof calcProb === 'function') s.prob = calcProb(correctOdd);
+            s.oddPG = +(correctOdd / 2).toFixed(2);
+          }
+        }
+      });
+
+      // Remove duplicidade se existir any_other_home e any_other_away juntos
+      const seen = new Set();
+      return cluster.filter(s=>{
+        if(!s || !s.score) return true;
+        if((s.score === 'any_other_home' || s.score === 'any_other_away')){
+          if(seen.has('any_other')) return false;
+          seen.add('any_other');
+        }
+        return true;
+      });
+    }catch(e){
+      console.warn('fixAnyOtherExpansionSide error', e);
+      return cluster;
+    }
+  };
+
+  function patchFunction(name){
+    const original = window[name];
+    if(typeof original !== 'function') return;
+    window[name] = function(){
+      const result = original.apply(this, arguments);
+      try{
+        if(Array.isArray(S.currentCluster)){
+          S.currentCluster = window.fixAnyOtherExpansionSide(S.currentCluster);
+        }
+        if(Array.isArray(window.cluster)){
+          window.cluster = window.fixAnyOtherExpansionSide(window.cluster);
+        }
+      }catch(e){}
+      return result;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    ['renderCluster','renderClusterCards','calcularDutch','renderResultado','renderSidebar'].forEach(patchFunction);
+  });
+})();
+</script>
+
 </body>
 </html>
