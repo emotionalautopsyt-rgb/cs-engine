@@ -803,55 +803,80 @@ function renderSidebar() {
 
 function sbGameCard(g) {
   const isAct = S.currentGame && S.currentGame.id === g.id;
-  const gid = g.id;
+  const gid   = g.id;
 
-  const statusDot = {
-    'pre':  '<div class="sb-dot pre"></div>',
-    'live': '<div class="sb-dot live"></div>',
-    'enc':  g.resultado > 0 ? '<div class="sb-dot win"></div>' : g.resultado < 0 ? '<div class="sb-dot loss"></div>' : '<div class="sb-dot done"></div>'
-  }[g.status] || '<div class="sb-dot pre"></div>';
+  // Status dot
+  var dot = g.status === 'live'
+    ? '<div class="sb-dot live"></div>'
+    : g.status === 'enc'
+      ? (g.resultado > 0 ? '<div class="sb-dot win"></div>' : g.resultado < 0 ? '<div class="sb-dot loss"></div>' : '<div class="sb-dot done"></div>')
+      : '<div class="sb-dot pre"></div>';
 
-  const statusBadge = g.status === 'pre'  ? '<span class="sb-badge" style="background:rgba(255,214,0,.1);color:var(--ylw);">PRÉ</span>'
-    : g.status === 'live' ? '<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">● LIVE</span>'
-    : g.resultado > 0     ? '<span class="sb-badge" style="background:rgba(0,201,110,.1);color:var(--grn);">+R$'+g.resultado.toFixed(0)+'</span>'
-    : g.resultado < 0     ? '<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">-R$'+Math.abs(g.resultado).toFixed(0)+'</span>'
-    : '<span class="sb-badge" style="background:rgba(58,85,112,.2);color:var(--txt3);">ENC</span>';
+  // Status badge
+  var badge = g.status === 'live'
+    ? '<span class="sb-badge" style="background:rgba(255,77,106,.1);color:var(--red);">● LIVE</span>'
+    : g.status === 'pre'
+      ? '<span class="sb-badge" style="background:rgba(255,214,0,.1);color:var(--ylw);">PRÉ</span>'
+      : '<span class="sb-badge" style="background:rgba(58,85,112,.2);color:var(--txt3);">ENC</span>';
 
-  var nameParts = g.name ? g.name.split(' vs ') : [g.name, ''];
-  var teamA = nameParts[0] || g.name;
-  var teamB = nameParts[1] || '';
-  var displayName = teamB
-    ? '<div class="sb-name">'+teamA+'</div><div style="font-family:Space Mono,monospace;font-size:6px;color:var(--txt3);margin:1px 0;letter-spacing:1px;">vs</div><div class="sb-name" style="color:var(--txt2);">'+teamB+'</div>'
-    : '<div class="sb-name">'+teamA+'</div>';
+  // Times
+  var parts = (g.name||'').split(' vs ');
+  var tA = parts[0]||g.name, tB = parts[1]||'';
+  var names = tB
+    ? '<div class="sb-name">'+tA+'</div><div style="font-family:Space Mono,monospace;font-size:6px;color:var(--txt3);margin:1px 0;">vs</div><div class="sb-name" style="color:var(--txt2);">'+tB+'</div>'
+    : '<div class="sb-name">'+tA+'</div>';
 
-  var clusterShort = g.cluster && g.cluster.length > 0
+  // Cluster
+  var cls = g.cluster && g.cluster.length
     ? '<div class="sb-cluster">'+g.cluster.slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
     : '';
 
-  var placarInfo = (g.status === 'live' || g.status === 'enc')
-    ? '<span style="color:var(--ylw);font-size:8px;font-family:Space Mono,monospace;">'+g.placar+'</span> '
+  // Placar ao vivo
+  var plc = (g.status==='live'||g.status==='enc')
+    ? '<span style="color:var(--ylw);font-size:8px;font-family:Space Mono,monospace;margin-right:4px;">'+g.placar+'</span>'
     : '';
 
-  var btns = '';
-  if(g.status === 'live') btns += '<button data-action="fim"    data-gid="'+gid+'" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">FIM</button>';
-  if(g.status === 'pre')  btns += '<button data-action="live"   data-gid="'+gid+'" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>';
-  if(g.status === 'enc')  btns += '<button data-action="result" data-gid="'+gid+'" style="background:rgba(0,201,110,.08);border:1px solid rgba(0,201,110,.2);border-radius:4px;padding:2px 6px;color:var(--grn);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">R$</button>';
-  btns += '<button data-action="del" data-gid="'+gid+'" style="background:transparent;border:none;padding:2px 6px;color:var(--txt3);font-size:11px;cursor:pointer;opacity:.6;line-height:1;" title="Remover">✕</button>';
+  // Resultado financeiro — sempre visível se encerrado
+  var resRow = '';
+  if(g.status === 'enc') {
+    var resColor = g.resultado > 0 ? 'var(--grn)' : g.resultado < 0 ? 'var(--red)' : 'var(--txt3)';
+    var resText  = g.resultado !== 0 ? (g.resultado > 0 ? '+' : '') + 'R$' + g.resultado.toFixed(2) : 'Sem resultado';
+    resRow = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding:5px 8px;background:#0a1520;border-radius:6px;border:1px solid var(--border);">'
+      + '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">RESULTADO</span>'
+      + '<span style="font-family:Space Mono,monospace;font-size:10px;font-weight:700;color:'+resColor+';">'+resText+'</span>'
+      + '<button data-action="result" data-gid="'+gid+'" style="background:rgba(0,201,110,.1);border:1px solid rgba(0,201,110,.2);border-radius:4px;padding:1px 6px;color:var(--grn);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">EDITAR</button>'
+      + '</div>';
+  } else {
+    // Jogo pré ou live — campo para registrar resultado
+    resRow = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding:5px 8px;background:#0a1520;border-radius:6px;border:1px dashed rgba(255,255,255,.08);">'
+      + '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">REGISTRAR R$</span>'
+      + '<button data-action="result" data-gid="'+gid+'" style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);border-radius:4px;padding:2px 8px;color:var(--acc);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;letter-spacing:.5px;">+ RESULTADO</button>'
+      + '</div>';
+  }
 
-  return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" data-gid="'+gid+'">'+
-    '<div style="display:flex;gap:8px;align-items:flex-start;">'+
-      statusDot+
-      '<div style="flex:1;min-width:0;">'+
-        displayName+
-        '<div class="sb-info"><span style="color:var(--txt3);">'+(g.comp||'CS Trading')+'</span>'+(g.hora?'<span style="color:var(--border);">•</span><span style="color:var(--acc);">'+g.hora+'</span>':'')+'</div>'+
-        clusterShort+
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">'+
-          '<div>'+placarInfo+statusBadge+'</div>'+
-          '<div style="display:flex;gap:3px;">'+btns+'</div>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-  '</div>';
+  // Botões de ação
+  var actBtns = '';
+  if(g.status === 'live') actBtns += '<button data-action="fim"  data-gid="'+gid+'" style="background:#0a1520;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--txt3);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">FIM</button>';
+  if(g.status === 'pre')  actBtns += '<button data-action="live" data-gid="'+gid+'" style="background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.25);border-radius:4px;padding:2px 6px;color:var(--red);font-size:7px;cursor:pointer;font-family:Barlow Condensed,sans-serif;">▶ LIVE</button>';
+
+  // Botão ✕ sempre presente
+  var delBtn = '<button data-action="del" data-gid="'+gid+'" style="background:transparent;border:none;padding:2px 7px;color:var(--txt3);font-size:13px;font-weight:300;cursor:pointer;line-height:1;transition:color .15s;" title="Remover jogo">✕</button>';
+
+  return '<div class="sb-game '+(isAct?'act':'')+' '+g.status+'" data-gid="'+gid+'">'
+    + '<div style="display:flex;gap:8px;align-items:flex-start;">'
+      + dot
+      + '<div style="flex:1;min-width:0;">'
+        + names
+        + '<div class="sb-info"><span style="color:var(--txt3);">'+(g.comp||'CS Trading')+'</span>'+(g.hora?'<span style="color:var(--border);">•</span><span style="color:var(--acc);">'+g.hora+'</span>':'')+'</div>'
+        + cls
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">'
+          + '<div>'+plc+badge+'</div>'
+          + '<div style="display:flex;gap:3px;align-items:center;">'+actBtns+delBtn+'</div>'
+        + '</div>'
+        + resRow
+      + '</div>'
+    + '</div>'
+  + '</div>';
 }
 
 function deleteGame(id) {
