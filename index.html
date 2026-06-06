@@ -4690,5 +4690,139 @@ function injetarScoresNarrativa(texto, cluster) {
 })();
 </script>
 
+
+<script>
+/* =========================================================
+   PATCH — Persistir e restaurar análise completa por jogo
+   Corrige troca de jogo: cards permaneciam, narrativa sumia.
+   ========================================================= */
+(function(){
+  function saveCurrentAnalysisToGame(){
+    try{
+      if(!S || !S.currentGame) return;
+      const out = document.getElementById('resultado-out');
+      const badge = document.getElementById('res-badge');
+      const clusterCard = document.getElementById('cluster-card');
+      const clusterScores = document.getElementById('cluster-scores');
+      const clusterStats = document.getElementById('cluster-stats');
+      const clusterSummary = document.getElementById('cluster-summary');
+
+      if(out && out.innerHTML && !/AGUARDANDO ANÁLISE/i.test(out.innerText || '')){
+        S.currentGame.analysisHTML = out.innerHTML;
+      }
+      if(badge) S.currentGame.resBadgeHTML = badge.innerHTML || '';
+      if(clusterCard) S.currentGame.clusterCardDisplay = clusterCard.style.display || '';
+      if(clusterScores) S.currentGame.clusterScoresHTML = clusterScores.innerHTML || '';
+      if(clusterStats) S.currentGame.clusterStatsHTML = clusterStats.innerHTML || '';
+      if(clusterSummary) S.currentGame.clusterSummaryHTML = clusterSummary.innerHTML || '';
+
+      const idx = S.games.findIndex(g => g.id === S.currentGame.id);
+      if(idx >= 0){
+        S.games[idx] = Object.assign({}, S.games[idx], S.currentGame);
+        if(typeof saveGames === 'function') saveGames();
+      }
+    }catch(e){
+      console.warn('saveCurrentAnalysisToGame error', e);
+    }
+  }
+
+  function restoreAnalysisFromGame(game){
+    try{
+      if(!game) return;
+      const out = document.getElementById('resultado-out');
+      const badge = document.getElementById('res-badge');
+      const clusterCard = document.getElementById('cluster-card');
+      const clusterScores = document.getElementById('cluster-scores');
+      const clusterStats = document.getElementById('cluster-stats');
+      const clusterSummary = document.getElementById('cluster-summary');
+
+      if(out && game.analysisHTML){
+        out.innerHTML = game.analysisHTML;
+      }
+
+      if(badge && typeof game.resBadgeHTML === 'string'){
+        badge.innerHTML = game.resBadgeHTML;
+      }
+
+      if(clusterCard){
+        if(game.cluster && Array.isArray(game.cluster) && game.cluster.length){
+          clusterCard.style.display = 'block';
+        }else if(game.clusterCardDisplay){
+          clusterCard.style.display = game.clusterCardDisplay;
+        }
+      }
+
+      if(clusterScores && game.clusterScoresHTML){
+        clusterScores.innerHTML = game.clusterScoresHTML;
+      }
+      if(clusterStats && game.clusterStatsHTML){
+        clusterStats.innerHTML = game.clusterStatsHTML;
+      }
+      if(clusterSummary && game.clusterSummaryHTML){
+        clusterSummary.innerHTML = game.clusterSummaryHTML;
+      }
+
+      if(game.cluster && Array.isArray(game.cluster)){
+        S.currentCluster = game.cluster;
+      }
+    }catch(e){
+      console.warn('restoreAnalysisFromGame error', e);
+    }
+  }
+
+  window.saveCurrentAnalysisToGame = saveCurrentAnalysisToGame;
+  window.restoreAnalysisFromGame = restoreAnalysisFromGame;
+
+  // Envolve a seleção de jogos: salva o atual antes e restaura o novo depois
+  const oldSelectGame = window.selectGame;
+  if(typeof oldSelectGame === 'function'){
+    window.selectGame = function(gameId){
+      saveCurrentAnalysisToGame();
+      const r = oldSelectGame.apply(this, arguments);
+      setTimeout(function(){
+        if(S && S.currentGame) restoreAnalysisFromGame(S.currentGame);
+      }, 80);
+      return r;
+    };
+  }
+
+  // Envolve render do cluster: depois de gerar, salva HTML da análise no jogo
+  ['renderCluster','renderClusterCards','renderResultado'].forEach(function(fnName){
+    const oldFn = window[fnName];
+    if(typeof oldFn === 'function'){
+      window[fnName] = function(){
+        const r = oldFn.apply(this, arguments);
+        setTimeout(saveCurrentAnalysisToGame, 120);
+        return r;
+      };
+    }
+  });
+
+  // Envolve analisarJogo: ao terminar, salva análise completa no jogo
+  const oldAnalisar = window.analisarJogo;
+  if(typeof oldAnalisar === 'function'){
+    window.analisarJogo = async function(){
+      const r = oldAnalisar.apply(this, arguments);
+      if(r && typeof r.then === 'function') await r;
+      setTimeout(saveCurrentAnalysisToGame, 180);
+      return r;
+    };
+  }
+
+  // Ao abrir pré-live ou performance, não perder a análise atual
+  const oldShowTab = window.showTab;
+  if(typeof oldShowTab === 'function'){
+    window.showTab = function(){
+      saveCurrentAnalysisToGame();
+      const r = oldShowTab.apply(this, arguments);
+      setTimeout(function(){
+        if(S && S.currentGame) restoreAnalysisFromGame(S.currentGame);
+      }, 80);
+      return r;
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
