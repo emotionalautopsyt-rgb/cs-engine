@@ -2666,7 +2666,8 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     }
 
     // Extract and render cluster
-    const cluster = extractCluster(reply, stake);
+    let cluster = extractCluster(reply, stake);
+    cluster = refinarArvorePremium(cluster, {fav:fav, over:over, btts:btts, text:texto, favEhVisitante:(engine && engine.favEhVisitante)});
 
     // Extract ALERTA DO GÊNIO from reply
     const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
@@ -2704,6 +2705,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind5?'var(--grn)':'var(--red)')+';">CS '+(ind5?'✅':'❌')+'</span>'+
       '</div>'+
     '</div>';
+    if(cluster && cluster._premiumDNA) contextWarnings += `<div class="ab ab-b" style="border-color:rgba(0,212,255,.25);margin-bottom:8px;padding:8px 12px;"><div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--acc);">🧠 ${cluster._premiumDNA.perfil} — caos ${cluster._premiumDNA.chaos}/10 | controle ${cluster._premiumDNA.control}/10</div></div>`;
     if(isCopa) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
       <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — stake -20% aplicado.</div>
     </div>`;
@@ -4855,6 +4857,240 @@ function injetarScoresNarrativa(texto, cluster) {
       return r;
     };
   }
+})();
+</script>
+
+
+<script>
+/* =========================================================
+   PATCH PREMIUM 10/10 — Árvore inteligente sem mexer no motor-base
+   Camadas adicionadas:
+   1) DNA Caótico
+   2) Score Morto
+   3) Exclusão inteligente
+   4) Tradeabilidade
+   5) Sanity check any_other pelo lado/menor odd
+   ========================================================= */
+(function(){
+  function scoreSide(score){
+    if(!score || typeof score !== 'string') return 'special';
+    const m = score.match(/^(\d+)-(\d+)$/);
+    if(!m) return 'special';
+    const h = parseInt(m[1],10), a = parseInt(m[2],10);
+    if(h > a) return 'home';
+    if(a > h) return 'away';
+    return 'draw';
+  }
+
+  function invertScore(score){
+    if(!score || !score.includes('-')) return score;
+    const p = score.split('-');
+    return p[1] + '-' + p[0];
+  }
+
+  function getOdd(score){
+    if(!score || !S || !S.csOdds) return 0;
+    return S.csOdds[score] || 0;
+  }
+
+  function calcProbSafe(odd){
+    return (typeof calcProb === 'function') ? calcProb(odd) : (odd > 0 ? +(100/odd).toFixed(1) : 0);
+  }
+
+  function makeScore(score,tipo,label){
+    const odd = getOdd(score);
+    return {
+      score: score,
+      odd: odd || 0,
+      tipo: tipo || 'expansao',
+      prob: calcProbSafe(odd || 0),
+      stake: 0,
+      lucro: 0,
+      oddPG: odd ? +(odd/2).toFixed(2) : 0,
+      _label: label || null,
+      _premiumAdded: true
+    };
+  }
+
+  function addIfValid(cluster, score, tipo, label, maxOdd){
+    if(!Array.isArray(cluster)) return false;
+    if(cluster.some(s => s && s.score === score)) return false;
+    const odd = getOdd(score);
+    if(!odd || odd <= 0) return false;
+    if(maxOdd && odd > maxOdd) return false;
+    cluster.push(makeScore(score,tipo,label));
+    return true;
+  }
+
+  function removeScore(cluster, score, reason){
+    if(!Array.isArray(cluster)) return cluster;
+    const before = cluster.length;
+    const out = cluster.filter(s => s && s.score !== score);
+    if(before !== out.length){
+      out._removedPremium = (cluster._removedPremium || []).concat([{score,reason}]);
+    }
+    return out;
+  }
+
+  function capCluster(cluster, max, favSide, chaosLevel){
+    if(!Array.isArray(cluster)) return cluster;
+    if(cluster.length <= max) return cluster;
+
+    const favMin = favSide === 'away' ? '0-1' : '1-0';
+    const dogMin = favSide === 'away' ? '1-0' : '0-1';
+
+    const priorityRemove = chaosLevel === 'high'
+      ? [favMin, dogMin]
+      : ['2-2','3-2','2-3','any_other_home','any_other_away', dogMin];
+
+    let out = cluster.slice();
+    for(const sc of priorityRemove){
+      if(out.length <= max) break;
+      const idx = out.findIndex(s => s.score === sc && s.tipo !== 'destino');
+      if(idx >= 0) out.splice(idx,1);
+    }
+
+    while(out.length > max){
+      // Remove primeiro score sem odd, depois expansão, depois Plano B mais longo
+      let idx = out.findIndex(s => !s.odd || s.odd <= 0);
+      if(idx < 0) idx = out.findIndex(s => s.tipo === 'expansao');
+      if(idx < 0) idx = out.findIndex(s => s.tipo === 'planb' && s.score !== '1-1');
+      if(idx < 0) idx = out.length - 1;
+      out.splice(idx,1);
+    }
+    return out;
+  }
+
+  function detectContextFlags(text){
+    const t = (text || '').toLowerCase();
+    return {
+      amistoso: /amistoso|friendly|amigável|sem pressão|teste/.test(t),
+      defesasRuins: /sofreu gols|sofreram gols|defesa.*vaz|defensiva.*frágil|permitiu gols|gols sofridos|permeabilidade defensiva/.test(t),
+      ataqueForte: /marcou gols|ataque.*regular|ofensivo|volume ofensivo|média de gols marcados|cria muitas/.test(t),
+      golsTardios: /76-90|61-75|segundo tempo|gols tardios|fase final|reta final/.test(t),
+      cleanSheet: /sem sofrer|clean sheet|não sofreu|visitante não marcou|sem marcar gols|não marca/.test(t),
+      mataMata: /mata-mata|eliminatória|quartas|semifinal|final|copa/.test(t)
+    };
+  }
+
+  window.refinarArvorePremium = function(cluster, ctx){
+    try{
+      if(!Array.isArray(cluster)) return cluster;
+      ctx = ctx || {};
+      const fav = +ctx.fav || 0;
+      const over = +ctx.over || 0;
+      const btts = +ctx.btts || 0;
+      const text = ctx.text || '';
+      const flags = detectContextFlags(text);
+
+      let homeWins = 0, awayWins = 0;
+      cluster.forEach(s=>{
+        const side = scoreSide(s.score);
+        if(side === 'home') homeWins++;
+        if(side === 'away') awayWins++;
+      });
+
+      const favSide = ctx.favEhVisitante || awayWins > homeWins ? 'away' : 'home';
+      const favMin  = favSide === 'away' ? '0-1' : '1-0';
+      const dogMin  = favSide === 'away' ? '1-0' : '0-1';
+      const favHigh = favSide === 'away' ? '2-3' : '3-2';
+
+      const odd22 = getOdd('2-2');
+      const oddFavHigh = getOdd(favHigh);
+      const oddDogHigh = getOdd(favSide === 'away' ? '3-2' : '2-3');
+
+      // DNA Caótico: mercado + contexto
+      let chaos = 0;
+      if(btts > 0 && btts <= 1.70) chaos += 2;
+      if(over > 0 && over <= 1.70) chaos += 2;
+      if(fav >= 1.65 && fav <= 2.10) chaos += 2;
+      if(odd22 > 0 && odd22 <= 14) chaos += 2;
+      if(oddFavHigh > 0 && oddFavHigh <= 24) chaos += 1.5;
+      if(oddDogHigh > 0 && oddDogHigh <= 26) chaos += 0.75;
+      if(flags.amistoso) chaos += 1;
+      if(flags.defesasRuins) chaos += 1;
+      if(flags.ataqueForte) chaos += 0.5;
+      if(flags.golsTardios) chaos += 0.5;
+
+      // Controle linear: favorito forte + mercado menos aberto
+      let control = 0;
+      if(fav > 0 && fav <= 1.55) control += 2;
+      if(btts >= 1.85) control += 1.5;
+      if(over >= 1.80) control += 1;
+      if(flags.cleanSheet) control += 1;
+      if(cluster.some(s => s.score === (favSide === 'away' ? '0-3' : '3-0'))) control += 0.5;
+
+      const highChaos = chaos >= 7;
+      const semiChaos = chaos >= 5 && chaos < 7;
+      const controlled = control >= 3.5 && chaos < 5;
+
+      // 1) SCORE MORTO: jogo gritando gols/troca não precisa carregar favorito 1-0/0-1 como rota principal
+      if(highChaos && btts <= 1.70 && over <= 1.75){
+        cluster = removeScore(cluster, favMin, 'score mínimo do favorito perde valor em DNA caótico');
+      }
+
+      // 2) DNA CAÓTICO: adiciona 2-2 e placar alto do lado do favorito apenas quando mercado/contexto confirmar
+      if(highChaos){
+        addIfValid(cluster, '2-2', 'planb', 'CAOS 2-2', 16);
+        addIfValid(cluster, favHigh, 'expansao', 'EXPLOSÃO FAVORITO', 28);
+      } else if(semiChaos){
+        addIfValid(cluster, '2-2', 'planb', 'CAOS MODERADO', 15);
+      }
+
+      // 3) EXCLUSÃO INTELIGENTE: jogo controlado não precisa scores caóticos
+      if(controlled){
+        ['2-2','3-2','2-3'].forEach(sc => {
+          cluster = removeScore(cluster, sc, 'jogo controlado/linear');
+        });
+      }
+
+      // 4) Tradeabilidade: se score mínimo está barato demais, ele não deve ser destaque em árvore ofensiva
+      const oddFavMin = getOdd(favMin);
+      if(oddFavMin > 0 && oddFavMin < 5.2 && over <= 1.75 && btts <= 1.85 && cluster.length > 5){
+        cluster = removeScore(cluster, favMin, 'odd baixa demais para leverage em jogo ofensivo');
+      }
+
+      // 5) any_other pelo lado correto + sanity check pela menor odd
+      const homeAO = getOdd('any_other_home');
+      const awayAO = getOdd('any_other_away');
+      if(homeAO > 0 || awayAO > 0){
+        const marketFavSide = (homeAO > 0 && awayAO > 0)
+          ? (homeAO < awayAO ? 'home' : 'away')
+          : favSide;
+        const correctSide = favSide || marketFavSide;
+        const correct = correctSide === 'away' ? 'any_other_away' : 'any_other_home';
+        const wrong   = correctSide === 'away' ? 'any_other_home' : 'any_other_away';
+        const correctOdd = getOdd(correct);
+
+        cluster.forEach(s=>{
+          if(s.score === wrong || (s.tipo === 'expansao' && /any_other/i.test(s.score) && s.score !== correct)){
+            s.score = correct;
+            s.odd = correctOdd || s.odd || 0;
+            s.prob = calcProbSafe(s.odd);
+            s.oddPG = s.odd ? +(s.odd/2).toFixed(2) : 0;
+            s._label = correctSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
+            s._covers = correctSide === 'away' ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+';
+          }
+        });
+      }
+
+      // 6) Cap inteligente: preservar árvore saudável
+      const maxScores = highChaos ? 7 : (controlled ? 5 : 6);
+      cluster = capCluster(cluster, maxScores, favSide, highChaos ? 'high' : semiChaos ? 'semi' : 'normal');
+
+      cluster._premiumDNA = {
+        chaos: +chaos.toFixed(1),
+        control: +control.toFixed(1),
+        perfil: highChaos ? 'DNA CAÓTICO' : semiChaos ? 'CAOS MODERADO' : controlled ? 'CONTROLE LINEAR' : 'ROTA PADRÃO',
+        favSide
+      };
+
+      return cluster;
+    }catch(e){
+      console.warn('refinarArvorePremium error', e);
+      return cluster;
+    }
+  };
 })();
 </script>
 
