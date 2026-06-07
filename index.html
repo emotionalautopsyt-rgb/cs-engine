@@ -2668,6 +2668,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     // Extract and render cluster
     let cluster = extractCluster(reply, stake);
     cluster = refinarArvorePremium(cluster, {fav:fav, over:over, btts:btts, text:texto, favEhVisitante:(engine && engine.favEhVisitante)});
+    reply = syncNarrativaClusterFinal(reply, cluster);
 
     // Extract ALERTA DO GÊNIO from reply
     const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
@@ -5091,6 +5092,276 @@ function injetarScoresNarrativa(texto, cluster) {
       return cluster;
     }
   };
+})();
+</script>
+
+
+<script>
+/* =========================================================
+PATCH FINAL — Sincronização narrativa + Plano B contextual
+========================================================= */
+(function(){
+
+  function classifyPlanB(cluster){
+    const planB = cluster.filter(s => s.tipo === 'planb').map(s => s.score);
+    return {
+      scores: planB,
+      text: planB.length ? planB.join(' e ') : 'sem proteção adicional'
+    };
+  }
+
+  function buildNarrativeFromCluster(cluster){
+    if(!Array.isArray(cluster)) return null;
+
+    const planoA = cluster
+      .filter(s => s.tipo !== 'planb')
+      .map(s => s.score);
+
+    const planB = classifyPlanB(cluster);
+
+    return { planoA, planB };
+  }
+
+  window.syncNarrativaClusterFinal = function(textoOriginal, cluster){
+    try{
+      if(!textoOriginal || !cluster) return textoOriginal;
+
+      const built = buildNarrativeFromCluster(cluster);
+
+      const planoAText = built.planoA.join(', ');
+      const planoBText = built.planB.text;
+
+      return textoOriginal.replace(
+        /Minha seleção inclui o Plano A[\s\S]*?junto com o Plano B[\s\S]*?\)\./m,
+        `Minha seleção inclui o Plano A\n(placares do favorito como ${planoAText})\njunto com o Plano B\n(proteção via ${planoBText}).`
+      );
+
+    }catch(e){
+      console.warn('syncNarrativaClusterFinal', e);
+      return textoOriginal;
+    }
+  };
+
+})();
+</script>
+
+
+<script>
+/* =========================================================
+   PATCH DEFINITIVO — Registro persistente da análise por jogo
+   Salva/restaura narrativa + cards + cluster no localStorage.
+   Corrige perda ao trocar jogo/menu, voltar do modo avião ou reabrir.
+   ========================================================= */
+(function(){
+
+  function getCurrentGameIndex(){
+    try{
+      if(!S || !S.currentGame) return -1;
+      return S.games.findIndex(g => g.id === S.currentGame.id);
+    }catch(e){ return -1; }
+  }
+
+  function hasRealAnalysis(){
+    const out = document.getElementById('resultado-out');
+    if(!out) return false;
+    const txt = (out.innerText || '').trim();
+    return txt && !/AGUARDANDO ANÁLISE/i.test(txt) && txt.length > 40;
+  }
+
+  window.persistirAnaliseDoJogo = function(){
+    try{
+      if(!S || !S.currentGame) return;
+
+      const out = document.getElementById('resultado-out');
+      const badge = document.getElementById('res-badge');
+      const clusterCard = document.getElementById('cluster-card');
+      const clusterScores = document.getElementById('cluster-scores');
+      const clusterStats = document.getElementById('cluster-stats');
+      const clusterSummary = document.getElementById('cluster-summary');
+      const financeBox = document.getElementById('finance-box');
+
+      const g = S.currentGame;
+
+      if(out && hasRealAnalysis()){
+        g.analysisHTML = out.innerHTML;
+        g.analysisText = out.innerText || '';
+        g.analysisSavedAt = new Date().toISOString();
+      }
+
+      if(badge) g.resBadgeHTML = badge.innerHTML || '';
+      if(clusterCard) g.clusterCardDisplay = clusterCard.style.display || '';
+      if(clusterScores) g.clusterScoresHTML = clusterScores.innerHTML || '';
+      if(clusterStats) g.clusterStatsHTML = clusterStats.innerHTML || '';
+      if(clusterSummary) g.clusterSummaryHTML = clusterSummary.innerHTML || '';
+      if(financeBox) g.financeBoxHTML = financeBox.innerHTML || '';
+
+      if(Array.isArray(S.currentCluster) && S.currentCluster.length){
+        g.cluster = S.currentCluster;
+      }
+
+      if(S.csOdds && Object.keys(S.csOdds).length){
+        g.csOdds = S.csOdds;
+      }
+
+      const idx = getCurrentGameIndex();
+      if(idx >= 0){
+        S.games[idx] = Object.assign({}, S.games[idx], g);
+      }else{
+        S.games.push(g);
+      }
+
+      if(typeof saveGames === 'function') saveGames();
+      else localStorage.setItem('cs_v6g', JSON.stringify(S.games));
+
+    }catch(e){
+      console.warn('persistirAnaliseDoJogo error', e);
+    }
+  };
+
+  window.restaurarAnaliseDoJogo = function(game){
+    try{
+      if(!game) game = S && S.currentGame;
+      if(!game) return;
+
+      const out = document.getElementById('resultado-out');
+      const badge = document.getElementById('res-badge');
+      const clusterCard = document.getElementById('cluster-card');
+      const clusterScores = document.getElementById('cluster-scores');
+      const clusterStats = document.getElementById('cluster-stats');
+      const clusterSummary = document.getElementById('cluster-summary');
+      const financeBox = document.getElementById('finance-box');
+
+      if(out && game.analysisHTML){
+        out.innerHTML = game.analysisHTML;
+      }
+
+      if(badge && typeof game.resBadgeHTML === 'string'){
+        badge.innerHTML = game.resBadgeHTML;
+      }
+
+      if(clusterCard){
+        if(game.cluster && Array.isArray(game.cluster) && game.cluster.length){
+          clusterCard.style.display = 'block';
+        }else if(game.clusterCardDisplay){
+          clusterCard.style.display = game.clusterCardDisplay;
+        }
+      }
+
+      if(clusterScores && game.clusterScoresHTML) clusterScores.innerHTML = game.clusterScoresHTML;
+      if(clusterStats && game.clusterStatsHTML) clusterStats.innerHTML = game.clusterStatsHTML;
+      if(clusterSummary && game.clusterSummaryHTML) clusterSummary.innerHTML = game.clusterSummaryHTML;
+      if(financeBox && game.financeBoxHTML) financeBox.innerHTML = game.financeBoxHTML;
+
+      if(game.cluster && Array.isArray(game.cluster)){
+        S.currentCluster = game.cluster;
+      }
+
+      if(game.csOdds && Object.keys(game.csOdds).length){
+        S.csOdds = game.csOdds;
+      }
+
+    }catch(e){
+      console.warn('restaurarAnaliseDoJogo error', e);
+    }
+  };
+
+  function wrapFunction(name, before, after, delay){
+    const old = window[name];
+    if(typeof old !== 'function') return;
+    if(old.__persistWrapped) return;
+
+    const wrapped = function(){
+      try{ if(before) before.apply(this, arguments); }catch(e){}
+      const r = old.apply(this, arguments);
+
+      const runAfter = () => {
+        try{ if(after) after.apply(this, arguments); }catch(e){}
+      };
+
+      if(r && typeof r.then === 'function'){
+        return r.then(function(res){
+          setTimeout(runAfter, delay || 80);
+          return res;
+        });
+      }
+
+      setTimeout(runAfter, delay || 80);
+      return r;
+    };
+
+    wrapped.__persistWrapped = true;
+    window[name] = wrapped;
+  }
+
+  // Salva antes de sair de um jogo/menu e restaura depois.
+  wrapFunction('selectGame',
+    function(){ window.persistirAnaliseDoJogo(); },
+    function(){
+      if(S && S.currentGame) window.restaurarAnaliseDoJogo(S.currentGame);
+      if(typeof setGenioButtonLoading === 'function') setGenioButtonLoading(false);
+    },
+    120
+  );
+
+  wrapFunction('showTab',
+    function(){ window.persistirAnaliseDoJogo(); },
+    function(){
+      if(S && S.currentGame) window.restaurarAnaliseDoJogo(S.currentGame);
+      if(typeof setGenioButtonLoading === 'function') setGenioButtonLoading(false);
+    },
+    120
+  );
+
+  // Depois de gerar/renderizar cluster, salva tudo.
+  ['renderCluster','renderClusterCards','renderResultado','renderSidebar','parseCS'].forEach(function(fn){
+    wrapFunction(fn, null, function(){ window.persistirAnaliseDoJogo(); }, 180);
+  });
+
+  // Análise finalizada: persistência forte.
+  wrapFunction('analisarJogo',
+    null,
+    function(){
+      window.persistirAnaliseDoJogo();
+      if(typeof setGenioButtonLoading === 'function') setGenioButtonLoading(false);
+    },
+    350
+  );
+
+  // Antes de fechar/recarregar/hibernar.
+  window.addEventListener('beforeunload', function(){
+    try{ window.persistirAnaliseDoJogo(); }catch(e){}
+  });
+
+  document.addEventListener('visibilitychange', function(){
+    try{
+      if(document.hidden) window.persistirAnaliseDoJogo();
+      else if(S && S.currentGame) window.restaurarAnaliseDoJogo(S.currentGame);
+    }catch(e){}
+  });
+
+  window.addEventListener('online', function(){
+    try{
+      if(S && S.currentGame) window.restaurarAnaliseDoJogo(S.currentGame);
+      if(typeof setGenioButtonLoading === 'function') setGenioButtonLoading(false);
+    }catch(e){}
+  });
+
+  // Ao carregar, tenta restaurar o jogo ativo.
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      try{
+        if(S && S.currentGame) window.restaurarAnaliseDoJogo(S.currentGame);
+      }catch(e){}
+    }, 500);
+  });
+
+  // Segurança extra: salva periodicamente se houver análise real aberta.
+  setInterval(function(){
+    try{
+      if(hasRealAnalysis()) window.persistirAnaliseDoJogo();
+    }catch(e){}
+  }, 2500);
+
 })();
 </script>
 
