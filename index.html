@@ -2668,7 +2668,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     // Extract and render cluster
     let cluster = extractCluster(reply, stake);
     cluster = refinarArvorePremium(cluster, {fav:fav, over:over, btts:btts, text:texto, favEhVisitante:(engine && engine.favEhVisitante)});
-    reply = syncNarrativaClusterFinal(reply, cluster);
+    reply = syncNarrativaComClusterFinal(reply, cluster);
 
     // Extract ALERTA DO GÊNIO from reply
     const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
@@ -5361,6 +5361,83 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       if(hasRealAnalysis()) window.persistirAnaliseDoJogo();
     }catch(e){}
   }, 2500);
+
+})();
+</script>
+
+
+<script>
+/* =========================================================
+   PATCH MASTER — Narrativa obedecendo 100% o cluster final
+   A IA não inventa mais Plano A/B/Rota.
+   O texto passa a ler o cluster FINAL.
+   ========================================================= */
+(function(){
+
+  function isPlanB(scoreObj){
+    return scoreObj && scoreObj.tipo === 'planb';
+  }
+
+  function buildClusterNarrative(cluster){
+    if(!Array.isArray(cluster) || !cluster.length){
+      return null;
+    }
+
+    const planoA = cluster
+      .filter(s => !isPlanB(s))
+      .map(s => s.score);
+
+    const planoB = cluster
+      .filter(s => isPlanB(s))
+      .map(s => s.score);
+
+    const rota = cluster.map(s => s.score);
+
+    return {
+      planoA,
+      planoB,
+      rota
+    };
+  }
+
+  function joinScores(arr){
+    if(!arr || !arr.length) return '';
+    if(arr.length === 1) return arr[0];
+    if(arr.length === 2) return arr[0] + ' e ' + arr[1];
+
+    return arr.slice(0,-1).join(', ') + ' e ' + arr[arr.length-1];
+  }
+
+  window.syncNarrativaComClusterFinal = function(reply, cluster){
+    try{
+      if(!reply || !cluster) return reply;
+
+      const built = buildClusterNarrative(cluster);
+      if(!built) return reply;
+
+      const planoAText = joinScores(built.planoA);
+      const planoBText = joinScores(built.planoB);
+
+      // BLOCO Plano A + Plano B
+      reply = reply.replace(
+        /Minha seleção inclui o Plano A[\s\S]*?(?=\n\nO |\nO )/m,
+        `Minha seleção inclui o Plano A\n(placares do favorito como ${planoAText})\njunto com o Plano B\n(proteção via ${planoBText || 'sem proteção adicional'}).\n`
+      );
+
+      // Rota do jogo
+      const rotaText = built.rota.join(' → ');
+      reply = reply.replace(
+        /⚡ Rota do Jogo[\s\S]*?(?=\nPOR QUE|\n5 SCORES|\n6 SCORES|\n7 SCORES)/m,
+        `⚡ Rota do Jogo\n${rotaText}\n`
+      );
+
+      return reply;
+
+    }catch(e){
+      console.warn('syncNarrativaComClusterFinal', e);
+      return reply;
+    }
+  };
 
 })();
 </script>
