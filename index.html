@@ -2530,7 +2530,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
       throw new Error(errMsg);
     }
     const data = await resp.json();
-    const reply = data.content?.[0]?.text || 'Erro.';
+    let reply = data.content?.[0]?.text || 'Erro.';
 
 
 
