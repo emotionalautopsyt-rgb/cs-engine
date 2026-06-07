@@ -2109,52 +2109,54 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
   // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
 
+  // ── FUNÇÃO GLOBAL: 3-1 vs 3-0 pelo BTTS ─────────────────
+  // Regra derivada de todos os vídeos e 7 jogos analisados:
+  // btts > 1.90 → mercado diz que adversário provavelmente não marca → 3-0
+  // btts < 1.85 → adversário marca → 3-1
+  // btts 1.85-1.90 (zona cinza) → over decide
+  function escolher31ou30() {
+    if(btts > 1.90) return '3-0';
+    if(btts < 1.85) return '3-1';
+    // Zona cinza: over baixo = jogo controlado = clean sheet mais provável
+    return over < 1.85 ? '3-0' : '3-1';
+  }
+  var scoreExpansao = escolher31ou30();
+
   if(profileId === 'GOLEADA') {
     // PDF: 2-0 / 3-0 / 2-1 / 3-1 (ordem exata)
-    // 1-0 como ponte fraca — avaliado pela odd real abaixo
-    mainScores = ['2-0','3-0','2-1','3-1'];
+    // No GOLEADA o 3-0 SEMPRE é fixo (rota limpa dominante)
+    // o 3-1 fica como 4º score — mas se BTTS > 1.90, remove 3-1
+    if(btts > 1.90) {
+      mainScores = ['2-0','3-0','2-1'];
+    } else {
+      mainScores = ['2-0','3-0','2-1','3-1'];
+    }
 
   } else if(profileId === 'OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1
-    mainScores = ['1-0','2-0','2-1','3-1'];
-
-    // REFINO LIMPO 3-0 x 3-1 — alinhado ao comportamento do método:
-    // se o favorito é muito forte e o mercado NÃO confia no gol do underdog,
-    // o 3-0 ganha prioridade sobre o 3-1. Não altera plano B, 1-0, 2-0 ou 2-1.
-    var odd30 = csOdds['3-0'] || 0;
-    var cleanSheetForte = (fav <= 1.50 && over >= 1.70 && over <= 1.85 && btts >= 2.05 && odd30 > 0);
-    if(cleanSheetForte) {
-      mainScores = mainScores.map(function(s){ return s === '3-1' ? '3-0' : s; });
-    }
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 ou 3-0 conforme BTTS
+    mainScores = ['1-0','2-0','2-1', scoreExpansao];
 
   } else if(profileId === 'EQUILIBRADO_OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1
-    // BTTS < 1.85 → 0-1 stake maior (tratado no plano B)
-    mainScores = ['1-0','2-0','2-1','3-1'];
-
-    // Mesmo refino, porém um pouco mais seletivo: só troca para 3-0 quando
-    // o BTTS está claramente desconfiado e existe odd real do 3-0 no CS.
-    var odd30Eq = csOdds['3-0'] || 0;
-    var cleanSheetForteEq = (fav <= 1.64 && over >= 1.70 && over <= 1.90 && btts >= 2.10 && odd30Eq > 0);
-    if(cleanSheetForteEq) {
-      mainScores = mainScores.map(function(s){ return s === '3-1' ? '3-0' : s; });
-    }
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 ou 3-0 conforme BTTS
+    mainScores = ['1-0','2-0','2-1', scoreExpansao];
 
   } else if(profileId === 'EQUILIBRADO') {
-    // PDF: 1-0 / 2-0 / 2-1 (sem 3-1)
+    // PDF: 1-0 / 2-0 / 2-1 (sem expansão — cluster compacto)
     mainScores = ['1-0','2-0','2-1'];
 
   } else if(profileId === 'ABERTO_BTTS') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 + 2-2 se BTTS < 1.85
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 + 2-2 se BTTS muito baixo
     mainScores = ['1-0','2-0','2-1','3-1'];
+    // No ABERTO_BTTS o 3-1 se mantém pois BTTS é baixo por definição
+    // 2-2 só se btts < 1.85 (jogo muito aberto)
     if(btts < 1.85) mainScores.push('2-2');
 
   } else if(profileId === 'CONSERVADOR') {
-    // PDF: 1-0 / 2-0 / 2-1 (sem 3-1)
+    // PDF: 1-0 / 2-0 / 2-1 (sem expansão)
     mainScores = ['1-0','2-0','2-1'];
 
   } else {
-    // ALTO_RISCO: máx 5 scores
+    // ALTO_RISCO: máx 3 scores Plano A (total 5 com PB)
     mainScores = ['1-0','2-0','2-1'];
   }
 
@@ -2198,15 +2200,25 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
 
   } else if(profileId === 'ABERTO_BTTS') {
     // PDF: 0-1 / 1-1 / 2-2
+    // Vídeos confirmam: Plano B máximo 2 scores
+    // ABERTO_BTTS: se btts < 1.85 → PB com 2-2 e 1-1 (os mais prováveis)
+    // 0-1 fica fora — o 2-2 já cobre cenário de gols do visitante
     if(btts < 1.85) {
-      protection = ['2-2','1-1','0-1'];
+      protection = ['1-1','2-2'];
     } else {
       protection = ['1-1','0-1'];
     }
 
   } else {
-    // ALTO_RISCO: PB robusto — 0-1 / 1-1 / 1-2
-    protection = ['0-1','1-1','1-2'];
+    // ALTO_RISCO: PB robusto — 2 scores principais
+    // PDF confirma: 0-1 / 1-1 / 1-2 → mas máx 5 scores total
+    // Plano A = 3 scores → Plano B = 2 scores para não ultrapassar 5
+    // 1-2 entra só se fav > 2.15 (risco muito alto)
+    if(fav > 2.15) {
+      protection = ['1-1','0-1','1-2']; // 3 PB para fav muito alto
+    } else {
+      protection = ['1-1','0-1']; // 2 PB padrão
+    }
   }
 
   // ── ÂNCORA (PLACAR PROJETADO) ─────────────────────────────
@@ -2398,25 +2410,47 @@ async function analisarJogo() {
   // ── Detectar favorito real pelas odds CS ─────────────────
   // Compara odds de vitória casa (1-0,2-0,2-1) vs visitante (0-1,0-2,1-2)
   // O time com odds MENORES é o favorito real do mercado
+  // ── DETECTOR FAVORITO VISITANTE — 3 camadas ─────────────
+  // Camada 1: odds CS médias (threshold reduzido para 1.30)
   function avgOdds(scores) {
     const vals = scores.map(s => S.csOdds[s]).filter(o => o && o > 0);
     if(!vals.length) return 999;
     return vals.reduce((a,b) => a+b, 0) / vals.length;
   }
+  // Camada 2: liquidez CS total
+  function totalLiq(scores) {
+    return scores.reduce(function(acc, s) {
+      return acc + (S.csOddsLiq ? (S.csOddsLiq[s] || 0) : 0);
+    }, 0);
+  }
   const avgCasa      = avgOdds(['1-0','2-0','2-1','3-0','3-1']);
   const avgVisitante = avgOdds(['0-1','0-2','1-2','0-3','1-3']);
-  // Se visitante tem odds menores = visitante é o favorito real
-  const favEhVisitante = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.75);
-  // Também detectar pelo texto da análise
+  const liqCasa      = totalLiq(['1-0','2-0','2-1','3-0','3-1']);
+  const liqVisitante = totalLiq(['0-1','0-2','1-2','0-3','1-3']);
+
+  // Odds: visitante tem odds menores que casa × 0.80 (era 0.75 — muito restritivo)
+  const favPorOdds = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.80);
+  // Liquidez: visitante tem mais dinheiro real que casa × 1.30
+  const favPorLiq  = (liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.30);
+  // Combinado: odds + liquidez juntos (threshold mais suave)
+  const favPorCombinado = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85 &&
+                           liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.10);
+
+  // Camada 3: texto da análise
   const textoLower = texto.toLowerCase();
   const favVisTextual = (
     textoLower.includes('joga fora') ||
     textoLower.includes('time visitante') ||
     textoLower.includes('favorito fora') ||
     textoLower.includes('como visitante') ||
-    textoLower.includes('fora de casa como favorito')
+    textoLower.includes('fora de casa como favorito') ||
+    textoLower.includes('visitante é favorito') ||
+    textoLower.includes('favorito é visitante')
   );
-  const favEhVisitanteReal = favEhVisitante || (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85 && favVisTextual);
+
+  // Aciona se qualquer camada confirmar:
+  const favEhVisitanteReal = favPorOdds || favPorLiq || favPorCombinado ||
+    (favVisTextual && avgVisitante > 0 && avgVisitante < avgCasa * 0.90);
 
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal);
