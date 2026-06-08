@@ -1,26 +1,39 @@
-const { getStore } = require('@netlify/blobs');
-
-exports.handler = async function(event) {
+exports.handler = async function(event, context) {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
   try {
-    const key = event.queryStringParameters?.key || 'games';
+    const key = (event.queryStringParameters && event.queryStringParameters.key) || 'games';
 
-    const store = getStore({ name: 'genio-placares', consistency: 'strong' });
-    const data = await store.get(key, { type: 'json' });
+    const siteId = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+    const token  = process.env.NETLIFY_TOKEN || process.env.NETLIFY_ACCESS_TOKEN;
 
+    if (!siteId || !token) {
+      return { statusCode: 200, body: JSON.stringify({ ok: true, data: null, mode: 'local-only' }) };
+    }
+
+    const url = `https://api.netlify.com/api/v1/sites/${siteId}/blobs/${encodeURIComponent(key)}?namespace=genio-placares`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (resp.status === 404) {
+      return { statusCode: 200, body: JSON.stringify({ ok: true, data: null }) };
+    }
+
+    if (!resp.ok) {
+      return { statusCode: 200, body: JSON.stringify({ ok: true, data: null }) };
+    }
+
+    const data = await resp.json();
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, data: data || null })
+      body: JSON.stringify({ ok: true, data: data, mode: 'server' })
     };
   } catch (err) {
-    // Se não encontrar, retorna null sem erro
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, data: null })
-    };
+    console.error('load-games error:', err.message);
+    return { statusCode: 200, body: JSON.stringify({ ok: true, data: null }) };
   }
 };
