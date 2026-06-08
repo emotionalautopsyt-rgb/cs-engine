@@ -961,10 +961,21 @@ async function loadGamesServer() {
       if(serverGames && serverGames.length > 0) {
         // Merge: usa o servidor se tiver mais jogos ou dados mais recentes
         if(serverGames.length >= S.games.length) {
-          S.games = serverGames;
+          // Merge: combina server + local sem duplicar por ID
+          var localIds = new Set(S.games.map(function(g){ return g.id; }));
+          serverGames.forEach(function(sg){
+            if(!localIds.has(sg.id)) S.games.push(sg);
+            else {
+              // Atualiza dados do servidor se for mais recente
+              var idx = S.games.findIndex(function(g){ return g.id === sg.id; });
+              if(idx >= 0 && sg.cluster && sg.cluster.length > 0) {
+                S.games[idx] = Object.assign({}, S.games[idx], sg);
+              }
+            }
+          });
           localStorage.setItem('cs_v6g', JSON.stringify(S.games));
           renderSidebar();
-          console.log('✅ ' + serverGames.length + ' jogos restaurados do servidor');
+          console.log('✅ ' + serverGames.length + ' jogos do servidor sincronizados');
         }
       }
     } catch(e) {
@@ -2483,14 +2494,24 @@ async function analisarJogo() {
   if(detected.casa || detected.fora) {
     const gameName = (detected.casa||'Casa')+' vs '+(detected.fora||'Fora');
 
-    // Priority 1: use currentGame if it matches the detected name
+    // Priority 1: use currentGame if it matches the detected name (fuzzy)
     // Priority 2: find any existing game with same name (any date)
     // Priority 3: create new game
+    function normName(n){ return (n||'').toLowerCase().replace(/\s+/g,' ').trim(); }
     let targetGame = null;
-    if(S.currentGame && S.currentGame.name === gameName) {
+    if(S.currentGame && normName(S.currentGame.name) === normName(gameName)) {
       targetGame = S.currentGame; // already selected — use it
+    } else if(S.currentGame && (
+      normName(S.currentGame.name).includes(normName(detected.casa||'')) ||
+      normName(S.currentGame.name).includes(normName(detected.fora||''))
+    ) && detected.casa && detected.fora) {
+      // currentGame parece ser o mesmo jogo com nome levemente diferente
+      targetGame = S.currentGame;
     } else {
-      targetGame = S.games.find(g => g.name === gameName); // find by name, any date
+      // Busca por nome normalizado em todos os jogos
+      targetGame = S.games.find(function(g){
+        return normName(g.name) === normName(gameName);
+      });
     }
 
     if(!targetGame) {
