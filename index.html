@@ -2252,36 +2252,52 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
   // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
 
-  // ── FUNÇÃO GLOBAL: 3-1 vs 3-0 pelo BTTS ─────────────────
-  // Regra derivada de todos os vídeos e 7 jogos analisados:
-  // btts > 1.90 → mercado diz que adversário provavelmente não marca → 3-0
-  // btts < 1.85 → adversário marca → 3-1
-  // btts 1.85-1.90 (zona cinza) → over decide
-  function escolher31ou30() {
-    if(btts > 1.90) return '3-0';
-    if(btts < 1.85) return '3-1';
-    // Zona cinza: over baixo = jogo controlado = clean sheet mais provável
-    return over < 1.85 ? '3-0' : '3-1';
+  // ── FUNÇÃO GLOBAL: 3-0 e/ou 3-1 — decisão inteligente ──────
+  // Regra revisada: BTTS sozinho não decide — é uma combinação de fatores
+  // O 3-1 ocorre muito e tem valor — não deve ser eliminado só por BTTS alto
+  //
+  // LÓGICA:
+  // btts > 2.00 + adversário defensivo → só 3-0 (mercado muito desconfiante)
+  // btts < 1.85 → só 3-1 (adversário marca regularmente)
+  // btts 1.85-2.00 (zona normal) → AMBOS 3-0 e 3-1 (cap pelo refinador)
+  // Favorito < 1.55 (dominante) → preferência ao 3-0, mas 3-1 ainda entra
+
+  var odd30cs = csOdds['3-0'] || 0;
+  var odd31cs = csOdds['3-1'] || 0;
+
+  // Decidir quais scores de expansão incluir
+  function getExpansao() {
+    // Caso 1: BTTS muito alto (> 2.00) = adversário provavelmente não marca
+    if(btts > 2.00) return ['3-0'];
+    // Caso 2: BTTS baixo (< 1.85) = adversário marca regularmente
+    if(btts < 1.85) return ['3-1'];
+    // Caso 3: zona normal (1.85-2.00) = incluir ambos se tiver odds reais
+    // O refinador premium vai decidir qual manter pelo contexto
+    var ambos = [];
+    if(odd30cs > 0 || btts > 1.90) ambos.push('3-0');
+    if(odd31cs > 0 || btts < 1.95) ambos.push('3-1');
+    if(ambos.length === 0) ambos = ['3-0']; // fallback
+    return ambos;
   }
-  var scoreExpansao = escolher31ou30();
+  var expansao = getExpansao();
+  // scoreExpansao = primeiro da lista (para compatibilidade)
+  var scoreExpansao = expansao[0];
 
   if(profileId === 'GOLEADA') {
-    // PDF: 2-0 / 3-0 / 2-1 / 3-1 (ordem exata)
-    // No GOLEADA o 3-0 SEMPRE é fixo (rota limpa dominante)
-    // o 3-1 fica como 4º score — mas se BTTS > 1.90, remove 3-1
-    if(btts > 1.90) {
+    // GOLEADA: 2-0 / 3-0 / 2-1 sempre + 3-1 se BTTS < 2.00
+    if(btts > 2.00) {
       mainScores = ['2-0','3-0','2-1'];
     } else {
       mainScores = ['2-0','3-0','2-1','3-1'];
     }
 
   } else if(profileId === 'OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 ou 3-0 conforme BTTS
-    mainScores = ['1-0','2-0','2-1', scoreExpansao];
+    // OFENSIVO: 1-0 / 2-0 / 2-1 + expansão inteligente
+    mainScores = ['1-0','2-0','2-1'].concat(expansao);
 
   } else if(profileId === 'EQUILIBRADO_OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 ou 3-0 conforme BTTS
-    mainScores = ['1-0','2-0','2-1', scoreExpansao];
+    // EQUIL_OFENSIVO: 1-0 / 2-0 / 2-1 + expansão inteligente
+    mainScores = ['1-0','2-0','2-1'].concat(expansao);
 
   } else if(profileId === 'EQUILIBRADO') {
     // PDF: 1-0 / 2-0 / 2-1 (sem expansão — cluster compacto)
