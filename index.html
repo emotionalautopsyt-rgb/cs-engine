@@ -2455,6 +2455,89 @@ async function analisarJogo() {
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal);
 
+  // ── CONSENSO DUPLO — Fase 1: prompt de validação contextual ──
+  // A IA lê o contexto e vota nos scores do motor
+  // Ela pode remover scores que não fazem sentido contextual
+  // Ela NÃO pode adicionar scores fora do perfil
+  // O cluster final = motor + validação da IA
+  // ── TERCEIRO PILAR: Liquidez real estruturada ─────────────
+  // Ordenar scores por dinheiro real na Betfair
+  // O mercado já precificou tudo — onde está o dinheiro é o voto mais importante
+  var liquidezEstruturada = '';
+  try {
+    var todosScoresCS = ['1-0','2-0','2-1','3-0','3-1','1-1','0-1','0-2','1-2','0-3','2-2','3-2','2-3'];
+    var scoresComLiq = todosScoresCS
+      .filter(function(s){ return S.csOdds && S.csOdds[s] && S.csOdds[s] > 0; })
+      .map(function(s){
+        var odd = S.csOdds[s] || 0;
+        var liq = (S.csOddsLiq && S.csOddsLiq[s]) ? S.csOddsLiq[s] : 0;
+        var probImpl = odd > 0 ? (100/odd).toFixed(1) : '0';
+        return { score: s, odd: odd, liq: liq, prob: probImpl };
+      })
+      .filter(function(x){ return x.liq > 0 || x.odd > 0; })
+      .sort(function(a,b){ return b.liq - a.liq; })
+      .slice(0, 10);
+
+    if(scoresComLiq.length > 0) {
+      liquidezEstruturada = scoresComLiq
+        .map(function(x){
+          return x.score + ' @ ' + x.odd + ' | prob ' + x.prob + '% | R$' + (x.liq||'?');
+        })
+        .join('\n');
+    }
+  } catch(eLiq) {
+    liquidezEstruturada = 'Não disponível';
+  }
+
+  const promptValidacao = `Você é o validador de árvore do Gênio dos Placares.
+Você tem 3 fontes de informação. Use as 3 para validar o cluster.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 1 — CONTEXTO DO JOGO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${texto}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 2 — MOTOR MATEMÁTICO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Cluster proposto: Plano A: ${engine.mainScores.join(', ')} | Plano B: ${engine.protection.join(', ')}
+Âncora: ${engine.ancora} | Perfil: ${engine.profileId}
+Favorito: ${favEhVisitanteReal ? 'VISITANTE' : 'CASA'}
+fav@${fav} | over@${over} | btts@${btts}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 3 — LIQUIDEZ REAL BETFAIR (ordenada por dinheiro):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${liquidezEstruturada || 'Não fornecida'}
+
+O mercado já precificou tudo. Onde está o dinheiro é o voto mais honesto.
+Se um score do cluster tem pouca liquidez comparado a outro que não está no cluster,
+isso é um sinal relevante. Mas não mude por liquidez sozinha — precisa de coerência com contexto.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUA TAREFA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Cruze as 3 fontes e valide se cada score do cluster faz sentido para ESTE evento.
+
+REGRAS ABSOLUTAS:
+1. Só remova score com razão FORTE das 3 fontes — nunca por feeling
+2. Nunca remova mais que 1-2 scores
+3. NUNCA adicione scores fora do cluster do motor
+4. NUNCA aumente a quantidade de scores
+5. A âncora só muda se contexto + mercado contradizerem claramente
+6. Se cluster estiver correto, aprovar tudo sem remover nada
+
+Responda APENAS com JSON válido, sem texto adicional:
+{
+  "aprovar": ["scores que fazem sentido — mínimo 3"],
+  "remover": ["scores a remover — vazio se nada remover"],
+  "motivo_remocao": "razão objetiva cruzando as 3 fontes, ou vazio",
+  "ancora_final": "score âncora validado pelo consenso",
+  "confianca_contexto": 1-5
+}`;
+
+  // ============================================================
+
   const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
 
 CAMPO 1 — DADOS DO JOGO (Academia das Apostas):
@@ -2512,6 +2595,57 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
   lsTimers.push(setTimeout(function(){ var e=document.getElementById('ls4'); if(e){e.classList.add('active');} }, 3000));
 
   try {
+    // ── FASE 1: Validação contextual (Consenso Duplo) ─────────
+    // Chamada rápida — só JSON, sem narrativa
+    let engineFinal = { ...engine }; // começa com o cluster do motor
+    try {
+      const respValidacao = await fetch('/.netlify/functions/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 400,
+          temperature: 0.1,
+          system: 'Você é um validador de árvore de correct score trading. Responda APENAS com JSON válido. Sem texto adicional.',
+          messages: [{ role:'user', content: promptValidacao }]
+        })
+      });
+      if(respValidacao.ok) {
+        const dataV = await respValidacao.json();
+        const replyV = dataV.content?.[0]?.text || '';
+        // Extrair JSON da resposta
+        const jsonMatch = replyV.match(/\{[\s\S]*\}/);
+        if(jsonMatch) {
+          const voto = JSON.parse(jsonMatch[0]);
+          // Aplicar voto da IA ao cluster
+          if(voto.aprovar && Array.isArray(voto.aprovar) && voto.aprovar.length >= 3) {
+            // Plano A final = interseção do motor com aprovados pela IA
+            const todosAprovados = voto.aprovar;
+            engineFinal.mainScores = engine.mainScores.filter(s => todosAprovados.includes(s));
+            engineFinal.protection = engine.protection.filter(s => todosAprovados.includes(s));
+            // Garantir que Plano A tem pelo menos 2 scores
+            if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores;
+            if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection;
+            // Âncora validada pela IA
+            if(voto.ancora_final && todosAprovados.includes(voto.ancora_final)) {
+              engineFinal.ancora = voto.ancora_final;
+            }
+          }
+        }
+      }
+    } catch(eV) {
+      // Falha silenciosa — usa cluster original do motor
+      console.warn('Validação contextual falhou, usando cluster do motor:', eV.message);
+    }
+    // A partir daqui usa engineFinal (motor + validação da IA)
+    // Atualizar prompt com cluster final validado
+    const promptFinal = prompt
+      .replace('Plano A: '+engine.mainScores.join(', '), 'Plano A: '+engineFinal.mainScores.join(', '))
+      .replace('Plano B: '+engine.protection.join(', '), 'Plano B: '+engineFinal.protection.join(', '))
+      .replace('Âncora (PLACAR PROJETADO): '+engine.ancora, 'Âncora (PLACAR PROJETADO): '+engineFinal.ancora)
+      .replace(/Total na lista = \d+ scores/, 'Total na lista = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores');
+
+    // ── FASE 2: Narrativa com cluster final ───────────────────
     const resp = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2520,7 +2654,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         max_tokens: 3000,
         temperature: 0.3,
         system: SP,
-        messages: [{ role:'user', content: prompt }]
+        messages: [{ role:'user', content: promptFinal }]
       })
     });
 
