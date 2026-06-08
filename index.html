@@ -646,6 +646,11 @@ input:focus,select:focus,textarea:focus{
   </div>
   <div class="sb-footer">
     <button class="sb-hist-btn" onclick="showTab('hist',document.getElementById('tab-hist'))">📅 HISTÓRICO</button>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button onclick="exportarDados()" style="flex:1;background:var(--card);border:1px solid var(--brd);color:var(--acc);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:7px 4px;border-radius:6px;cursor:pointer;" title="Salvar todos os jogos num arquivo">💾 EXPORTAR</button>
+      <button onclick="document.getElementById('import-input').click()" style="flex:1;background:var(--card);border:1px solid var(--brd);color:var(--txt);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:7px 4px;border-radius:6px;cursor:pointer;" title="Restaurar jogos de um arquivo salvo">📂 IMPORTAR</button>
+      <input type="file" id="import-input" accept=".json" style="display:none" onchange="importarDados(this)">
+    </div>
   </div>
 </div>
 
@@ -908,7 +913,134 @@ const S = {
   csOdds: {}
 };
 function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
-function saveGames() { localStorage.setItem('cs_v6g', JSON.stringify(S.games)); }
+function saveGames() {
+  // Salva local imediatamente (rápido)
+  localStorage.setItem('cs_v6g', JSON.stringify(S.games));
+  // Salva no servidor em background (persistente entre dispositivos)
+  saveGamesServer().catch(function(e){ console.warn('Servidor indisponível:', e.message); });
+}
+
+async function saveGamesServer() {
+  try {
+    var payload = {
+      key: 'games',
+      data: {
+        games: S.games,
+        savedAt: new Date().toISOString()
+      }
+    };
+    await fetch('/.netlify/functions/save-games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) {
+    // Falha silenciosa — localStorage continua funcionando
+  }
+}
+
+async function loadGamesServer() {
+  try {
+    var resp = await fetch('/.netlify/functions/load-games?key=games');
+    if(!resp.ok) return null;
+    var json = await resp.json();
+    if(json.ok && json.data && Array.isArray(json.data.games)) {
+      return json.data.games;
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ── INICIALIZAÇÃO COM SERVIDOR ──────────────────────────
+// Ao abrir o app, tenta carregar jogos do servidor
+// Se o servidor tiver dados mais recentes, usa eles
+(function initFromServer() {
+  setTimeout(async function() {
+    try {
+      var serverGames = await loadGamesServer();
+      if(serverGames && serverGames.length > 0) {
+        // Merge: usa o servidor se tiver mais jogos ou dados mais recentes
+        if(serverGames.length >= S.games.length) {
+          S.games = serverGames;
+          localStorage.setItem('cs_v6g', JSON.stringify(S.games));
+          renderSidebar();
+          console.log('✅ ' + serverGames.length + ' jogos restaurados do servidor');
+        }
+      }
+    } catch(e) {
+      console.warn('Servidor indisponível na inicialização:', e.message);
+    }
+  }, 500); // aguarda 500ms para o app inicializar primeiro
+})();
+
+// ── EXPORTAR — salva todos os dados num arquivo JSON ──────
+function exportarDados() {
+  try {
+    var data = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      games: S.games,
+      performance: JSON.parse(localStorage.getItem('cs_perf') || '[]'),
+      historico: JSON.parse(localStorage.getItem('cs_hist') || '[]'),
+    };
+    // Incluir análises salvas por jogo
+    var analises = {};
+    S.games.forEach(function(g) {
+      var an = localStorage.getItem('cs_an_' + g.id);
+      if(an) analises[g.id] = JSON.parse(an);
+    });
+    data.analises = analises;
+
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'genio-placares-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify('💾 EXPORTADO', S.games.length + ' jogos salvos no arquivo', 'var(--grn)');
+  } catch(e) {
+    notify('❌ ERRO', 'Falha ao exportar: ' + e.message, 'var(--red)');
+  }
+}
+
+// ── IMPORTAR — restaura dados de um arquivo JSON ──────────
+function importarDados(input) {
+  var file = input.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if(!data.games || !Array.isArray(data.games)) {
+        notify('❌ ERRO', 'Arquivo inválido — não contém jogos', 'var(--red)');
+        return;
+      }
+      // Restaurar jogos
+      S.games = data.games;
+      saveGames();
+      // Restaurar performance e histórico
+      if(data.performance) localStorage.setItem('cs_perf', JSON.stringify(data.performance));
+      if(data.historico) localStorage.setItem('cs_hist', JSON.stringify(data.historico));
+      // Restaurar análises por jogo
+      if(data.analises) {
+        Object.entries(data.analises).forEach(function(entry) {
+          localStorage.setItem('cs_an_' + entry[0], JSON.stringify(entry[1]));
+        });
+      }
+      // Recarregar sidebar
+      renderSidebar();
+      notify('📂 IMPORTADO', data.games.length + ' jogos restaurados com sucesso', 'var(--grn)');
+      // Limpar input para permitir reimportar mesmo arquivo
+      input.value = '';
+    } catch(e) {
+      notify('❌ ERRO', 'Falha ao importar: ' + e.message, 'var(--red)');
+    }
+  };
+  reader.readAsText(file);
+}
 function td() {
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
