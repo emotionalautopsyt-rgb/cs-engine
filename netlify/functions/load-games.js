@@ -5,8 +5,8 @@ exports.handler = async function(event, context) {
   try {
     const key = (event.queryStringParameters && event.queryStringParameters.key) || 'games';
 
-    const siteId = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
-    const token  = process.env.NETLIFY_TOKEN || process.env.NETLIFY_ACCESS_TOKEN;
+    const siteId = process.env.GENIO_SITE_ID;
+    const token  = process.env.NETLIFY_TOKEN;
 
     if (!siteId || !token) {
       return { statusCode: 200, body: JSON.stringify({ ok: true, data: null, mode: 'local-only' }) };
@@ -33,7 +33,6 @@ exports.handler = async function(event, context) {
       body: JSON.stringify({ ok: true, data: data, mode: 'server' })
     };
   } catch (err) {
-    console.error('load-games error:', err.message);
     return { statusCode: 200, body: JSON.stringify({ ok: true, data: null }) };
   }
 };
