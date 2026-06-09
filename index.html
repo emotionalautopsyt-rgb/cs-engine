@@ -1734,21 +1734,27 @@ function parseCS() {
         if(/^\d{1,2}-\d{1,2}$/.test(nx)) break;
         if(/^\d{1,2}x\d{1,2}$/i.test(nx)) break;
 
-        // R$ antes ou depois do número, com ou sem espaço, com ou sem k
-        const mR = nx.match(/^R\$\s*([\d.,]+)[Kk]?$/) || nx.match(/^([\d.,]+)\s*R\$/);
-        if(mR) {
-          const raw = mR[1].replace(',','.');
-          const v = raw.includes('k')||raw.includes('K') ? parseFloat(raw)*1000 : parseFloat(raw);
-          if(v>=1.01&&v<=500) withRS.push(v);
+        // Formato "9.4R$ 4.06" — odd antes do R$, liquidez depois
+        const mOddLiq = nx.match(/^(\d{1,3}(?:[.,]\d{1,2})?)R\$\s*[\d.,]+[Kk]?$/);
+        if(mOddLiq) {
+          const v = parseFloat(mOddLiq[1].replace(',','.'));
+          if(v>=3.0&&v<=999) standalone.push(v); // odd antes do R$
           continue;
         }
-        // Liquidez grande (ex: R$ 1.57k) — ignorar como odd
+        // Formato "R$ 4.06" ou "R$ 1.57k" — é liquidez, não odd
+        const mR = nx.match(/^R\$\s*([\d.,]+)[Kk]?$/);
+        if(mR) {
+          // só captura como odd se for valor razoável de odd (>= 3.0)
+          // normalmente liquidez pequena como R$4.06 não é odd
+          continue; // ignorar — é liquidez
+        }
+        // Liquidez colada sem espaço
         if(/R\$|[Kk]$/.test(nx)) { continue; }
 
         const mS = nx.match(/^(-?\d{1,3}(?:[.,]\d{1,2})?)$/);
         if(mS) {
           const v = parseFloat(mS[1].replace(',','.'));
-          if(v>=1.01&&v<=500) standalone.push(v);
+          if(v>=3.0&&v<=999) standalone.push(v); // mínimo 3.0 para ser odd válida
         }
       }
 
@@ -1759,7 +1765,7 @@ function parseCS() {
         backOdd = Math.min(...standalone);
       }
 
-      if(backOdd && backOdd >= 4.0 && !S.csOdds[score]) {
+      if(backOdd && backOdd >= 3.0 && !S.csOdds[score]) {
         S.csOdds[score] = backOdd;
         count++;
       }
@@ -3228,8 +3234,40 @@ function extractCluster(text, stake) {
   if(!cluster.some(s=>s.score==='1-1')&&S.csOdds['1-1']>0)
     cluster.push({score:'1-1',odd:S.csOdds['1-1'],tipo:'planb',prob:cpLocal(S.csOdds['1-1'])});
 
-  const ord={caminho:0,destino:1,planb:2,expansao:3};
-  cluster.sort((a,b)=>{ const oa=ord[a.tipo]??1,ob=ord[b.tipo]??1; return oa!==ob?oa-ob:b.prob-a.prob; });
+  // ── ORDENAÇÃO VISUAL DA ROTA ────────────────────────────
+  // Ordem visual: Caminho → Destinos (rota do favorito) → Plano B
+  // Dentro dos destinos: progressão natural 2-0 → 2-1 → 3-0 → 3-1
+  // Critério: total de gols crescente, depois gols adversário crescente
+
+  function ordemRota(score, isFavorito) {
+    const parts = score.split('-').map(Number);
+    const h = parts[0]||0, a = parts[1]||0;
+    const total = h + a;
+    // Para favorito em casa: h é o favorito
+    // Ordem: total gols crescente, depois adversário crescente
+    // Isso dá: 2-0(t2,a0) → 2-1(t3,a1) → 3-0(t3,a0→mas 3-0 vem antes de 2-1?) 
+    // Queremos: 2-0 → 2-1 → 3-0 → 3-1
+    // Ou seja: favorito gols primário crescente, depois adversário crescente
+    const favG = isFavorito ? h : a;
+    const advG = isFavorito ? a : h;
+    return favG * 100 + advG;
+  }
+
+  // Detectar se favorito é casa ou fora pelo cluster
+  const temCaminho = cluster.find(s => s.tipo === 'caminho');
+  const fcDir = temCaminho ? (temCaminho.score.split('-')[0] > temCaminho.score.split('-')[1] ? true : false) : true;
+
+  cluster.sort((a,b)=>{
+    // 1. Caminho sempre primeiro
+    if(a.tipo === 'caminho' && b.tipo !== 'caminho') return -1;
+    if(b.tipo === 'caminho' && a.tipo !== 'caminho') return 1;
+    // 2. Plano B sempre depois dos destinos
+    const isPlanBA = a.tipo === 'planb';
+    const isPlanBB = b.tipo === 'planb';
+    if(isPlanBA !== isPlanBB) return isPlanBA ? 1 : -1;
+    // 3. Dentro dos destinos: rota progressiva do favorito
+    return ordemRota(a.score, fcDir) - ordemRota(b.score, fcDir);
+  });
   if(cluster.length>0) calcStakes(cluster,stake,text);
   return cluster;
 }
