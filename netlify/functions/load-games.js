@@ -7,7 +7,15 @@ exports.handler = async function(event, context) {
   try {
     const key = (event.queryStringParameters && event.queryStringParameters.key) || 'games';
 
-    const store = getStore("genio-placares");
+    const siteID = process.env.GENIO_SITE_ID;
+    const token  = process.env.NETLIFY_TOKEN;
+
+    const store = getStore({
+      name: "genio-placares",
+      siteID: siteID,
+      token: token
+    });
+
     const data = await store.get(key, { type: "json" });
 
     return {

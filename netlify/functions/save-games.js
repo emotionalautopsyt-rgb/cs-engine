@@ -11,7 +11,15 @@ exports.handler = async function(event, context) {
       return { statusCode: 400, body: JSON.stringify({ error: 'key e data obrigatorios' }) };
     }
 
-    const store = getStore("genio-placares");
+    const siteID = process.env.GENIO_SITE_ID;
+    const token  = process.env.NETLIFY_TOKEN;
+
+    const store = getStore({
+      name: "genio-placares",
+      siteID: siteID,
+      token: token
+    });
+
     await store.setJSON(key, data);
 
     return {
