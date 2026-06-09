@@ -1596,6 +1596,7 @@ function selectSbGame(id) {
   // Restore game state
   if(S.currentGame.cluster?.length > 0) S.currentCluster = S.currentGame.cluster;
   if(S.currentGame.csOdds) S.csOdds = {...S.currentGame.csOdds};
+  if(S.currentGame.csOddsLiq) S.csOddsLiq = {...S.currentGame.csOddsLiq};
   if(S.currentGame.chatHistory?.length > 0) S.chatHistory = S.currentGame.chatHistory;
 
   // Restore text fields
@@ -2671,6 +2672,37 @@ async function analisarJogo() {
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal);
 
+  // ── PRÉ-REFINO: refinar o cluster do motor ANTES da IA validar ──
+  // Ordem correta: motor → refino premium → IA valida → cluster final
+  // Assim a IA valida a árvore já refinada pelo DNA/caos/tradeabilidade
+  try {
+    var clusterPreRefino = [];
+    var todosPreRefino = [...engine.mainScores, ...engine.protection];
+    var favVisPreRefino = engine.favEhVisitante;
+    todosPreRefino.forEach(function(sc) {
+      if(!sc) return;
+      var odd = S.csOdds[sc] || 0;
+      var prob = odd > 0 ? parseFloat((100/odd).toFixed(1)) : 0;
+      var parts = sc.split('-').map(Number);
+      var h = parts[0]||0, a = parts[1]||0;
+      var favVence = favVisPreRefino ? a>h : h>a;
+      var tipo = h===a ? 'planb' : (favVence ? 'destino' : 'planb');
+      if(sc === engine.mainScores[0]) tipo = 'caminho';
+      clusterPreRefino.push({score:sc, odd:odd, prob:prob, tipo:tipo, liq:S.csOddsLiq[sc]||0});
+    });
+    var clusterRefinado = refinarArvorePremium(clusterPreRefino, {
+      fav:fav, over:over, btts:btts, text:texto, favEhVisitante:favVisPreRefino
+    });
+    // Atualizar engine com scores refinados antes de enviar para IA
+    if(clusterRefinado && clusterRefinado.length >= 2) {
+      engine.mainScores = clusterRefinado.filter(s=>s.tipo!=='planb').map(s=>s.score);
+      engine.protection = clusterRefinado.filter(s=>s.tipo==='planb').map(s=>s.score);
+      if(engine.mainScores.length < 1) engine.mainScores = clusterPreRefino.filter(s=>s.tipo!=='planb').map(s=>s.score);
+    }
+  } catch(ePreRefino) {
+    console.warn('Pré-refino falhou, usando motor direto:', ePreRefino.message);
+  }
+
   // ── CONSENSO DUPLO — Fase 1: prompt de validação contextual ──
   // A IA lê o contexto e vota nos scores do motor
   // Ela pode remover scores que não fazem sentido contextual
@@ -3089,7 +3121,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         '<div style="font-size:13px;color:#e8f4ff;line-height:1.85;letter-spacing:.2px;">'+alertaText+'</div>'+
       '</div>';
     // PLACAR PROJETADO — logo abaixo do alerta
-    var ancoraProjt = engine ? engine.ancora : null;
+    var ancoraProjt = engineFinal ? engineFinal.ancora : (engine ? engine.ancora : null);
     if(ancoraProjt) contextWarnings +=
       '<div style="background:linear-gradient(135deg,rgba(124,92,252,.18),rgba(0,212,255,.10));border:1px solid rgba(124,92,252,.45);border-radius:14px;padding:20px;margin-bottom:12px;text-align:center;position:relative;overflow:hidden;">'+
         '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--pur),var(--acc));"></div>'+
@@ -3121,6 +3153,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         S.currentGame.cluster = cluster;
         S.currentGame.stake = stake;
         S.currentGame.csOdds = {...S.csOdds};
+        S.currentGame.csOddsLiq = {...S.csOddsLiq}; // salvar liquidez por jogo
         // Save ancora from JSON for PLACAR PROJETADO highlight
         try { const jd = JSON.parse(jsonStr||'{}'); S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
