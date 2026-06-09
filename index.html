@@ -1581,7 +1581,13 @@ function confirmarEncerrar(id) {
     S.hist.push({
       gameId: g.id, j: g.name, c: g.comp||'', d: g.data||td(),
       s: g.stake||S.stake, r: val>0?'lucro':val<0?'loss':'be',
-      v: val, sc: g.placar||'', ob: 'Encerrado via sidebar', ts: Date.now()
+      v: val, sc: g.placar||'', ob: 'Encerrado via sidebar', ts: Date.now(),
+      // Salvar odds e status para a Performance
+      status: g.aprovacaoStatus || 'historico',
+      oddsFav: g.savedPkFav || '',
+      btts: g.savedPkBtts || '',
+      over: g.savedPkOver || '',
+      cluster: g.cluster || []
     });
     save();
   }
@@ -1851,13 +1857,25 @@ function avaliarAprovacaoGenio(ctx) {
   const hardBlock = amistoso || rotacao || semObjetivo || rangeFails >= 2 || csPouco;
   const aprovado = !hardBlock && (rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
 
+  // Montar mensagem contextual de não aprovado
+  var motivoPrincipal = '';
+  if(amistoso) motivoPrincipal = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
+  else if(rotacao) motivoPrincipal = 'Possível escalação alternativa ou desfalques reduz a leitura do Gênio.';
+  else if(semObjetivo) motivoPrincipal = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
+  else if(csPouco) motivoPrincipal = 'Cole as odds CS da Betfair para o Gênio fazer uma leitura completa.';
+  else if(rangeFails >= 2) motivoPrincipal = 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
+  else motivoPrincipal = 'Perfil fora da zona ideal — a árvore pode ter menor precisão.';
+
   return {
     aprovado,
     status: aprovado ? 'aprovado' : 'nao_aprovado',
-    label: aprovado ? '🟢 GÊNIO APROVOU O JOGO' : '🔴 GÊNIO NÃO APROVA OPERAR ESTE JOGO',
+    label: aprovado ? '🟢 GÊNIO APROVOU O JOGO' : '🔴 FORA DA ZONA DO GÊNIO',
     resumo: aprovado
-      ? 'Mercado legível. Árvore liberada pelo Gênio para acompanhamento operacional.'
-      : 'Mercado sem edge claro para o padrão do Gênio. O usuário pode operar, mas a operação ficará registrada como NÃO APROVADA.',
+      ? 'Edge identificado. Árvore gerada com alta confiança operacional.'
+      : motivoPrincipal,
+    submensagem: aprovado
+      ? ''
+      : 'Você ainda pode analisar e operar — o resultado será registrado separadamente para comparação.',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
     fav, btts, over
   };
@@ -1866,11 +1884,16 @@ function avaliarAprovacaoGenio(ctx) {
 function renderGenioApprovalBox(ap) {
   if(!ap) ap = avaliarAprovacaoGenio({});
   const cor = ap.aprovado ? 'var(--grn)' : 'var(--red)';
-  const bg  = ap.aprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,77,106,.07)';
-  const itens = (ap.motivos || []).map(m => '<div style="margin-top:4px;">• '+m+'</div>').join('');
-  return '<div class="ab '+(ap.aprovado?'ab-g':'ab-r')+'" style="background:'+bg+';border-color:'+cor+';margin-bottom:10px;">'
-    + '<div class="ab-title" style="color:'+cor+';font-size:12px;letter-spacing:2px;">'+ap.label+'</div>'
-    + '<div class="ab-text">'+ap.resumo+(itens?'<br>'+itens:'')+'</div>'
+  const bg  = ap.aprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,77,106,.05)';
+  const itens = (ap.motivos || []).map(function(m){ return '<div style="margin-top:3px;opacity:.8;">• '+m+'</div>'; }).join('');
+  const sub = ap.submensagem
+    ? '<div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">'+ap.submensagem+'</div>'
+    : '';
+  return '<div class="ab '+(ap.aprovado?'ab-g':'ab-r')+'" style="background:'+bg+';border-color:'+cor+';margin-bottom:10px;padding:12px 14px;">'
+    + '<div class="ab-title" style="color:'+cor+';font-size:12px;letter-spacing:2px;margin-bottom:6px;">'+ap.label+'</div>'
+    + '<div class="ab-text" style="font-size:11px;line-height:1.6;">'+ap.resumo+'</div>'
+    + (itens ? '<div style="margin-top:6px;font-size:10px;color:var(--txt2);">'+itens+'</div>' : '')
+    + sub
     + '</div>';
 }
 
@@ -1919,9 +1942,9 @@ function checkPackball() {
   // Comunicação premium para o usuário final.
   // A lógica interna continua avaliando os critérios, mas sem expor ranges, cautela ou stake.
   if(fails <= 1) {
-    el.innerHTML = `<div class="ab ab-g" style="border-left-color:var(--grn);"><div class="ab-title" style="color:var(--grn);font-size:11px;letter-spacing:2px;">🧠 GÊNIO APROVOU O JOGO</div><div class="ab-text">Cluster liberado para análise operacional.</div></div>`;
+    el.innerHTML = `<div class="ab ab-g" style="border-left-color:var(--grn);background:rgba(0,201,110,.07);padding:12px 14px;"><div class="ab-title" style="color:var(--grn);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🟢 GÊNIO APROVOU O JOGO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">Edge identificado. Árvore liberada com alta confiança operacional.</div></div>`;
   } else {
-    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;">🚫 NÃO OPERAR — JOGO PERIGOSO</div><div class="ab-text">O Gênio não encontrou segurança suficiente para liberar este jogo.</div></div>`;
+    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);background:rgba(255,77,106,.05);padding:12px 14px;"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🔴 FORA DA ZONA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">As odds estão fora do perfil onde o Gênio tem maior edge histórico.</div><div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">Você ainda pode analisar e operar — o resultado ficará registrado separadamente para comparação.</div></div>`;
   }
 
   // Comunicação final oficial: binário e profissional
@@ -4758,7 +4781,12 @@ function regResult() {
   const j=document.getElementById('r-j')?.value?.trim();
   if(!j) { notify('ERRO','Informe o jogo','var(--red)'); return; }
   const v=parseFloat(document.getElementById('r-v')?.value)||0;
-  S.hist.push({j,c:document.getElementById('r-c')?.value||'',d:document.getElementById('r-d')?.value||td(),s:parseFloat(document.getElementById('r-s')?.value)||S.stake,r:document.getElementById('r-r')?.value||'lucro',v,sc:document.getElementById('r-sc')?.value||'',ob:'',ts:Date.now()});
+  var rFav=document.getElementById('pk-fav')?.value||'';
+  var rBtts=document.getElementById('pk-btts')?.value||'';
+  var rOver=document.getElementById('pk-over')?.value||'';
+  var rStatus=S.currentGame?.aprovacaoStatus||'historico';
+  var rCluster=S.currentCluster||[];
+  S.hist.push({j,c:document.getElementById('r-c')?.value||'',d:document.getElementById('r-d')?.value||td(),s:parseFloat(document.getElementById('r-s')?.value)||S.stake,r:document.getElementById('r-r')?.value||'lucro',v,sc:document.getElementById('r-sc')?.value||'',ob:'',ts:Date.now(),status:rStatus,oddsFav:rFav,btts:rBtts,over:rOver,cluster:rCluster});
   save();
   ['r-j','r-c','r-s','r-v','r-sc'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   renderPerf(); updHdr();
@@ -4957,8 +4985,8 @@ function renderPerf() {
       '</div>';
     };
     splitEl.innerHTML =
-      sCard('🟢','APROVADOS',aprovados,'rgba(0,255,136,.3)')+
-      sCard('🔴','NÃO APROVADOS',naoAprovados,'rgba(255,68,68,.3)')+
+      sCard('🟢','APROVADOS PELO GÊNIO',aprovados,'rgba(0,255,136,.3)')+
+      sCard('🔴','NÃO APROVADOS PELO GÊNIO',naoAprovados,'rgba(255,68,68,.3)')+
       sCard('🟡','HISTÓRICO ANTIGO',semStatus,'rgba(255,215,0,.2)');
   }
 
@@ -5111,10 +5139,12 @@ function renderPerf() {
               (r.c?'<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+r.c+'</span>':'')+
             '</div>'+
             '<div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px;">'+r.j+'</div>'+
-            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+
-              (r.sc?'⚽ '+r.sc+' · ':'')+
-              '🎯 '+gameCluster+' · '+
-              '💰 Stake R$ '+(r.s||0)+
+            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);line-height:1.8;">'+
+              (r.sc?'<span>⚽ '+r.sc+'</span> · ':'')+
+              '<span>🎯 '+gameCluster+'</span>'+
+              ((r.oddsFav||r.btts||r.over)?
+                ' · <span style="color:var(--acc);">Fav @'+(r.oddsFav||'—')+' · BTTS @'+(r.btts||'—')+' · Over @'+(r.over||'—')+'</span>':'')+
+              ' · <span>💰 Stake R$ '+(r.s||0)+'</span>'+
             '</div>'+
           '</div>'+
           '<div style="text-align:right;">'+
