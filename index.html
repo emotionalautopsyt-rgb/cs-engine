@@ -1996,12 +1996,22 @@ function checkPackball() {
   else if(fav>=2.00&&fav<=2.35)                   { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
   else                                             { perfil='INDEFINIDO';           piramide='NORMAL'; }
 
-  // Comunicação premium para o usuário final.
-  // A lógica interna continua avaliando os critérios, mas sem expor ranges, cautela ou stake.
-  if(fails <= 1) {
+  // Verificar também o texto da análise para detectar amistoso
+  const textoAnalise = document.getElementById('an-texto')?.value || '';
+  const isAmistoso = /amistoso|friendly|pre.?season|pré.?temporada|preparação/i.test(textoAnalise);
+  const semMotivacao = /sem objetivo|sem motivação|já classificado|eliminado|cumpre tabela|nada em jogo/i.test(textoAnalise);
+  const contextoBloqueio = isAmistoso || semMotivacao;
+
+  // Mensagem contextual de bloqueio
+  var motivoContexto = '';
+  if(isAmistoso) motivoContexto = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
+  else if(semMotivacao) motivoContexto = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
+
+  if(fails <= 1 && !contextoBloqueio) {
     el.innerHTML = `<div class="ab ab-g" style="border-left-color:var(--grn);background:rgba(0,201,110,.07);padding:12px 14px;"><div class="ab-title" style="color:var(--grn);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🟢 GÊNIO APROVOU O JOGO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">Edge identificado. Árvore liberada com alta confiança operacional.</div></div>`;
   } else {
-    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);background:rgba(255,77,106,.05);padding:12px 14px;"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🔴 FORA DA ZONA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">As odds estão fora do perfil onde o Gênio tem maior edge histórico.</div><div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">Você ainda pode analisar e operar — o resultado ficará registrado separadamente para comparação.</div></div>`;
+    var motivoEl = contextoBloqueio ? motivoContexto : 'As odds estão fora do perfil onde o Gênio tem maior edge histórico.';
+    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);background:rgba(255,77,106,.05);padding:12px 14px;"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🔴 FORA DA ZONA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">${motivoEl}</div><div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">Você ainda pode analisar e operar — o resultado ficará registrado separadamente para comparação.</div></div>`;
   }
 
   // Comunicação final oficial: binário e profissional
