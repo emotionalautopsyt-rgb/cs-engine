@@ -5048,7 +5048,9 @@ function renderPerf() {
       if(isLast||showDot||i%skipDot===0){
         var r=isLast?6:4;
         // Bolinha branca com borda verde — igual à imagem
-        dots+='<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+r+'" fill="#ffffff" stroke="#00c96e" stroke-width="'+(isLast?2.5:1.5)+'"'+(isLast?' filter="url(#lineGlow)"':'')+'/>';
+        var dotFill = isLast ? gc : '#ffffff';
+        var dotStroke = gc;
+        dots+='<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+r+'" fill="'+dotFill+'" stroke="'+dotStroke+'" stroke-width="'+(isLast?2:1.5)+'"'+(isLast?' filter="url(#lineGlow)"':'')+'/>';
       }
     });
 
@@ -5062,25 +5064,22 @@ function renderPerf() {
     var gc=saldoTotal>=0?'#00c96e':'#ff4444';
     var gid='pg'+Date.now();
 
+    // Gradiente igual à imagem: verde embaixo, mais suave, área bem abaixo da linha
     chart.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:260px;background:#0d1421;border-radius:16px;border:1px solid #1a2535;">'+
       '<defs>'+
         '<linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
-          '<stop offset="0%" stop-color="'+gc+'" stop-opacity="0.4"/>'+
-          '<stop offset="60%" stop-color="'+gc+'" stop-opacity="0.15"/>'+
+          '<stop offset="0%" stop-color="'+gc+'" stop-opacity="0.18"/>'+
+          '<stop offset="50%" stop-color="'+gc+'" stop-opacity="0.08"/>'+
           '<stop offset="100%" stop-color="'+gc+'" stop-opacity="0.0"/>'+
         '</linearGradient>'+
         '<filter id="lineGlow" x="-50%" y="-50%" width="200%" height="200%">'+
-          '<feGaussianBlur stdDeviation="3" result="blur"/>'+
-          '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>'+
-        '</filter>'+
-        '<filter id="areaGlow" x="-5%" y="-5%" width="110%" height="110%">'+
-          '<feGaussianBlur stdDeviation="1.5" result="blur"/>'+
+          '<feGaussianBlur stdDeviation="2.5" result="blur"/>'+
           '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>'+
         '</filter>'+
       '</defs>'+
       grid+
       '<path d="'+aPath+'" fill="url(#'+gid+')" />'+
-      '<path d="'+lPath+'" fill="none" stroke="'+gc+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#lineGlow)" />'+
+      '<path d="'+lPath+'" fill="none" stroke="'+gc+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#lineGlow)" />'+
       dots+xL+valTag+
     '</svg>';
   })();
