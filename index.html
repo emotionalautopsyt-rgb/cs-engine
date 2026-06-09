@@ -534,33 +534,7 @@ input:focus,select:focus,textarea:focus{
       <label>Campeonato</label>
       <select id="nj-comp">
         <option value="">Selecionar campeonato</option>
-        <option value="Copa do Mundo 2026">🌍 Copa do Mundo 2026</option>
-        <option value="Copa do Mundo">🌍 Copa do Mundo</option>
-        <option value="Mundial de Clubes">🏆 Mundial de Clubes</option>
-        <option value="Champions League">🇪🇺 Champions League</option>
-        <option value="Europa League">🇪🇺 Europa League</option>
-        <option value="Conference League">🇪🇺 Conference League</option>
-        <option value="Premier League">🏴 Premier League</option>
-        <option value="La Liga">🇪🇸 La Liga</option>
-        <option value="Bundesliga">🇩🇪 Bundesliga</option>
-        <option value="Serie A Italiana">🇮🇹 Serie A Italiana</option>
-        <option value="Ligue 1">🇫🇷 Ligue 1</option>
-        <option value="Eredivisie">🇳🇱 Eredivisie</option>
-        <option value="Liga Portugal">🇵🇹 Liga Portugal</option>
-        <option value="Brasileirão Série A">🇧🇷 Brasileirão Série A</option>
-        <option value="Brasileirão Série B">🇧🇷 Brasileirão Série B</option>
-        <option value="Copa do Brasil">🇧🇷 Copa do Brasil</option>
-        <option value="Libertadores">🏆 Libertadores</option>
-        <option value="Sul-Americana">🏆 Sul-Americana</option>
-        <option value="Eliminatórias Copa do Mundo">🌎 Eliminatórias Copa do Mundo</option>
-        <option value="Eurocopa">🇪🇺 Eurocopa</option>
-        <option value="Copa América">🌎 Copa América</option>
-        <option value="Copa Africana de Nações">🌍 Copa Africana de Nações</option>
-        <option value="AFC Asian Cup">🌏 AFC Asian Cup</option>
-        <option value="MLS">🇺🇸 MLS</option>
-        <option value="Saudi Pro League">🇸🇦 Saudi Pro League</option>
-        <option value="Amistosos de Seleções">🤝 Amistosos de Seleções</option>
-        <option value="Amistosos de Clubes">🤝 Amistosos de Clubes</option>
+        <option value="Copa do Mundo 2026" selected>🌍 Copa do Mundo 2026</option>
         <option value="Outros Campeonatos">📌 Outros Campeonatos</option>
       </select>
     </div>
@@ -1143,7 +1117,22 @@ function criarJogo() {
     };
     S.games.push(game);
     S.currentGame = game;
+    S.currentCluster = []; // limpa cluster do jogo anterior
+    S.csOdds = {};
+    S.csOddsLiq = {};
     saveGames();
+    // Limpar lado direito completamente
+    const out = document.getElementById('resultado-out');
+    if(out) out.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--txt2);"><div style="font-size:32px;margin-bottom:16px;">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:14px;letter-spacing:2px;">AGUARDANDO ANÁLISE</div><div style="font-size:12px;margin-top:12px;opacity:.6;">Cole a análise do jogo e clique ANALISAR</div></div>';
+    const resCard = document.getElementById('resultado-card');
+    if(resCard) { resCard.innerHTML = ''; }
+    // Limpar campos de texto
+    const anTexto = document.getElementById('an-texto');
+    if(anTexto) anTexto.value = '';
+    const csPaste = document.getElementById('cs-paste');
+    if(csPaste) csPaste.value = '';
+    const csStatus = document.getElementById('cs-status');
+    if(csStatus) csStatus.textContent = '';
     // Sync live display
     const lt=document.getElementById('l-teams');
     if(lt) lt.textContent=S.currentGame.name;
