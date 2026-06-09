@@ -5085,9 +5085,13 @@ function renderPerf() {
     // Valor final em destaque
     var lastCoord=coords[coords.length-1];
     var lastVal=lastCoord.v;
-    var lastLabel=(lastVal>=0?'+':'')+'R$ '+Math.abs(lastVal).toFixed(2);
-    var valTag='<rect x="'+(lastCoord.x-30).toFixed(1)+'" y="'+(lastCoord.y-22).toFixed(1)+'" width="60" height="16" rx="4" fill="rgba(0,201,110,0.15)" stroke="rgba(0,201,110,0.4)" stroke-width="1"/>'+
-      '<text x="'+lastCoord.x.toFixed(1)+'" y="'+(lastCoord.y-11).toFixed(1)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="#00c96e" font-weight="700">'+lastLabel+'</text>';
+    var lastLabel=(lastVal>=0?'+':'-')+'R$ '+Math.abs(lastVal).toFixed(2);
+    var lastTagColor=lastVal>=0?'rgba(0,201,110,0.15)':'rgba(255,68,68,0.15)';
+    var lastTagBorder=lastVal>=0?'rgba(0,201,110,0.4)':'rgba(255,68,68,0.4)';
+    var lastTextColor=lastVal>=0?'#00c96e':'#ff4444';
+    var tagW=80, tagX=(lastCoord.x-tagW/2).toFixed(1);
+    var valTag='<rect x="'+tagX+'" y="'+(lastCoord.y-24).toFixed(1)+'" width="'+tagW+'" height="16" rx="4" fill="'+lastTagColor+'" stroke="'+lastTagBorder+'" stroke-width="1"/>'+
+      '<text x="'+lastCoord.x.toFixed(1)+'" y="'+(lastCoord.y-13).toFixed(1)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="'+lastTextColor+'" font-weight="700">'+lastLabel+'</text>';
 
     var gc=saldoTotal>=0?'#00c96e':'#ff4444';
     var gid='pg'+Date.now();
