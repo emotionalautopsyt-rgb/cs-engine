@@ -783,6 +783,7 @@ input:focus,select:focus,textarea:focus{
 <div class="tabs">
   <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
   <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
+  <button class="tab" onclick="showTab('copa',this)" id="tab-copa" style="color:#ffd700;border-bottom-color:transparent;">🌍 Copa 2026</button>
   <button class="tab" onclick="showTab('hist',this)" id="tab-hist">📅 Histórico</button>
 </div>
 
@@ -1004,6 +1005,61 @@ e garantir que o DNA seja lido corretamente."></textarea>
   </div>
 </div>
 
+<!-- ===== COPA DO MUNDO 2026 ===== -->
+<div class="panel" id="panel-copa">
+  <div id="copa-dashboard">
+
+    <!-- CABEÇALHO -->
+    <div style="text-align:center;padding:20px 0 14px;border-bottom:1px solid rgba(255,215,0,.2);margin-bottom:18px;">
+      <div style="font-size:32px;margin-bottom:6px;">🌍</div>
+      <div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;letter-spacing:3px;color:#ffd700;">COPA DO MUNDO 2026</div>
+      <div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);margin-top:4px;letter-spacing:1px;">ACOMPANHAMENTO AO VIVO — GÊNIO DOS PLACARES</div>
+    </div>
+
+    <!-- CONTADOR PRINCIPAL -->
+    <div id="copa-counter" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;"></div>
+
+    <!-- SPLIT APROVADOS -->
+    <div id="copa-split" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"></div>
+
+    <!-- GRÁFICO COPA -->
+    <div class="card" style="margin-bottom:14px;padding:18px;border-color:rgba(255,215,0,.2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="card-title" style="margin:0;color:#ffd700;">📈 Evolução da Banca — Copa 2026</div>
+      </div>
+      <div id="copa-chart" style="min-height:220px;"></div>
+    </div>
+
+    <!-- MAPA DE ACERTOS -->
+    <div class="card" style="margin-bottom:14px;padding:18px;border-color:rgba(255,215,0,.2);">
+      <div class="card-title" style="color:#ffd700;margin-bottom:12px;">🗺️ Mapa de Acertos — Placar no Cluster?</div>
+      <div id="copa-mapa" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <div style="display:flex;gap:16px;margin-top:10px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">
+        <span>🟩 Placar do Gênio</span>
+        <span>🟥 Fora do Gênio</span>
+        <span>🟨 Neutro</span>
+        <span>⬜ Sem placar final</span>
+      </div>
+    </div>
+
+    <!-- POR FASE -->
+    <div class="card" style="margin-bottom:14px;padding:18px;border-color:rgba(255,215,0,.2);">
+      <div class="card-title" style="color:#ffd700;margin-bottom:12px;">🏆 Desempenho por Fase</div>
+      <div id="copa-fases"></div>
+    </div>
+
+    <!-- MELHOR JOGO -->
+    <div id="copa-best" style="margin-bottom:14px;"></div>
+
+    <!-- ÚLTIMAS OPERAÇÕES COPA -->
+    <div class="card" style="border-color:rgba(255,215,0,.2);">
+      <div class="card-title" style="color:#ffd700;margin-bottom:12px;">⚽ Operações da Copa</div>
+      <div id="copa-ops"></div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ===== HISTÓRICO ===== -->
 <div class="panel" id="panel-hist">
   <div class="card" style="border-color:rgba(0,212,255,.25);box-shadow:0 0 22px rgba(0,212,255,.05);">
@@ -1211,6 +1267,7 @@ function showTab(t, el) {
     if(el) el.classList.add('act');
     if(t === 'perf') renderPerf();
     if(t === 'hist') renderHistPanel();
+    if(t === 'copa') renderCopa();
   } catch(e) {}
 }
 
@@ -4555,7 +4612,7 @@ function analisarLive() {
     }
   } else if(narr==='morta') {
     cor='ab-r'; risco='ALTO';
-    acao='🔴 NARRATIVA MORTA\n→ Sair agora.\n→ Break even ou red pequeno = decisão certa.\n→ Não esperar milagre.';
+    acao='🔴 NARRATIVA MORTA\n→ Sair agora.\n→ Neutro ou red pequeno = decisão certa.\n→ Não esperar milagre.';
   } else if(gc===0&&gf===0&&m>=45) {
     cor='ab-y';
     const ordLP=odd>0?parseFloat((odd*0.75).toFixed(1)):0;
@@ -5178,6 +5235,236 @@ function renderPerf() {
           '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+x.arr.length+' j</div>'+
           '<div style="font-family:Space Mono,monospace;font-size:8px;color:'+(parseFloat(x.r)>=0?'var(--grn)':'var(--red)')+';">ROI '+(parseFloat(x.r)>=0?'+':'')+x.r+'%</div>'+
           '<div style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:900;color:'+(x.s>=0?'var(--grn)':'var(--red)')+';">'+(x.s>=0?'+':'')+'R$ '+x.s.toFixed(2)+'</div>'+
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+// ===== COPA DO MUNDO 2026 =====
+function renderCopa() {
+  var COPA = 'Copa do Mundo 2026';
+  var h = (S.hist || []).filter(function(r){
+    var c = (r.c || '').toLowerCase();
+    return c.includes('copa do mundo') || c.includes('world cup') || c.includes('copa 2026');
+  }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+
+  var fmt  = function(v){ return (v>=0?'+':'-')+'R$ '+Math.abs(Number(v||0)).toFixed(2); };
+  var clr  = function(v){ return Number(v)>=0?'var(--grn)':'var(--red)'; };
+
+  var calcSaldo = function(arr){ return arr.reduce(function(a,r){ return a+Number(r.v||0); },0); };
+  var calcWins  = function(arr){ return arr.filter(function(r){ return Number(r.v||0)>0; }).length; };
+  var calcValid = function(arr){ return arr.filter(function(r){ return r.r!=='void'; }).length; };
+  var calcWR    = function(arr){ var v=calcValid(arr); return v?Math.round(calcWins(arr)/v*100):0; };
+  var calcROI   = function(arr){
+    var s=calcSaldo(arr), sk=arr.reduce(function(a,r){return a+Number(r.s||0);},0);
+    return sk?((s/sk)*100).toFixed(1):'0.0';
+  };
+
+  var saldo = calcSaldo(h);
+  var wr    = calcWR(h);
+  var roi   = calcROI(h);
+  var total = calcValid(h);
+  var wins  = calcWins(h);
+
+  var aprov = h.filter(function(r){ return r.status==='aprovado'; });
+  var naoAp = h.filter(function(r){ return r.status==='nao_aprovado'; });
+
+  // ── CONTADOR PRINCIPAL ──
+  var counterEl = document.getElementById('copa-counter');
+  if(counterEl) {
+    var cc = function(icon,label,val,sub,cor){
+      return '<div class="card" style="margin:0;text-align:center;padding:14px 8px;background:linear-gradient(145deg,#0c1410,#0f1e14);border-color:rgba(255,215,0,.2);">'+
+        '<div style="font-size:20px;margin-bottom:2px;">'+icon+'</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:6px;color:#ffd700;letter-spacing:1.5px;margin-bottom:5px;">'+label+'</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:26px;font-weight:900;color:'+cor+';">'+val+'</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-top:3px;">'+sub+'</div>'+
+      '</div>';
+    };
+    counterEl.innerHTML =
+      cc('💰','SALDO COPA',fmt(saldo),total+' operações',clr(saldo))+
+      cc('📊','ROI COPA',(parseFloat(roi)>=0?'+':'')+roi+'%','retorno sobre capital',parseFloat(roi)>=0?'var(--grn)':'var(--red)')+
+      cc('🎯','WINRATE',wr+'%',wins+'W / '+(total-wins)+'L',wr>=55?'var(--grn)':wr>=45?'var(--ylw)':'var(--red)')+
+      cc('⚽','JOGOS',total,'Copa do Mundo 2026','var(--acc)');
+  }
+
+  // ── SPLIT APROVADOS ──
+  var splitEl = document.getElementById('copa-split');
+  if(splitEl) {
+    var sc = function(icon,label,arr,bColor){
+      var s=calcSaldo(arr),r=calcROI(arr),w=calcWR(arr);
+      return '<div class="card" style="margin:0;padding:14px;background:linear-gradient(145deg,#0c1410,#0f1e14);border-color:'+bColor+';border-width:1.5px;">'+
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'+
+          '<span style="font-size:16px;">'+icon+'</span>'+
+          '<span style="font-family:Space Mono,monospace;font-size:8px;color:#ffd700;letter-spacing:1px;">'+label+'</span>'+
+          '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-left:auto;">'+arr.length+' jogos</span>'+
+        '</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:900;color:'+clr(s)+';">'+fmt(s)+'</div>'+
+        '<div style="display:flex;gap:10px;margin-top:6px;">'+
+          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">ROI <b style="color:'+(parseFloat(r)>=0?'var(--grn)':'var(--red)')+';">'+(parseFloat(r)>=0?'+':'')+r+'%</b></span>'+
+          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">WR <b style="color:'+(w>=55?'var(--grn)':w>=45?'var(--ylw)':'var(--red)')+';">'+w+'%</b></span>'+
+        '</div>'+
+      '</div>';
+    };
+    splitEl.innerHTML =
+      sc('🟢','APROVADOS PELO GÊNIO',aprov,'rgba(0,255,136,.3)')+
+      sc('🔴','NÃO APROVADOS PELO GÊNIO',naoAp,'rgba(255,68,68,.3)');
+  }
+
+  // ── GRÁFICO COPA ──
+  (function(){
+    var chart = document.getElementById('copa-chart');
+    if(!chart) return;
+    if(!h.length){
+      chart.innerHTML='<div style="height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#070d16;border-radius:12px;">'+
+        '<div style="font-size:32px;">🌍</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:14px;color:#ffd700;letter-spacing:2px;">AGUARDANDO JOGOS DA COPA</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);">Registre resultados marcados como Copa do Mundo 2026</div>'+
+      '</div>';
+      return;
+    }
+    var cum=0;
+    var pts=h.map(function(r,i){
+      cum+=Number(r.v||0);
+      return{i:i,v:cum,d:r.d||'',status:r.status||'historico'};
+    });
+    var vals=pts.map(function(p){return p.v;});
+    var minV=Math.min(0,Math.min.apply(null,vals));
+    var maxV=Math.max(0,Math.max.apply(null,vals));
+    var rng=Math.max(1,maxV-minV);
+    var W=560,H=220,pL=52,pR=16,pT=20,pB=36;
+    var cW=W-pL-pR,cH=H-pT-pB;
+    var coords=pts.map(function(p,i){
+      var x=pL+(pts.length===1?cW/2:(i/(pts.length-1))*cW);
+      var y=pT+cH-((p.v-minV)/rng)*cH;
+      return{x:x.toFixed(1),y:y.toFixed(1),v:p.v,d:p.d,status:p.status};
+    });
+    var zY=(pT+cH-((0-minV)/rng)*cH).toFixed(1);
+    var lPath=coords.map(function(c,i){return(i===0?'M':'L')+c.x+' '+c.y;}).join(' ');
+    var aPath=lPath+' L'+coords[coords.length-1].x+' '+zY+' L'+coords[0].x+' '+zY+' Z';
+    var grid='';
+    for(var g=0;g<=4;g++){
+      var gy=(pT+(g/4)*cH).toFixed(1);
+      var gv=maxV-(g/4)*rng;
+      grid+='<line x1="'+pL+'" y1="'+gy+'" x2="'+(W-pR)+'" y2="'+gy+'" stroke="rgba(255,215,0,0.1)" stroke-width="1" stroke-dasharray="4,3"/>';
+      grid+='<text x="'+(pL-5)+'" y="'+(parseFloat(gy)+3)+'" text-anchor="end" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.4)">'+(gv>=0?'+':'')+'R$'+Math.abs(gv).toFixed(0)+'</text>';
+    }
+    var gc=saldo>=0?'#00c96e':'#ff4444';
+    var gid='cpg'+Date.now();
+    chart.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:220px;background:#070d16;border-radius:12px;">'+
+      '<defs>'+
+        '<linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
+          '<stop offset="0%" stop-color="'+gc+'" stop-opacity="0.35"/>'+
+          '<stop offset="100%" stop-color="'+gc+'" stop-opacity="0.0"/>'+
+        '</linearGradient>'+
+        '<filter id="cg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'+
+      '</defs>'+
+      grid+
+      '<path d="'+aPath+'" fill="url(#'+gid+')" />'+
+      '<path d="'+lPath+'" fill="none" stroke="'+gc+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#cg)" />'+
+      coords.map(function(c,i){
+        var r=i===coords.length-1?5:3;
+        return '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+r+'" fill="#ffffff" stroke="'+gc+'" stroke-width="1.5"'+(i===coords.length-1?' filter="url(#cg)"':'')+'/>';
+      }).join('')+
+      coords.filter(function(_,i){return i===0||i===coords.length-1;}).map(function(c){
+        return '<text x="'+c.x+'" y="'+(H-8)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.5)">'+c.d.slice(5)+'</text>';
+      }).join('')+
+    '</svg>';
+  })();
+
+  // ── MAPA DE ACERTOS ──
+  var mapaEl = document.getElementById('copa-mapa');
+  if(mapaEl){
+    if(!h.length){
+      mapaEl.innerHTML='<div style="color:var(--txt3);font-size:10px;font-family:Space Mono,monospace;">Nenhum jogo da Copa registrado ainda</div>';
+    } else {
+      mapaEl.innerHTML=h.map(function(r){
+        var v=Number(r.v||0);
+        var sc=r.sc||'';
+        var cluster=r.cluster&&r.cluster.length?r.cluster.map(function(c){return c.score||c;}):[]; 
+        var noCluster=sc&&cluster.length>0&&cluster.indexOf(sc)>=0;
+        var emoji=v>10?'🟩':v<-10?'🟥':v===0&&sc?'🟨':'⬜';
+        if(sc&&cluster.length>0) emoji=noCluster?'🟩':'🟥';
+        var title=r.j+(sc?' — '+sc:'')+(v!==0?' ('+fmt(v)+')':'');
+        return '<div title="'+title+'" style="font-size:22px;cursor:default;">'+emoji+'</div>';
+      }).join('');
+    }
+  }
+
+  // ── POR FASE ──
+  var fasesEl = document.getElementById('copa-fases');
+  if(fasesEl){
+    var fases=['Grupos','Oitavas','Quartas','Semifinais','Final'];
+    var porFase={};
+    h.forEach(function(r){
+      var fase='Grupos';
+      var j=(r.j||'').toLowerCase();
+      if(j.includes('final')&&!j.includes('semi')&&!j.includes('quarta')) fase='Final';
+      else if(j.includes('semi')) fase='Semifinais';
+      else if(j.includes('quarta')||j.includes('quarter')) fase='Quartas';
+      else if(j.includes('oitava')||j.includes('round of 16')) fase='Oitavas';
+      if(!porFase[fase]) porFase[fase]=[];
+      porFase[fase].push(r);
+    });
+    var html='';
+    fases.forEach(function(f){
+      var arr=porFase[f]||[];
+      if(!arr.length) return;
+      var s=calcSaldo(arr), r=calcROI(arr), w=calcWR(arr);
+      html+='<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:10px 12px;background:#0a1520;border:1px solid rgba(255,215,0,.15);border-radius:9px;margin-bottom:7px;">'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:700;color:#ffd700;">'+f+'</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+arr.length+' jogos</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:8px;color:'+(parseFloat(r)>=0?'var(--grn)':'var(--red)')+';">ROI '+(parseFloat(r)>=0?'+':'')+r+'%</div>'+
+        '<div style="font-family:Barlow Condensed,sans-serif;font-size:15px;font-weight:900;color:'+(s>=0?'var(--grn)':'var(--red)')+';">'+fmt(s)+'</div>'+
+      '</div>';
+    });
+    fasesEl.innerHTML=html||'<div style="color:var(--txt3);font-size:10px;font-family:Space Mono,monospace;padding:10px;">Nenhum jogo registrado ainda</div>';
+  }
+
+  // ── MELHOR JOGO ──
+  var bestEl = document.getElementById('copa-best');
+  if(bestEl&&h.length){
+    var best=h.reduce(function(a,r){return Number(r.v||0)>Number(a.v||0)?r:a;},h[0]);
+    if(Number(best.v||0)>0){
+      bestEl.innerHTML='<div class="card" style="padding:14px;background:linear-gradient(135deg,rgba(0,201,110,.1),rgba(0,201,110,.03));border-color:rgba(0,201,110,.3);margin-bottom:14px;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--grn);letter-spacing:1px;margin-bottom:6px;">🏆 MELHOR OPERAÇÃO DA COPA</div>'+
+        '<div style="font-size:14px;font-weight:600;color:var(--txt);margin-bottom:4px;">'+best.j+'</div>'+
+        '<div style="display:flex;gap:12px;align-items:center;">'+
+          (best.sc?'<span style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);">⚽ '+best.sc+'</span>':'')+
+          '<span style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:var(--grn);">+R$ '+Number(best.v).toFixed(2)+'</span>'+
+        '</div>'+
+      '</div>';
+    } else { bestEl.innerHTML=''; }
+  }
+
+  // ── OPERAÇÕES DA COPA ──
+  var opsEl = document.getElementById('copa-ops');
+  if(opsEl){
+    if(!h.length){
+      opsEl.innerHTML='<div style="text-align:center;padding:24px;color:var(--txt3);font-family:Space Mono,monospace;font-size:10px;">Registre resultados marcados como Copa do Mundo 2026</div>';
+    } else {
+      var si={aprovado:{icon:'🟢',label:'APROVADO',color:'#00c96e',border:'rgba(0,201,110,.25)'},nao_aprovado:{icon:'🔴',label:'NÃO APROV.',color:'#ff4444',border:'rgba(255,68,68,.25)'},historico:{icon:'🟡',label:'HISTÓRICO',color:'#ffd700',border:'rgba(255,215,0,.2)'}};
+      opsEl.innerHTML=h.slice().reverse().map(function(r){
+        var v=Number(r.v||0);
+        var s=si[r.status||'historico']||si.historico;
+        var cluster=r.cluster&&r.cluster.length?r.cluster.slice(0,5).map(function(c){return c.score||c;}).join(' · '):'—';
+        return '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;padding:12px;background:#0a1520;border:1px solid '+s.border+';border-radius:10px;margin-bottom:7px;">'+
+          '<div>'+
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'+
+              '<span style="font-family:Space Mono,monospace;font-size:7px;background:'+s.border+';color:'+s.color+';padding:2px 6px;border-radius:4px;font-weight:700;">'+s.icon+' '+s.label+'</span>'+
+            '</div>'+
+            '<div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px;">'+r.j+'</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+
+              (r.sc?'⚽ '+r.sc+' · ':'')+
+              '🌿 '+cluster+
+              ((r.oddsFav||r.btts||r.over)?' · <span style="color:var(--acc);">Fav @'+(r.oddsFav||'—')+' BTTS @'+(r.btts||'—')+' Over @'+(r.over||'—')+'</span>':'')+
+              ' · 💰 R$ '+(r.s||0)+
+            '</div>'+
+          '</div>'+
+          '<div style="text-align:right;">'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:'+(v>=0?'var(--grn)':'var(--red)')+';">'+(v>=0?'+':'-')+'R$ '+Math.abs(v).toFixed(2)+'</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">'+r.d+'</div>'+
+          '</div>'+
         '</div>';
       }).join('');
     }
