@@ -560,6 +560,163 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="genio-performance-replace-css">
+#perf-view-geral{
+  display:block;
+}
+.genio-pro-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.genio-pro-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:2px;
+}
+.genio-pro-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:15px;
+  font-weight:900;
+  letter-spacing:2px;
+  color:var(--txt);
+}
+.genio-pro-sub{
+  font-family:Space Mono,monospace;
+  font-size:9px;
+  color:var(--txt2);
+  margin-top:5px;
+}
+.genio-pro-grid{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:12px;
+}
+@media(max-width:1300px){.genio-pro-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:720px){.genio-pro-grid{grid-template-columns:1fr;}}
+.genio-pro-card{
+  background:linear-gradient(180deg,#111927,#08111b);
+  border:1px solid rgba(0,212,255,.14);
+  border-radius:16px;
+  padding:17px 15px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+  min-height:108px;
+}
+.genio-pro-label{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+.genio-pro-value{
+  font-family:Barlow Condensed,Inter,Arial,sans-serif;
+  font-size:32px;
+  font-weight:900;
+  line-height:1;
+  letter-spacing:.5px;
+}
+.genio-pro-small{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  margin-top:8px;
+}
+.genio-pro-main{
+  display:grid;
+  grid-template-columns:1.45fr .85fr;
+  gap:14px;
+}
+@media(max-width:1100px){.genio-pro-main{grid-template-columns:1fr;}}
+.genio-pro-panel{
+  background:linear-gradient(180deg,#0d1622,#08111b);
+  border:1px solid rgba(0,212,255,.14);
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 8px 24px rgba(0,0,0,.23);
+}
+.genio-pro-panel-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:1.7px;
+  color:var(--acc);
+  margin-bottom:12px;
+  text-transform:uppercase;
+}
+#genio-pro-canvas{
+  width:100%;
+  height:310px;
+  display:block;
+  background:linear-gradient(180deg,rgba(0,201,110,.09),rgba(0,0,0,0));
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.04);
+}
+.genio-status-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.genio-status-card{
+  background:#08131d;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;
+  padding:13px;
+}
+.genio-status-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:1.3px;
+  margin-bottom:8px;
+}
+.genio-status-num{
+  font-family:Barlow Condensed,Inter,Arial,sans-serif;
+  font-size:26px;
+  font-weight:900;
+}
+.genio-history-row{
+  background:#08131d;
+  border:1px solid rgba(0,212,255,.11);
+  border-radius:13px;
+  padding:12px;
+  margin-bottom:8px;
+  display:grid;
+  grid-template-columns:1.4fr .8fr .7fr;
+  gap:10px;
+  align-items:center;
+}
+@media(max-width:850px){.genio-history-row{grid-template-columns:1fr;}}
+.genio-history-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:12px;
+  font-weight:900;
+  color:var(--txt);
+}
+.genio-history-meta{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  margin-top:5px;
+  line-height:1.5;
+}
+.genio-badge-ok,.genio-badge-no{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.8px;
+}
+.genio-badge-ok{color:var(--grn);background:rgba(0,201,110,.10);border:1px solid rgba(0,201,110,.32);}
+.genio-badge-no{color:var(--red);background:rgba(255,77,106,.10);border:1px solid rgba(255,77,106,.32);}
+</style>
+
 </head>
 <body>
 
@@ -6397,6 +6554,224 @@ setTimeout(()=>{
     window.renderGenioPremiumDashboard();
   }
 },1000);
+
+})();
+</script>
+
+
+<script id="genio-performance-replace-script">
+(function(){
+
+function gpMoney(v){
+  const n = Number(v||0);
+  return (n>=0?'+':'') + 'R$ ' + n.toFixed(2);
+}
+function gpPct(v){
+  return (isFinite(v)?Number(v).toFixed(1):'0.0') + '%';
+}
+function gpStats(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const total = rows.length;
+  const lucro = rows.reduce((a,r)=>a+(Number(r.v)||0),0);
+  const stake = rows.reduce((a,r)=>a+(Number(r.s)||0),0);
+  const wins = rows.filter(r=>(Number(r.v)||0)>0).length;
+  const reds = rows.filter(r=>(Number(r.v)||0)<0).length;
+  const roi = stake ? lucro/stake*100 : 0;
+  const wr = total ? wins/total*100 : 0;
+  const gw = rows.filter(r=>(Number(r.v)||0)>0).reduce((a,r)=>a+(Number(r.v)||0),0);
+  const gl = Math.abs(rows.filter(r=>(Number(r.v)||0)<0).reduce((a,r)=>a+(Number(r.v)||0),0));
+  const pf = gl ? gw/gl : (gw>0?gw:0);
+  return {total,lucro,stake,wins,reds,roi,wr,pf};
+}
+function gpStatus(r){
+  if(r.genioStatus === 'aprovado' || r.genioApproved === true) return 'ok';
+  if(r.genioStatus === 'nao_aprovado') return 'no';
+  return 'no';
+}
+function drawGenioChart(){
+  const canvas = document.getElementById('genio-pro-canvas');
+  if(!canvas || !window.S) return;
+  const rows = (S.hist||[]).slice().sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(300, rect.width*dpr);
+  canvas.height = Math.max(220, rect.height*dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0,0,w,h);
+
+  let bal = 0;
+  const pts = rows.map((r,i)=>{ bal += Number(r.v)||0; return {i,y:bal,st:gpStatus(r),v:Number(r.v)||0}; });
+  if(!pts.length){
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.font = '12px Space Mono, monospace';
+    ctx.fillText('Sem operações finalizadas ainda.', 22, 38);
+    return;
+  }
+  const maxY = Math.max(...pts.map(p=>p.y),0);
+  const minY = Math.min(...pts.map(p=>p.y),0);
+  const range = maxY-minY || 1;
+  const pad = 24;
+
+  ctx.strokeStyle = 'rgba(255,255,255,.06)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<6;i++){
+    const y = pad + ((h-pad*2)/5)*i;
+    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke();
+  }
+
+  function xy(p){
+    const x = pts.length===1 ? pad : pad + (p.i/(pts.length-1))*(w-pad*2);
+    const y = h-pad - ((p.y-minY)/range)*(h-pad*2);
+    return {x,y};
+  }
+
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,201,110,.22)');
+  grad.addColorStop(1,'rgba(0,201,110,0)');
+
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    const q=xy(p);
+    if(i===0) ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+  });
+  const last=xy(pts[pts.length-1]);
+  const first=xy(pts[0]);
+  ctx.lineTo(last.x,h-pad);
+  ctx.lineTo(first.x,h-pad);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    const q=xy(p);
+    if(i===0) ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+  });
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  pts.forEach(p=>{
+    const q=xy(p);
+    ctx.beginPath();
+    ctx.fillStyle = p.st==='ok' ? '#00c96e' : '#ff4d6a';
+    ctx.arc(q.x,q.y,4,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.font = '10px Space Mono, monospace';
+  ctx.fillText('Saldo atual: '+gpMoney(pts[pts.length-1].y), pad, h-7);
+}
+
+window.renderPerf = function(){
+  try{
+    const hist = Array.isArray(S.hist) ? S.hist.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)) : [];
+    const all = gpStats(hist);
+    const aprov = gpStats(hist.filter(r=>gpStatus(r)==='ok'));
+    const nao = gpStats(hist.filter(r=>gpStatus(r)==='no'));
+
+    const target = document.getElementById('perf-view-geral');
+    if(!target) return;
+
+    const recent = hist.slice(0,8).map(r=>{
+      const st = gpStatus(r);
+      const badge = st==='ok'
+        ? '<span class="genio-badge-ok">🟢 APROVADO</span>'
+        : '<span class="genio-badge-no">🔴 NÃO APROVADO</span>';
+      const odds = r.oddsMercado || {};
+      const cluster = Array.isArray(r.cluster) && r.cluster.length ? r.cluster.map(s=>s.score).join(' / ') : '';
+      const val = Number(r.v)||0;
+      return `
+        <div class="genio-history-row">
+          <div>
+            <div class="genio-history-title">${r.j || 'Jogo sem nome'}</div>
+            <div class="genio-history-meta">${r.c || 'Sem competição'} • ${r.sc ? 'Placar: '+r.sc : 'Placar não informado'}</div>
+            ${cluster ? `<div class="genio-history-meta">Árvore: ${cluster}</div>` : ''}
+          </div>
+          <div>
+            ${badge}
+            <div class="genio-history-meta">Fav ${odds.fav?('@'+odds.fav):'--'} • BTTS ${odds.btts?('@'+odds.btts):'--'} • Over ${odds.over?('@'+odds.over):'--'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:Barlow Condensed,Inter,sans-serif;font-size:22px;font-weight:900;color:${val>=0?'var(--grn)':'var(--red)'};">${gpMoney(val)}</div>
+            <div class="genio-history-meta">Stake R$ ${Number(r.s||0).toFixed(2)}</div>
+          </div>
+        </div>`;
+    }).join('') || '<div class="genio-history-meta" style="padding:16px;">Nenhum jogo finalizado ainda.</div>';
+
+    target.innerHTML = `
+      <div class="genio-pro-wrap">
+        <div class="genio-pro-header">
+          <div>
+            <div class="genio-pro-title">📈 PERFORMANCE DO GÊNIO</div>
+            <div class="genio-pro-sub">Dashboard operacional com ROI, evolução, aprovados e não aprovados.</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-gh btn-sm" onclick="showPerfView('geral')" style="border-color:var(--acc);color:var(--acc);">GERAL</button>
+            <button class="btn btn-gh btn-sm" onclick="showPerfView('camps')">CAMPEONATOS</button>
+            <button class="btn btn-gh btn-sm" onclick="exportCSV()">CSV</button>
+          </div>
+        </div>
+
+        <div class="genio-pro-grid">
+          <div class="genio-pro-card"><div class="genio-pro-label">💰 Lucro Líquido</div><div class="genio-pro-value" style="color:${all.lucro>=0?'var(--grn)':'var(--red)'};">${gpMoney(all.lucro)}</div><div class="genio-pro-small">${all.total} operação(ões)</div></div>
+          <div class="genio-pro-card"><div class="genio-pro-label">📈 ROI</div><div class="genio-pro-value" style="color:${all.roi>=0?'var(--grn)':'var(--red)'};">${gpPct(all.roi)}</div><div class="genio-pro-small">Stake total R$ ${all.stake.toFixed(2)}</div></div>
+          <div class="genio-pro-card"><div class="genio-pro-label">🎯 Winrate</div><div class="genio-pro-value" style="color:var(--ylw);">${gpPct(all.wr)}</div><div class="genio-pro-small">${all.wins}W / ${all.reds}R</div></div>
+          <div class="genio-pro-card"><div class="genio-pro-label">🟢 Aprovados</div><div class="genio-pro-value" style="color:var(--grn);">${aprov.total}</div><div class="genio-pro-small">ROI ${gpPct(aprov.roi)} • ${gpMoney(aprov.lucro)}</div></div>
+          <div class="genio-pro-card"><div class="genio-pro-label">🔴 Não Aprovados</div><div class="genio-pro-value" style="color:var(--red);">${nao.total}</div><div class="genio-pro-small">ROI ${gpPct(nao.roi)} • ${gpMoney(nao.lucro)}</div></div>
+          <div class="genio-pro-card"><div class="genio-pro-label">⚖️ Profit Factor</div><div class="genio-pro-value" style="color:var(--acc);">${all.pf.toFixed(2)}</div><div class="genio-pro-small">Relação lucro/perda bruta</div></div>
+        </div>
+
+        <div class="genio-pro-main">
+          <div class="genio-pro-panel">
+            <div class="genio-pro-panel-title">📊 Evolução da Banca</div>
+            <canvas id="genio-pro-canvas"></canvas>
+          </div>
+          <div class="genio-pro-panel">
+            <div class="genio-pro-panel-title">🧠 Leitura por Status</div>
+            <div class="genio-status-grid">
+              <div class="genio-status-card">
+                <div class="genio-status-title" style="color:var(--grn);">🟢 APROVADOS</div>
+                <div class="genio-status-num" style="color:var(--grn);">${gpMoney(aprov.lucro)}</div>
+                <div class="genio-history-meta">ROI ${gpPct(aprov.roi)} • WR ${gpPct(aprov.wr)} • ${aprov.total} jogos</div>
+              </div>
+              <div class="genio-status-card">
+                <div class="genio-status-title" style="color:var(--red);">🔴 NÃO APROVADOS</div>
+                <div class="genio-status-num" style="color:var(--red);">${gpMoney(nao.lucro)}</div>
+                <div class="genio-history-meta">ROI ${gpPct(nao.roi)} • WR ${gpPct(nao.wr)} • ${nao.total} jogos</div>
+              </div>
+            </div>
+            <div class="genio-history-meta" style="margin-top:14px;line-height:1.8;">
+              O resultado geral soma tudo. A separação mostra se o usuário está lucrando mais quando segue a aprovação do Gênio ou quando opera por conta própria.
+            </div>
+          </div>
+        </div>
+
+        <div class="genio-pro-panel">
+          <div class="genio-pro-panel-title">📋 Últimas Operações Finalizadas</div>
+          ${recent}
+        </div>
+      </div>
+    `;
+
+    drawGenioChart();
+    if(typeof updateHeader === 'function') updateHeader();
+  }catch(e){
+    console.error('renderPerf premium erro:', e);
+  }
+};
+
+setTimeout(function(){
+  if(document.getElementById('panel-perf') && document.getElementById('panel-perf').classList.contains('act')){
+    renderPerf();
+  }
+},700);
 
 })();
 </script>
