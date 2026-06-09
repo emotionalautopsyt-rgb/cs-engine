@@ -884,7 +884,9 @@ const S = {
   twoLegs: false,
   thinking: false,
   chatHistory: [],
-  csOdds: {}
+  csOdds: {},
+  csOddsLiq: {},
+  lastGenioApproval: null
 };
 function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
 function saveGames() {
@@ -966,7 +968,7 @@ function exportarDados() {
       exportedAt: new Date().toISOString(),
       games: S.games,
       performance: JSON.parse(localStorage.getItem('cs_perf') || '[]'),
-      historico: JSON.parse(localStorage.getItem('cs_hist') || '[]'),
+      historico: S.hist || JSON.parse(localStorage.getItem('cs_v6h') || '[]'),
     };
     // Incluir análises salvas por jogo
     var analises = {};
@@ -1567,6 +1569,7 @@ function selectSbGame(id) {
   // Full state reset
   S.currentCluster = [];
   S.csOdds = {};
+  S.csOddsLiq = {};
   S.chatHistory = [];
 
   // Clear UI
@@ -1638,6 +1641,98 @@ function applyStake(v) {
 }
 
 // ===== FILTRO DE ENTRADA =====
+
+// ===== APROVAÇÃO OPERACIONAL DO GÊNIO =====
+// Regra binária: o Gênio aprova ou não aprova.
+// O usuário ainda pode operar qualquer jogo, mas a performance registra o status.
+function avaliarAprovacaoGenio(ctx) {
+  ctx = ctx || {};
+  const fav = parseFloat(ctx.fav ?? document.getElementById('pk-fav')?.value) || 0;
+  const btts = parseFloat(ctx.btts ?? document.getElementById('pk-btts')?.value) || 0;
+  const over = parseFloat(ctx.over ?? document.getElementById('pk-over')?.value) || 0;
+  const texto = String(ctx.texto || ctx.text || document.getElementById('an-texto')?.value || '');
+  const reply = String(ctx.reply || '');
+  const fullText = (texto + '\n' + reply).toLowerCase();
+  const crossScore = typeof ctx.crossScore === 'number' ? ctx.crossScore : null;
+
+  const motivos = [];
+  const positivos = [];
+
+  const favOk = fav >= 1.25 && fav <= 2.35;
+  const bttsOk = btts >= 1.65 && btts <= 2.20;
+  const overOk = over >= 1.40 && over <= 2.20;
+  const rangeFails = [!favOk, !bttsOk, !overOk].filter(Boolean).length;
+
+  if(favOk) positivos.push('favorito dentro da zona operacional');
+  else motivos.push('odd do favorito fora da zona operacional');
+
+  if(bttsOk) positivos.push('BTTS dentro da zona operacional');
+  else motivos.push('BTTS fora da zona operacional');
+
+  if(overOk) positivos.push('Over 2.5 dentro da zona operacional');
+  else motivos.push('Over 2.5 fora da zona operacional');
+
+  const amistoso = /amistoso|friendly|club friendly|pre.?season|pré.?temporada|exibição|preparação/i.test(fullText);
+  const rotacao = /reserva|reservas|rotação|rodízio|poupar|poupando|escalação alternativa|time misto|sem titulares|desfalque pesado/i.test(fullText);
+  const semObjetivo = /sem objetivo|sem motivação|já classificado|ja classificado|eliminado|cumpre tabela|nada em jogo|amistoso sem pressão/i.test(fullText);
+  const baixaLiq = (S.csOddsLiq && Object.keys(S.csOddsLiq).length >= 3)
+    ? Object.values(S.csOddsLiq).filter(v => Number(v||0) > 0).length < 3
+    : false;
+  const csPouco = !S.csOdds || Object.keys(S.csOdds).filter(k => S.csOdds[k] > 0).length < 4;
+
+  if(amistoso) motivos.push('amistoso/pré-temporada aumenta variância e reduz previsibilidade');
+  if(rotacao) motivos.push('possível rotação/reservas/desfalques fortes');
+  if(semObjetivo) motivos.push('motivação competitiva fraca ou incerta');
+  if(baixaLiq) motivos.push('liquidez CS insuficiente para leitura forte do mercado');
+  if(csPouco) motivos.push('poucas odds CS válidas coladas');
+
+  if(crossScore !== null) {
+    if(crossScore >= 3.5) positivos.push('validação cruzada forte');
+    else motivos.push('validação cruzada abaixo do ideal');
+  }
+
+  // Regra final:
+  // Aprova quando o mercado está legível, odds estão majoritariamente no range,
+  // e não há contexto de alto ruído.
+  const hardBlock = amistoso || rotacao || semObjetivo || rangeFails >= 2 || csPouco;
+  const aprovado = !hardBlock && (rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
+
+  return {
+    aprovado,
+    status: aprovado ? 'aprovado' : 'nao_aprovado',
+    label: aprovado ? '🟢 GÊNIO APROVOU O JOGO' : '🔴 GÊNIO NÃO APROVA OPERAR ESTE JOGO',
+    resumo: aprovado
+      ? 'Mercado legível. Árvore liberada pelo Gênio para acompanhamento operacional.'
+      : 'Mercado sem edge claro para o padrão do Gênio. O usuário pode operar, mas a operação ficará registrada como NÃO APROVADA.',
+    motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
+    fav, btts, over
+  };
+}
+
+function renderGenioApprovalBox(ap) {
+  if(!ap) ap = avaliarAprovacaoGenio({});
+  const cor = ap.aprovado ? 'var(--grn)' : 'var(--red)';
+  const bg  = ap.aprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,77,106,.07)';
+  const itens = (ap.motivos || []).map(m => '<div style="margin-top:4px;">• '+m+'</div>').join('');
+  return '<div class="ab '+(ap.aprovado?'ab-g':'ab-r')+'" style="background:'+bg+';border-color:'+cor+';margin-bottom:10px;">'
+    + '<div class="ab-title" style="color:'+cor+';font-size:12px;letter-spacing:2px;">'+ap.label+'</div>'
+    + '<div class="ab-text">'+ap.resumo+(itens?'<br>'+itens:'')+'</div>'
+    + '</div>';
+}
+
+function updatePkStatusFromApproval() {
+  const el = document.getElementById('pk-status');
+  if(!el) return;
+  const fav = parseFloat(document.getElementById('pk-fav')?.value);
+  const btts = parseFloat(document.getElementById('pk-btts')?.value);
+  const over = parseFloat(document.getElementById('pk-over')?.value);
+  if(!fav || !btts || !over) return;
+  const ap = avaliarAprovacaoGenio({fav,btts,over});
+  S.lastGenioApproval = ap;
+  el.innerHTML = renderGenioApprovalBox(ap);
+}
+
+
 function checkPackball() {
   const fav = parseFloat(document.getElementById('pk-fav')?.value);
   const btts = parseFloat(document.getElementById('pk-btts')?.value);
@@ -1674,6 +1769,10 @@ function checkPackball() {
   } else {
     el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;">🚫 NÃO OPERAR — JOGO PERIGOSO</div><div class="ab-text">O Gênio não encontrou segurança suficiente para liberar este jogo.</div></div>`;
   }
+
+  // Comunicação final oficial: binário e profissional
+  updatePkStatusFromApproval();
+
 }
 
 // ===== BETFAIR PARSER =====
@@ -2234,7 +2333,7 @@ Escreve APENAS:
 → Linha Potencial tardio
 → Linha ⚠️ ALERTA
 → "✅ X/5 — Confiança [Alta/Média/Baixa]"
-→ "🏆 Copa detectada — stake -20%" SE Copa
+→ "🏆 Copa detectada — contexto sensível" SE Copa
 
 NÃO escreve NUNCA:
 → PASSO 0, PASSO 1, PASSO 2... etc.
@@ -2961,6 +3060,10 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     // Confiança BAIXA não bloqueia — só avisa. Trader decide.
     const isLowConf = false;
 
+    // Status operacional do Gênio — binário e salvo na operação
+    const genioApproval = avaliarAprovacaoGenio({fav:fav, btts:btts, over:over, texto:texto, reply:reply, crossScore:crossScore});
+    S.lastGenioApproval = genioApproval;
+
     // (isCopa and isEarlySeason defined above, before crossScore)
     const metaMatch = reply.match(/META\s*CS[:\s]+(\d+)%/i);
     const ofereceMatch = reply.match(/CLUSTER\s*OFERECE[:\s:]+[~]?\s*(\d+)/i);
@@ -3086,8 +3189,10 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         const ancScore = cluster.find(s => s.score === engineFinal.ancora);
         if(ancScore && ancScore.tipo !== 'caminho') ancScore.tipo = 'destino';
       }
-      // Aplicar refino premium para DNA/caos/ordenação
-      cluster = refinarArvorePremium(cluster, {fav:fav, over:over, btts:btts, text:texto, favEhVisitante:favEhVis});
+      // CLUSTER SOBERANO DEFINITIVO:
+      // depois do engineFinal validado, nenhum refino pode adicionar/remover/reordenar scores.
+      // Calcula apenas stake/lucro/odd pós-gol, preservando exatamente a árvore final.
+      calcStakes(cluster, stake, texto);
     } else {
       // Fallback: se engineFinal não disponível, usar extractCluster
       cluster = extractCluster(reply, stake);
@@ -3101,6 +3206,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
 
     // Copa/early season + validation cross-check banners
     let contextWarnings = '';
+    contextWarnings += renderGenioApprovalBox(genioApproval);
     // ALERTA DO GÊNIO — destaque máximo + placar projetado
     if(alertaText) contextWarnings +=
       '<div style="background:linear-gradient(135deg,rgba(255,199,64,.14),rgba(255,122,53,.10));border:1px solid rgba(255,199,64,.5);border-radius:14px;padding:18px 20px;margin-bottom:12px;position:relative;overflow:hidden;">'+
@@ -3133,7 +3239,7 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
     '</div>';
     if(cluster && cluster._premiumDNA) contextWarnings += `<div class="ab ab-b" style="border-color:rgba(0,212,255,.25);margin-bottom:8px;padding:8px 12px;"><div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--acc);">🧠 ${cluster._premiumDNA.perfil} — caos ${cluster._premiumDNA.chaos}/10 | controle ${cluster._premiumDNA.control}/10</div></div>`;
     if(isCopa) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
-      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — stake -20% aplicado.</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — contexto sensível. O Gênio registra o status operacional, mas não reduz stake automaticamente.</div>
     </div>`;
     if(isEarlySeason) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
       <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">⚠️ DADO LIMITADO — menos de 8 rodadas. Cluster conservador.</div>
@@ -3145,6 +3251,13 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
         S.currentGame.stake = stake;
         S.currentGame.csOdds = {...S.csOdds};
         S.currentGame.csOddsLiq = {...S.csOddsLiq}; // salvar liquidez por jogo
+        S.currentGame.genioApproval = genioApproval;
+        S.currentGame.genioStatus = genioApproval.status;
+        S.currentGame.genioApproved = !!genioApproval.aprovado;
+        S.currentGame.genioMotivos = genioApproval.motivos || [];
+        S.currentGame.savedPkFav = fav;
+        S.currentGame.savedPkBtts = btts;
+        S.currentGame.savedPkOver = over;
         // Save ancora from JSON for PLACAR PROJETADO highlight
         try { const jd = JSON.parse(jsonStr||'{}'); S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
@@ -4858,11 +4971,31 @@ function registrarResultado(g, num) {
       s: g.stake||S.stake,
       r: num>0?'lucro':num<0?'loss':'be',
       v: num,
-      sc: g.placar||''
+      sc: g.placar||'',
+      genioStatus: g.genioStatus || g.genioApproval?.status || 'nao_informado',
+      genioApproved: !!(g.genioApproved || g.genioApproval?.aprovado),
+      genioMotivos: g.genioMotivos || g.genioApproval?.motivos || [],
+      oddsMercado: {
+        fav: g.savedPkFav || '',
+        btts: g.savedPkBtts || '',
+        over: g.savedPkOver || ''
+      },
+      cluster: Array.isArray(g.cluster) ? g.cluster.map(function(s){ return {score:s.score, odd:s.odd, tipo:s.tipo}; }) : [],
+      ancora: g.lastAncora || ''
     });
   } else {
     jaExiste.v = num;
     jaExiste.r = num>0?'lucro':num<0?'loss':'be';
+    jaExiste.genioStatus = g.genioStatus || g.genioApproval?.status || jaExiste.genioStatus || 'nao_informado';
+    jaExiste.genioApproved = !!(g.genioApproved || g.genioApproval?.aprovado || jaExiste.genioApproved);
+    jaExiste.genioMotivos = g.genioMotivos || g.genioApproval?.motivos || jaExiste.genioMotivos || [];
+    jaExiste.oddsMercado = {
+      fav: g.savedPkFav || jaExiste.oddsMercado?.fav || '',
+      btts: g.savedPkBtts || jaExiste.oddsMercado?.btts || '',
+      over: g.savedPkOver || jaExiste.oddsMercado?.over || ''
+    };
+    jaExiste.cluster = Array.isArray(g.cluster) ? g.cluster.map(function(s){ return {score:s.score, odd:s.odd, tipo:s.tipo}; }) : (jaExiste.cluster || []);
+    jaExiste.ancora = g.lastAncora || jaExiste.ancora || '';
   }
   // Depois de finalizado, sai do menu lateral e fica somente no histórico/performance
   S.games = S.games.filter(function(x){ return String(x.id) !== String(g.id); });
@@ -5910,6 +6043,135 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       return reply;
     }
   };
+
+})();
+</script>
+
+
+<script>
+/* =========================================================
+   PATCH ELITE — Performance por Aprovação do Gênio
+   Mostra ROI total, ROI dos aprovados e ROI dos não aprovados.
+   Não altera motor nem árvore.
+   ========================================================= */
+(function(){
+
+  function money(v){ return (v>=0?'+':'')+'R$ '+Number(v||0).toFixed(2); }
+  function pct(v){ return (isFinite(v)?v:0).toFixed(1)+'%'; }
+  function calcStats(rows){
+    rows = Array.isArray(rows) ? rows : [];
+    const n = rows.length;
+    const lucro = rows.reduce((a,r)=>a+(parseFloat(r.v)||0),0);
+    const stake = rows.reduce((a,r)=>a+(parseFloat(r.s)||0),0);
+    const wins = rows.filter(r=>(parseFloat(r.v)||0)>0).length;
+    const reds = rows.filter(r=>(parseFloat(r.v)||0)<0).length;
+    const wr = n ? wins/n*100 : 0;
+    const roi = stake ? lucro/stake*100 : 0;
+    const grossWin = rows.filter(r=>(parseFloat(r.v)||0)>0).reduce((a,r)=>a+(parseFloat(r.v)||0),0);
+    const grossLoss = Math.abs(rows.filter(r=>(parseFloat(r.v)||0)<0).reduce((a,r)=>a+(parseFloat(r.v)||0),0));
+    const pf = grossLoss ? grossWin/grossLoss : (grossWin>0 ? grossWin : 0);
+    return {n,lucro,stake,wins,reds,wr,roi,pf};
+  }
+
+  function statusBadge(r){
+    const st = r.genioStatus || (r.genioApproved ? 'aprovado' : 'nao_informado');
+    if(st === 'aprovado') return '<span class="bdg bdg-g">🟢 APROVADO</span>';
+    if(st === 'nao_aprovado') return '<span class="bdg bdg-r">🔴 NÃO APROVADO</span>';
+    return '<span class="bdg bdg-y">SEM STATUS</span>';
+  }
+
+  window.renderGenioApprovalPerformance = function(){
+    try{
+      const base = document.getElementById('perf-view-geral');
+      if(!base || !window.S) return;
+
+      let box = document.getElementById('genio-approval-performance');
+      if(!box){
+        box = document.createElement('div');
+        box.id = 'genio-approval-performance';
+        const after = base.querySelector('.g4');
+        if(after && after.parentNode) after.parentNode.insertBefore(box, after.nextSibling);
+        else base.prepend(box);
+      }
+
+      const h = (S.hist || []).slice();
+      const aprov = h.filter(r => r.genioStatus === 'aprovado' || r.genioApproved === true);
+      const nao = h.filter(r => r.genioStatus === 'nao_aprovado');
+      const total = calcStats(h), a = calcStats(aprov), n = calcStats(nao);
+
+      function card(title, st, color, desc){
+        return '<div class="card" style="margin:0;border-color:'+color+'33;">'
+          + '<div style="font-family:Inter,Arial,sans-serif;font-size:10px;font-weight:900;letter-spacing:1.3px;color:'+color+';margin-bottom:7px;">'+title+'</div>'
+          + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;">'
+          + '<div><div style="font-size:20px;font-weight:900;color:'+color+';">'+money(st.lucro)+'</div><div style="font-size:8px;color:var(--txt2);">LUCRO</div></div>'
+          + '<div><div style="font-size:20px;font-weight:900;color:'+color+';">'+pct(st.roi)+'</div><div style="font-size:8px;color:var(--txt2);">ROI</div></div>'
+          + '<div><div style="font-size:20px;font-weight:900;color:var(--ylw);">'+pct(st.wr)+'</div><div style="font-size:8px;color:var(--txt2);">WINRATE</div></div>'
+          + '<div><div style="font-size:20px;font-weight:900;color:var(--txt);">'+st.n+'</div><div style="font-size:8px;color:var(--txt2);">JOGOS</div></div>'
+          + '</div>'
+          + '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt2);margin-top:8px;line-height:1.5;">'+desc+'</div>'
+          + '</div>';
+      }
+
+      box.innerHTML =
+        '<div class="g3" style="margin-bottom:14px;">'
+        + card('🧠 TOTAL OPERADO', total, 'var(--acc)', 'Todos os jogos registrados pelo usuário, aprovados ou não.')
+        + card('🟢 APROVADOS PELO GÊNIO', a, 'var(--grn)', 'Somente jogos onde o Gênio encontrou edge operacional claro.')
+        + card('🔴 NÃO APROVADOS', n, 'var(--red)', 'Jogos que o usuário decidiu operar mesmo sem aprovação do Gênio.')
+        + '</div>';
+    }catch(e){ console.warn('renderGenioApprovalPerformance', e); }
+  };
+
+  window.renderGenioHistoricoStatus = function(){
+    try{
+      const list = document.getElementById('hist-list');
+      if(!list || !window.S || !Array.isArray(S.hist)) return;
+      // Complementa o histórico recente com status caso a versão original não mostre.
+      const rows = list.querySelectorAll('.hist-row, #hist-list > div');
+      rows.forEach((el, idx)=>{
+        if(el.dataset.genioPatched) return;
+        const r = (S.hist || []).slice().sort((a,b)=>(b.ts||0)-(a.ts||0))[idx];
+        if(!r) return;
+        const div = document.createElement('div');
+        div.style.cssText = 'margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;';
+        const odds = r.oddsMercado || {};
+        const cluster = Array.isArray(r.cluster) && r.cluster.length ? r.cluster.map(s=>s.score).join(' / ') : '';
+        div.innerHTML = statusBadge(r)
+          + (odds.fav ? '<span class="bdg bdg-b">Fav @'+odds.fav+'</span>' : '')
+          + (odds.btts ? '<span class="bdg bdg-y">BTTS @'+odds.btts+'</span>' : '')
+          + (odds.over ? '<span class="bdg bdg-o">Over @'+odds.over+'</span>' : '')
+          + (cluster ? '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt2);width:100%;margin-top:3px;">Árvore: '+cluster+'</div>' : '');
+        el.appendChild(div);
+        el.dataset.genioPatched = '1';
+      });
+    }catch(e){ console.warn('renderGenioHistoricoStatus', e); }
+  };
+
+  function wrapRender(name, fn){
+    const old = window[name];
+    if(typeof old !== 'function' || old.__genioApprovalWrapped) return;
+    const wrapped = function(){
+      const r = old.apply(this, arguments);
+      setTimeout(fn, 80);
+      return r;
+    };
+    wrapped.__genioApprovalWrapped = true;
+    window[name] = wrapped;
+  }
+
+  setTimeout(function(){
+    wrapRender('renderPerf', function(){
+      renderGenioApprovalPerformance();
+      renderGenioHistoricoStatus();
+    });
+    wrapRender('renderHistPanel', function(){
+      renderGenioHistoricoStatus();
+    });
+    if(typeof renderPerf === 'function') {
+      renderPerf();
+      renderGenioApprovalPerformance();
+      renderGenioHistoricoStatus();
+    }
+  }, 800);
 
 })();
 </script>
