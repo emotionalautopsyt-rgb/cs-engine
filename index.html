@@ -1121,11 +1121,13 @@ function criarJogo() {
     S.csOdds = {};
     S.csOddsLiq = {};
     saveGames();
-    // Limpar lado direito completamente
+    // Limpar APENAS os cards do cluster e o resultado — manter tela de análise intacta
     const out = document.getElementById('resultado-out');
-    if(out) out.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--txt2);"><div style="font-size:32px;margin-bottom:16px;">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:14px;letter-spacing:2px;">AGUARDANDO ANÁLISE</div><div style="font-size:12px;margin-top:12px;opacity:.6;">Cole a análise do jogo e clique ANALISAR</div></div>';
-    const resCard = document.getElementById('resultado-card');
-    if(resCard) { resCard.innerHTML = ''; }
+    if(out) out.innerHTML = '';
+    const liveCards = document.getElementById('live-cluster-cards');
+    if(liveCards) liveCards.innerHTML = '';
+    const resBadge = document.getElementById('res-badge');
+    if(resBadge) resBadge.innerHTML = '';
     // Limpar campos de texto
     const anTexto = document.getElementById('an-texto');
     if(anTexto) anTexto.value = '';
