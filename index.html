@@ -1734,12 +1734,16 @@ function parseCS() {
         if(/^\d{1,2}-\d{1,2}$/.test(nx)) break;
         if(/^\d{1,2}x\d{1,2}$/i.test(nx)) break;
 
-        const mR = nx.match(/^(\d{1,3}(?:[.,]\d{1,2})?)R\$/);
+        // R$ antes ou depois do número, com ou sem espaço, com ou sem k
+        const mR = nx.match(/^R\$\s*([\d.,]+)[Kk]?$/) || nx.match(/^([\d.,]+)\s*R\$/);
         if(mR) {
-          const v = parseFloat(mR[1].replace(',','.'));
+          const raw = mR[1].replace(',','.');
+          const v = raw.includes('k')||raw.includes('K') ? parseFloat(raw)*1000 : parseFloat(raw);
           if(v>=1.01&&v<=500) withRS.push(v);
           continue;
         }
+        // Liquidez grande (ex: R$ 1.57k) — ignorar como odd
+        if(/R\$|[Kk]$/.test(nx)) { continue; }
 
         const mS = nx.match(/^(-?\d{1,3}(?:[.,]\d{1,2})?)$/);
         if(mS) {
@@ -3662,6 +3666,15 @@ function renderCluster(cluster, stake) {
     var smColor   = specialMarket ? specialMarket.color : cardCol.border;
     var smFontSz  = specialMarket ? '11px' : '24px';
     var smCovers  = specialMarket ? '<div style="font-size:7px;color:var(--txt3);margin-bottom:2px;">'+specialMarket.covers+'</div>' : '';
+    // Se odd do score não foi capturada, tentar buscar nos csOdds
+    if(!s.odd || s.odd <= 0) {
+      var fallbackOdd = S.csOdds && S.csOdds[s.score] ? S.csOdds[s.score] : 0;
+      if(fallbackOdd > 0) {
+        s.odd = fallbackOdd;
+        s.prob = calcProb(fallbackOdd);
+        s.oddPG = parseFloat((fallbackOdd * 0.5).toFixed(1));
+      }
+    }
     var oddDisplay = s.odd>0 ? s.odd : '?';
     var probW2    = Math.min(s.prob*1.8,100);
     var pgLine2   = s.oddPG>0 ? '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @'+s.oddPG+' pós-gol</div>' : '';
