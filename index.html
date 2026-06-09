@@ -7035,5 +7035,407 @@ window.addEventListener('resize', function(){
 })();
 </script>
 
+
+<style id="genio-performance-final-clean-css">
+#panel-perf > .card{
+  display:block!important;
+}
+#genio-final-performance-root{
+  width:100%;
+}
+.genio-final-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.genio-final-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+.genio-final-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:16px;
+  font-weight:900;
+  color:var(--txt);
+  letter-spacing:2px;
+}
+.genio-final-sub{
+  font-family:Space Mono,monospace;
+  font-size:9px;
+  color:var(--txt2);
+  margin-top:5px;
+}
+.genio-final-grid{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:12px;
+}
+@media(max-width:1300px){.genio-final-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:760px){.genio-final-grid{grid-template-columns:1fr;}}
+.genio-final-metric{
+  background:linear-gradient(180deg,#101a27,#07111b);
+  border:1px solid rgba(0,212,255,.16);
+  border-radius:16px;
+  padding:16px;
+  min-height:106px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+}
+.genio-final-label{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+.genio-final-value{
+  font-family:Barlow Condensed,Inter,Arial,sans-serif;
+  font-size:32px;
+  font-weight:900;
+  line-height:1;
+}
+.genio-final-small{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  margin-top:8px;
+}
+.genio-final-main{
+  display:grid;
+  grid-template-columns:1.55fr .85fr;
+  gap:14px;
+}
+@media(max-width:1100px){.genio-final-main{grid-template-columns:1fr;}}
+.genio-final-panel{
+  background:linear-gradient(180deg,#0d1622,#07111b);
+  border:1px solid rgba(0,212,255,.16);
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 8px 24px rgba(0,0,0,.23);
+}
+.genio-final-panel-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:1.7px;
+  color:var(--acc);
+  margin-bottom:12px;
+  text-transform:uppercase;
+}
+#genio-final-canvas{
+  width:100%;
+  height:320px;
+  display:block;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.05);
+  background:linear-gradient(180deg,rgba(0,201,110,.08),rgba(0,0,0,0));
+}
+.genio-final-status-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.genio-final-status-card{
+  background:#08131d;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;
+  padding:13px;
+}
+.genio-final-status-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:1.3px;
+  margin-bottom:8px;
+}
+.genio-final-status-num{
+  font-family:Barlow Condensed,Inter,Arial,sans-serif;
+  font-size:26px;
+  font-weight:900;
+}
+.genio-final-row{
+  background:#08131d;
+  border:1px solid rgba(0,212,255,.11);
+  border-radius:13px;
+  padding:12px;
+  margin-bottom:8px;
+  display:grid;
+  grid-template-columns:1.4fr .8fr .7fr;
+  gap:10px;
+  align-items:center;
+}
+@media(max-width:850px){.genio-final-row{grid-template-columns:1fr;}}
+.genio-final-row-title{
+  font-family:Inter,Arial,sans-serif;
+  font-size:12px;
+  font-weight:900;
+  color:var(--txt);
+}
+.genio-final-meta{
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  color:var(--txt2);
+  margin-top:5px;
+  line-height:1.5;
+}
+.genio-final-badge-ok,.genio-final-badge-no,.genio-final-badge-old{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-family:Space Mono,monospace;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.8px;
+}
+.genio-final-badge-ok{color:var(--grn);background:rgba(0,201,110,.10);border:1px solid rgba(0,201,110,.32);}
+.genio-final-badge-no{color:var(--red);background:rgba(255,77,106,.10);border:1px solid rgba(255,77,106,.32);}
+.genio-final-badge-old{color:var(--ylw);background:rgba(255,199,64,.10);border:1px solid rgba(255,199,64,.32);}
+</style>
+
+
+<script id="genio-performance-final-clean-script">
+(function(){
+
+function m(v){
+  const n = Number(v||0);
+  return (n>=0?'+':'') + 'R$ ' + n.toFixed(2);
+}
+function p(v){
+  return (isFinite(v)?Number(v).toFixed(1):'0.0') + '%';
+}
+function status(r){
+  if(r.genioStatus === 'aprovado' || r.genioApproved === true) return 'aprovado';
+  if(r.genioStatus === 'nao_aprovado') return 'nao_aprovado';
+  return 'sem_status';
+}
+function stats(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const total = rows.length;
+  const lucro = rows.reduce((a,r)=>a+(Number(r.v)||0),0);
+  const stake = rows.reduce((a,r)=>a+(Number(r.s)||0),0);
+  const wins = rows.filter(r=>(Number(r.v)||0)>0).length;
+  const reds = rows.filter(r=>(Number(r.v)||0)<0).length;
+  const roi = stake ? lucro/stake*100 : 0;
+  const wr = total ? wins/total*100 : 0;
+  const gw = rows.filter(r=>(Number(r.v)||0)>0).reduce((a,r)=>a+(Number(r.v)||0),0);
+  const gl = Math.abs(rows.filter(r=>(Number(r.v)||0)<0).reduce((a,r)=>a+(Number(r.v)||0),0));
+  const pf = gl ? gw/gl : (gw>0 ? gw : 0);
+  return {total,lucro,stake,wins,reds,roi,wr,pf};
+}
+function badge(r){
+  const s = status(r);
+  if(s === 'aprovado') return '<span class="genio-final-badge-ok">🟢 APROVADO</span>';
+  if(s === 'nao_aprovado') return '<span class="genio-final-badge-no">🔴 NÃO APROVADO</span>';
+  return '<span class="genio-final-badge-old">🟡 HISTÓRICO ANTIGO</span>';
+}
+function draw(){
+  const canvas = document.getElementById('genio-final-canvas');
+  if(!canvas || !window.S) return;
+
+  const rows = (S.hist || []).slice().sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const parent = canvas.parentElement;
+  const w = Math.max(760, (parent ? parent.clientWidth : 900) - 32);
+  const h = 320;
+  const dpr = 2;
+
+  canvas.style.height = h + 'px';
+  canvas.width = w*dpr;
+  canvas.height = h*dpr;
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  const bg = ctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'rgba(0,201,110,.08)');
+  bg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,w,h);
+
+  const pad = 30;
+
+  if(!rows.length){
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    ctx.font = '12px Space Mono, monospace';
+    ctx.fillText('Sem operações finalizadas ainda.', pad, 42);
+    return;
+  }
+
+  let bal = 0;
+  const pts = rows.map((r,i)=>{
+    bal += Number(r.v)||0;
+    return {i,y:bal,st:status(r),v:Number(r.v)||0};
+  });
+
+  const maxY = Math.max(...pts.map(x=>x.y),0);
+  const minY = Math.min(...pts.map(x=>x.y),0);
+  const range = (maxY-minY)||1;
+
+  function xy(pt){
+    const x = pts.length===1 ? pad : pad + (pt.i/(pts.length-1))*(w-pad*2);
+    const y = h-pad - ((pt.y-minY)/range)*(h-pad*2);
+    return {x,y};
+  }
+
+  ctx.strokeStyle='rgba(255,255,255,.07)';
+  ctx.lineWidth=1;
+  for(let i=0;i<6;i++){
+    const y=pad+i*((h-pad*2)/5);
+    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke();
+  }
+
+  const zeroY = h-pad - ((0-minY)/range)*(h-pad*2);
+  ctx.strokeStyle='rgba(255,255,255,.14)';
+  ctx.beginPath(); ctx.moveTo(pad,zeroY); ctx.lineTo(w-pad,zeroY); ctx.stroke();
+
+  const area = ctx.createLinearGradient(0,0,0,h);
+  area.addColorStop(0, bal>=0?'rgba(0,201,110,.28)':'rgba(255,77,106,.24)');
+  area.addColorStop(1,'rgba(0,0,0,0)');
+
+  ctx.beginPath();
+  pts.forEach((pt,i)=>{
+    const q=xy(pt);
+    if(i===0) ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+  });
+  const first=xy(pts[0]), last=xy(pts[pts.length-1]);
+  ctx.lineTo(last.x,h-pad);
+  ctx.lineTo(first.x,h-pad);
+  ctx.closePath();
+  ctx.fillStyle=area;
+  ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach((pt,i)=>{
+    const q=xy(pt);
+    if(i===0) ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+  });
+  ctx.strokeStyle = bal>=0 ? '#00c96e' : '#ff4d6a';
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  pts.forEach(pt=>{
+    const q=xy(pt);
+    ctx.beginPath();
+    ctx.fillStyle = pt.st==='aprovado' ? '#00c96e' : pt.st==='nao_aprovado' ? '#ff4d6a' : '#ffc740';
+    ctx.arc(q.x,q.y,4,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle='#061018';
+    ctx.lineWidth=2;
+    ctx.stroke();
+  });
+
+  ctx.fillStyle='rgba(255,255,255,.7)';
+  ctx.font='10px Space Mono, monospace';
+  ctx.fillText('Saldo atual: '+m(bal), pad, h-8);
+}
+function render(){
+  const panel = document.getElementById('panel-perf');
+  if(!panel || !window.S) return;
+
+  const hist = Array.isArray(S.hist) ? S.hist.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)) : [];
+  const all = stats(hist);
+  const aprov = stats(hist.filter(r=>status(r)==='aprovado'));
+  const nao = stats(hist.filter(r=>status(r)==='nao_aprovado'));
+  const old = stats(hist.filter(r=>status(r)==='sem_status'));
+
+  const recent = hist.slice(0,8).map(r=>{
+    const odds = r.oddsMercado || {};
+    const cluster = Array.isArray(r.cluster) && r.cluster.length ? r.cluster.map(s=>s.score).join(' / ') : '';
+    const val = Number(r.v)||0;
+    return `
+      <div class="genio-final-row">
+        <div>
+          <div class="genio-final-row-title">${r.j || 'Jogo sem nome'}</div>
+          <div class="genio-final-meta">${r.c || 'Sem competição'} • ${r.sc ? 'Placar: '+r.sc : 'Placar não informado'}</div>
+          ${cluster ? `<div class="genio-final-meta">Árvore: ${cluster}</div>` : `<div class="genio-final-meta">Árvore não salva nesta versão antiga</div>`}
+        </div>
+        <div>
+          ${badge(r)}
+          <div class="genio-final-meta">Fav ${odds.fav?('@'+odds.fav):'--'} • BTTS ${odds.btts?('@'+odds.btts):'--'} • Over ${odds.over?('@'+odds.over):'--'}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:Barlow Condensed,Inter,sans-serif;font-size:22px;font-weight:900;color:${val>=0?'var(--grn)':'var(--red)'};">${m(val)}</div>
+          <div class="genio-final-meta">Stake R$ ${Number(r.s||0).toFixed(2)}</div>
+        </div>
+      </div>`;
+  }).join('') || '<div class="genio-final-meta" style="padding:16px;">Nenhum jogo finalizado ainda.</div>';
+
+  panel.innerHTML = `
+    <div class="card" id="genio-final-performance-root">
+      <div class="genio-final-wrap">
+        <div class="genio-final-head">
+          <div>
+            <div class="genio-final-title">📈 PERFORMANCE DO GÊNIO</div>
+            <div class="genio-final-sub">Dashboard operacional premium com ROI, evolução, aprovados, não aprovados e histórico antigo.</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn btn-gh btn-sm" onclick="showPerfView && showPerfView('geral')" style="border-color:var(--acc);color:var(--acc);">GERAL</button>
+            <button class="btn btn-gh btn-sm" onclick="showPerfView && showPerfView('camps')">CAMPEONATOS</button>
+            <button class="btn btn-gh btn-sm" onclick="exportCSV && exportCSV()">CSV</button>
+          </div>
+        </div>
+
+        <div class="genio-final-grid">
+          <div class="genio-final-metric"><div class="genio-final-label">💰 Lucro Líquido</div><div class="genio-final-value" style="color:${all.lucro>=0?'var(--grn)':'var(--red)'};">${m(all.lucro)}</div><div class="genio-final-small">${all.total} operação(ões)</div></div>
+          <div class="genio-final-metric"><div class="genio-final-label">📈 ROI</div><div class="genio-final-value" style="color:${all.roi>=0?'var(--grn)':'var(--red)'};">${p(all.roi)}</div><div class="genio-final-small">Stake total R$ ${all.stake.toFixed(2)}</div></div>
+          <div class="genio-final-metric"><div class="genio-final-label">🎯 Winrate</div><div class="genio-final-value" style="color:var(--ylw);">${p(all.wr)}</div><div class="genio-final-small">${all.wins}W / ${all.reds}R</div></div>
+          <div class="genio-final-metric"><div class="genio-final-label">🟢 Aprovados</div><div class="genio-final-value" style="color:var(--grn);">${aprov.total}</div><div class="genio-final-small">ROI ${p(aprov.roi)} • ${m(aprov.lucro)}</div></div>
+          <div class="genio-final-metric"><div class="genio-final-label">🔴 Não Aprovados</div><div class="genio-final-value" style="color:var(--red);">${nao.total}</div><div class="genio-final-small">ROI ${p(nao.roi)} • ${m(nao.lucro)}</div></div>
+          <div class="genio-final-metric"><div class="genio-final-label">🟡 Histórico Antigo</div><div class="genio-final-value" style="color:var(--ylw);">${old.total}</div><div class="genio-final-small">Sem classificação do Gênio</div></div>
+        </div>
+
+        <div class="genio-final-main">
+          <div class="genio-final-panel">
+            <div class="genio-final-panel-title">📊 Evolução da Banca</div>
+            <canvas id="genio-final-canvas"></canvas>
+          </div>
+          <div class="genio-final-panel">
+            <div class="genio-final-panel-title">🧠 Leitura por Status</div>
+            <div class="genio-final-status-grid">
+              <div class="genio-final-status-card">
+                <div class="genio-final-status-title" style="color:var(--grn);">🟢 APROVADOS</div>
+                <div class="genio-final-status-num" style="color:var(--grn);">${m(aprov.lucro)}</div>
+                <div class="genio-final-meta">ROI ${p(aprov.roi)} • WR ${p(aprov.wr)} • ${aprov.total} jogos</div>
+              </div>
+              <div class="genio-final-status-card">
+                <div class="genio-final-status-title" style="color:var(--red);">🔴 NÃO APROVADOS</div>
+                <div class="genio-final-status-num" style="color:var(--red);">${m(nao.lucro)}</div>
+                <div class="genio-final-meta">ROI ${p(nao.roi)} • WR ${p(nao.wr)} • ${nao.total} jogos</div>
+              </div>
+            </div>
+            <div class="genio-final-meta" style="margin-top:14px;line-height:1.8;">
+              Jogos antigos sem status não entram como não aprovados. A partir desta versão, cada novo jogo será salvo com aprovação real do Gênio.
+            </div>
+          </div>
+        </div>
+
+        <div class="genio-final-panel">
+          <div class="genio-final-panel-title">📋 Últimas Operações Finalizadas</div>
+          ${recent}
+        </div>
+      </div>
+    </div>
+  `;
+
+  setTimeout(draw,80);
+  setTimeout(draw,400);
+  if(typeof updateHeader === 'function') updateHeader();
+}
+
+window.renderPerf = render;
+window.addEventListener('resize', function(){
+  if(document.getElementById('genio-final-canvas')) setTimeout(draw,100);
+});
+
+setTimeout(function(){
+  // Se a aba performance já estiver aberta, força render definitivo.
+  if(document.getElementById('panel-perf')) render();
+},900);
+
+})();
+</script>
+
 </body>
 </html>
