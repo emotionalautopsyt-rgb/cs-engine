@@ -513,6 +513,53 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="genio-dashboard-premium">
+.genio-top-dashboard{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;
+  margin:16px 0;
+}
+.genio-metric{
+  background:linear-gradient(180deg,#121826,#0b111c);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
+}
+.genio-metric-label{
+  font-size:10px;
+  letter-spacing:1.5px;
+  opacity:.7;
+  margin-bottom:10px;
+  font-weight:800;
+}
+.genio-metric-value{
+  font-size:28px;
+  font-weight:900;
+}
+.genio-chart-wrap{
+  margin-top:18px;
+  background:linear-gradient(180deg,#121826,#0b111c);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  padding:18px;
+}
+.genio-chart-title{
+  font-size:12px;
+  letter-spacing:2px;
+  margin-bottom:14px;
+  font-weight:900;
+}
+.genio-chart{
+  width:100%;
+  height:260px;
+  background:linear-gradient(180deg,rgba(0,255,120,.08),rgba(0,0,0,0));
+  border-radius:12px;
+}
+</style>
+
 </head>
 <body>
 
@@ -6172,6 +6219,184 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       renderGenioHistoricoStatus();
     }
   }, 800);
+
+})();
+</script>
+
+
+<script id="genio-dashboard-script">
+(function(){
+
+function gMoney(v){
+  return (v>=0?'+':'') + 'R$ ' + Number(v||0).toFixed(2);
+}
+function gPct(v){
+  return (isFinite(v)?v:0).toFixed(1) + '%';
+}
+
+function calcDashStats(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const lucro = rows.reduce((a,r)=>a+(parseFloat(r.v)||0),0);
+  const stake = rows.reduce((a,r)=>a+(parseFloat(r.s)||0),0);
+  const wins = rows.filter(r=>(parseFloat(r.v)||0)>0).length;
+  const total = rows.length;
+  const roi = stake ? (lucro/stake*100) : 0;
+  const wr = total ? (wins/total*100) : 0;
+  const aprov = rows.filter(r=>r.genioApproved).length;
+  const nao = rows.filter(r=>r.genioStatus==='nao_aprovado').length;
+  return {lucro,stake,wins,total,roi,wr,aprov,nao};
+}
+
+function renderChart(canvas, rows){
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * 2;
+  const H = canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2,2);
+
+  ctx.clearRect(0,0,W,H);
+
+  rows = rows.slice().sort((a,b)=>(a.ts||0)-(b.ts||0));
+
+  let saldo = 0;
+  const pts = rows.map((r,i)=>{
+    saldo += Number(r.v||0);
+    return {x:i,y:saldo,ap:r.genioApproved};
+  });
+
+  const max = Math.max(...pts.map(p=>p.y),0,1);
+  const min = Math.min(...pts.map(p=>p.y),0,-1);
+  const range = max-min || 1;
+
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,.06)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<5;i++){
+    const gy = (h/4)*i;
+    ctx.beginPath();
+    ctx.moveTo(0,gy);
+    ctx.lineTo(w,gy);
+    ctx.stroke();
+  }
+
+  // main line
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#00ff88';
+  ctx.beginPath();
+
+  pts.forEach((p,i)=>{
+    const x = pts.length<=1 ? 20 : (i/(pts.length-1))*(w-30)+15;
+    const y = h - (((p.y-min)/range)*(h-30)+15);
+
+    if(i===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  });
+
+  ctx.stroke();
+
+  // points
+  pts.forEach((p,i)=>{
+    const x = pts.length<=1 ? 20 : (i/(pts.length-1))*(w-30)+15;
+    const y = h - (((p.y-min)/range)*(h-30)+15);
+
+    ctx.beginPath();
+    ctx.fillStyle = p.ap ? '#00ff88' : '#ff4d6a';
+    ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+window.renderGenioPremiumDashboard = function(){
+  try{
+    if(!window.S) return;
+    const perf = document.getElementById('perf-view-geral');
+    if(!perf) return;
+
+    let box = document.getElementById('genio-premium-dashboard');
+    if(!box){
+      box = document.createElement('div');
+      box.id = 'genio-premium-dashboard';
+      perf.prepend(box);
+    }
+
+    const hist = Array.isArray(S.hist) ? S.hist : [];
+    const st = calcDashStats(hist);
+
+    box.innerHTML = `
+      <div class="genio-top-dashboard">
+        <div class="genio-metric">
+          <div class="genio-metric-label">💰 LUCRO LÍQUIDO</div>
+          <div class="genio-metric-value" style="color:var(--grn);">${gMoney(st.lucro)}</div>
+        </div>
+
+        <div class="genio-metric">
+          <div class="genio-metric-label">📈 ROI</div>
+          <div class="genio-metric-value" style="color:#4ecbff;">${gPct(st.roi)}</div>
+        </div>
+
+        <div class="genio-metric">
+          <div class="genio-metric-label">🎯 WINRATE</div>
+          <div class="genio-metric-value" style="color:#ffd84e;">${gPct(st.wr)}</div>
+        </div>
+
+        <div class="genio-metric">
+          <div class="genio-metric-label">🧠 JOGOS APROVADOS</div>
+          <div class="genio-metric-value">${st.aprov}</div>
+        </div>
+
+        <div class="genio-metric">
+          <div class="genio-metric-label">🔴 NÃO APROVADOS</div>
+          <div class="genio-metric-value" style="color:#ff4d6a;">${st.nao}</div>
+        </div>
+
+        <div class="genio-metric">
+          <div class="genio-metric-label">📊 OPERAÇÕES</div>
+          <div class="genio-metric-value">${st.total}</div>
+        </div>
+      </div>
+
+      <div class="genio-chart-wrap">
+        <div class="genio-chart-title">📈 EVOLUÇÃO OPERACIONAL DO GÊNIO</div>
+        <canvas id="genio-growth-chart" class="genio-chart"></canvas>
+      </div>
+    `;
+
+    setTimeout(()=>{
+      renderChart(document.getElementById('genio-growth-chart'), hist);
+    },80);
+
+  }catch(e){
+    console.warn('premium dashboard error',e);
+  }
+};
+
+function hookDash(){
+  const old = window.renderPerf;
+  if(typeof old !== 'function' || old.__genioPremiumHooked) return;
+
+  const wrap = function(){
+    const r = old.apply(this, arguments);
+    setTimeout(()=>{
+      if(window.renderGenioPremiumDashboard){
+        window.renderGenioPremiumDashboard();
+      }
+    },120);
+    return r;
+  };
+
+  wrap.__genioPremiumHooked = true;
+  window.renderPerf = wrap;
+}
+
+setTimeout(()=>{
+  hookDash();
+  if(window.renderGenioPremiumDashboard){
+    window.renderGenioPremiumDashboard();
+  }
+},1000);
 
 })();
 </script>
