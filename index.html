@@ -1876,7 +1876,7 @@ function avaliarAprovacaoGenio(ctx) {
   const positivos = [];
 
   const favOk = fav >= 1.25 && fav <= 2.35;
-  const bttsOk = btts >= 1.65 && btts <= 2.20;
+  const bttsOk = btts >= 1.65 && btts <= 2.25;
   const overOk = over >= 1.40 && over <= 2.20;
   const rangeFails = [!favOk, !bttsOk, !overOk].filter(Boolean).length;
 
@@ -1976,7 +1976,7 @@ function checkPackball() {
   if(!fav || !btts || !over) return;
 
   const fO = fav>=1.25&&fav<=2.35;  // expanded to 1.25
-  const bO = btts>=1.65&&btts<=2.15;
+  const bO = btts>=1.65&&btts<=2.25;
   const oO = over>=1.40&&over<=2.20;
   const pass = fO && bO && oO;
   const fails = [!fO,!bO,!oO].filter(Boolean).length;
@@ -2875,7 +2875,7 @@ async function analisarJogo() {
 
   // Packball check — auto-reduce stake if one criterion outside range
   const favOk  = fav>=1.25&&fav<=2.35;
-  const bttsOk = btts>=1.65&&btts<=2.15;
+  const bttsOk = btts>=1.65&&btts<=2.25;
   const overOk = over>=1.40&&over<=2.20;
   const packballOk = favOk && bttsOk && overOk;
   const failCount = [!favOk,!bttsOk,!overOk].filter(Boolean).length;
