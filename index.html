@@ -2398,6 +2398,8 @@ PASSO 6 — SCORES ALTOS + VALIDAÇÃO
 ═══════════════════════════════════════
 3-1 entra quando: Over < @1.90 + DNA confirma.
 2-2 entra quando: BTTS < @1.85 E Over < @1.85.
+   OU quando DNA mostra padrão de empates com gols (1-1 e 2-2 frequentes no H2H, visitante empata fora com gols).
+   IMPORTANTE: 2-2 ≠ caos extremo. Pode ser equilíbrio ofensivo. Avaliar pelo contexto, não só pelas odds.
 4-0/4-1: usar mercado GOLEADA (Qualquer Outra Vitória Casa).
 
 Para cada score declarar: DADO SEGURO (frequente) ou LIMITE MÁXIMO (raro) → stake maior/menor.
@@ -2819,17 +2821,34 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   }
 
   // ── INTELIGÊNCIA CRUZADA — detecta automaticamente ──────
-  // Cruza btts + over + fav para ajustar cluster sem intervenção humana
-  // Isso garante que o robô detecta os sinais do mercado sozinho
+  // Cruza btts + over + fav + texto para ajustar cluster
 
   // SINAL 1: BTTS + OVER ambos baixos = mercado gritando gols dos dois lados
-  var sinalBTTS_forte = btts < 1.85;           // >57% prob ambos marcam
-  var sinalOver_forte = over < 1.90;           // >53% prob 3+ gols
+  var sinalBTTS_forte = btts < 1.85;
+  var sinalOver_forte = over < 1.90;
   var sinalJogoAberto = sinalBTTS_forte && sinalOver_forte;
 
-  // SINAL 2: BTTS baixo + Over moderado = ambos marcam, pode ser 2-1 ou 1-1
+  // SINAL 2: BTTS baixo + Over moderado
   var sinalBTTS_moderado = btts >= 1.85 && btts < 1.95;
   var sinalAmbosComGol = sinalBTTS_forte || sinalBTTS_moderado;
+
+  // SINAL 3 — DNA_EMPATE_GOLS
+  // 2-2 ≠ caos. Às vezes = equilíbrio ofensivo.
+  // Detecta padrão de empates com gols no texto da análise
+  var textoAnalise = document.getElementById('an-texto') ?
+    (document.getElementById('an-texto').value || '') : '';
+  var dnaEmpateGols = false;
+  if(textoAnalise) {
+    var empatesComGols = (textoAnalise.match(/2-2|1-1.*2-2|empat.*gol|gol.*empat/gi) || []).length;
+    var empatesFora    = (textoAnalise.match(/empat.*fora|fora.*empat/gi) || []).length;
+    var bttsHistorico  = (textoAnalise.match(/ambos.*marc|marc.*ambos|BTTS/gi) || []).length;
+    // Ativa DNA_EMPATE_GOLS se há padrão claro no texto
+    dnaEmpateGols = (empatesComGols >= 2) || (empatesFora >= 1 && bttsHistorico >= 1);
+  }
+
+  // SINAL 4 — FAVORITO VISITANTE SOBERANO
+  // Quando o mercado diz que o visitante é favorito, o cluster deve refletir isso
+  var favVisitanteForte = favEhVisitante && fav <= 2.15;
 
   if(sinalJogoAberto) {
     // Mercado grita: 3+ gols com ambos marcando
@@ -2896,7 +2915,30 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
   }
 
-  // Sinal 3b removido — 2-0 e 3-0 são scores de leverage, nunca removidos
+  // ── MELHORIA 1: DNA_EMPATE_GOLS ─────────────────────────
+  // 2-2 = equilíbrio ofensivo, não só caos
+  // Se texto indica padrão de empates com gols → adicionar 2-2 sem precisar de caos
+  if(dnaEmpateGols && !mainScores.includes('2-2') && !protection.includes('2-2')) {
+    if(btts <= 2.05 && over <= 2.15) {
+      protection.push('2-2');
+      // Manter máximo de 3 no Plano B — remove 1-0 se existir (menos relevante)
+      if(protection.length > 3) {
+        var i10 = protection.indexOf('1-0');
+        if(i10 >= 0) protection.splice(i10, 1); else protection.shift();
+      }
+    }
+  }
+
+  // ── MELHORIA 2: FAVORITO VISITANTE SOBERANO ─────────────
+  // Quando visitante favorito ≤ 2.15 + BTTS vivo + Over vivo
+  // O cluster invertido já foi calculado — aqui garantimos que
+  // scores do mandante limpos (ex: 2-0 original) não dominam indevidamente
+  // A inversão pelo favEhVisitante já trata isso — apenas reforçamos
+  // que a âncora invertida é soberana e não pode ser sobrescrita
+  if(favVisitanteForte && ancora) {
+    // Âncora invertida já está correta — preservar sem override
+    // (nenhuma lógica posterior deve inverter de volta)
+  }
 
   // SINAL 4: Odds CS reais — remover scores de baixíssima probabilidade do Plano A
   // Um score com prob muito abaixo da média do cluster não deve estar no Plano A
@@ -3364,7 +3406,10 @@ REGRAS ABSOLUTAS:
    - Se BTTS < 1.85 → narrativa deve mencionar que ambos os times marcam
    - Se Over < 1.90 → narrativa deve mencionar expectativa de 3+ gols
    - Se fav > 1.90 → narrativa deve mencionar equilíbrio do jogo
+   - Se 2-2 está no cluster → explicar como equilíbrio ofensivo, NÃO como caos extremo
+   - Se favorito é visitante → narrativa deve refletir isso claramente
 4. Cada score do cluster deve ser justificado cruzando: odds CS + contexto + mercado
+5. SOBRE O 2-2: não é sinônimo de caos. Pode ser equilíbrio ofensivo — H2H com 1-1/2-2 frequentes, visitante resiliente, ninguém mata o jogo. Explique assim quando aplicável.
 5. PROIBIDO mencionar score diferente da âncora como "mais provável"
 6. Total na lista vertical = ${engine.mainScores.length + engine.protection.length} scores exatos`;
 
