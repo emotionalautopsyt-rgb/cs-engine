@@ -2607,7 +2607,7 @@ Todo raciocínio técnico fica no cérebro do robô.
 REGRAS DO JSON:
 - "tipo" deve ser: "caminho", "destino" ou "planb"
 - "scores" sempre tem 5-7 items
-- "ancora" = SEMPRE vitória do favorito (1-0, 2-0, 2-1). NUNCA 1-1, 0-0 ou placar do adversário (H2H 2x+ prevalece, senão xG)
+- "ancora" = score de MAIOR probabilidade cruzando liquidez + contexto + btts. Em jogos ABERTO/BTTS com btts < 1.85, o 1-1 PODE e DEVE ser âncora se liquidez confirmar. Em jogos ofensivos, favorito (1-0, 2-0, 2-1). A âncora reflete o mercado, não apenas o favorito.
 - Nunca incluir 0-0
 - 1-1 SEMPRE obrigatório como planb em todos os jogos
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
@@ -2702,11 +2702,16 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
     mainScores = ['1-0','2-0','2-1'];
 
   } else if(profileId === 'ABERTO_BTTS') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 + 2-2 se BTTS muito baixo
-    mainScores = ['1-0','2-0','2-1','3-1'];
-    // No ABERTO_BTTS o 3-1 se mantém pois BTTS é baixo por definição
-    // 2-2 só se btts < 1.85 (jogo muito aberto)
-    if(btts < 1.85) mainScores.push('2-2');
+    // BTTS baixo = mercado convicto que ambos marcam
+    // Plano A deve refletir isso — não pode ter só vitórias limpas do favorito
+    if(btts < 1.85) {
+      // BTTS muito baixo — jogo aberto com gols dos dois lados quase certo
+      // 2-1 e 1-2 são os mais prováveis, 1-1 no Plano A
+      mainScores = ['2-1','1-1','1-2'];
+    } else {
+      // BTTS moderado — favorito leva mas ambos marcam
+      mainScores = ['2-1','1-0','1-1'];
+    }
 
   } else if(profileId === 'CONSERVADOR') {
     // PDF: 1-0 / 2-0 / 2-1 (sem expansão)
@@ -2756,12 +2761,12 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
     protection = ['1-1','0-1'];
 
   } else if(profileId === 'ABERTO_BTTS') {
-    // PDF: 0-1 / 1-1 / 2-2
-    // Vídeos confirmam: Plano B máximo 2 scores
-    // ABERTO_BTTS: se btts < 1.85 → PB com 2-2 e 1-1 (os mais prováveis)
-    // 0-1 fica fora — o 2-2 já cobre cenário de gols do visitante
-    if(btts < 1.85) {
-      protection = ['1-1','2-2'];
+    if(btts < 1.85 && over < 1.90) {
+      // BTTS baixo + Over baixo = mercado grita 3 gols com ambos marcando
+      // 2-2 é cenário real, não caótico
+      protection = ['2-2','0-1'];
+    } else if(btts < 1.85) {
+      protection = ['0-1','1-0'];
     } else {
       protection = ['1-1','0-1'];
     }
@@ -2788,14 +2793,118 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
   } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
     ancora = btts < 1.85 ? '2-1' : '2-0';
   } else if(profileId === 'ABERTO_BTTS') {
-    ancora = btts < 1.85 ? '2-1' : '2-0';
+    // btts baixo = ambos marcam quase certo → 1-1 é âncora mais honesta
+    // Verificar liquidez real para decidir entre 1-1 e 2-1
+    const liq11 = (csOdds && csOdds['1-1']) ? (csOddsLiq && csOddsLiq['1-1'] || 0) : 0;
+    const liq21 = (csOdds && csOdds['2-1']) ? (csOddsLiq && csOddsLiq['2-1'] || 0) : 0;
+    if(btts < 1.85) {
+      // BTTS muito baixo — mercado convicto que ambos marcam → 1-1 âncora
+      ancora = liq21 > liq11 * 1.5 ? '2-1' : '1-1';
+    } else {
+      ancora = '2-1';
+    }
   } else if(profileId === 'EQUILIBRADO') {
-    ancora = btts < 1.85 ? '2-1' : '2-0';
+    ancora = btts < 1.85 ? '1-1' : '2-1';
   } else if(profileId === 'CONSERVADOR') {
     ancora = '1-0';
   } else {
     // ALTO_RISCO
     ancora = '1-0';
+  }
+
+  // ── INTELIGÊNCIA CRUZADA — detecta automaticamente ──────
+  // Cruza btts + over + fav para ajustar cluster sem intervenção humana
+  // Isso garante que o robô detecta os sinais do mercado sozinho
+
+  // SINAL 1: BTTS + OVER ambos baixos = mercado gritando gols dos dois lados
+  var sinalBTTS_forte = btts < 1.85;           // >57% prob ambos marcam
+  var sinalOver_forte = over < 1.90;           // >53% prob 3+ gols
+  var sinalJogoAberto = sinalBTTS_forte && sinalOver_forte;
+
+  // SINAL 2: BTTS baixo + Over moderado = ambos marcam, pode ser 2-1 ou 1-1
+  var sinalBTTS_moderado = btts >= 1.85 && btts < 1.95;
+  var sinalAmbosComGol = sinalBTTS_forte || sinalBTTS_moderado;
+
+  if(sinalJogoAberto) {
+    // Mercado grita: 3+ gols com ambos marcando
+    // Cluster DEVE ter: 2-1, 1-1, 1-2 no Plano A + 2-2 no Plano B
+    var scores3gols = ['2-1','1-2','2-2'];
+    var scoresEquil = ['1-1'];
+
+    // Garantir que Plano A tem scores de ambos marcando
+    var temAmbosA = mainScores.some(function(s){
+      var p=s.split('-'); return Number(p[0])>0 && Number(p[1])>0;
+    });
+    if(!temAmbosA) {
+      // Substituir scores limpos por scores de ambos marcando
+      mainScores = mainScores.map(function(s){
+        var p=s.split('-');
+        if(Number(p[1])===0) {
+          // Score limpo do favorito → substituir por versão com gol adversário
+          return Number(p[0])>=2 ? (p[0]+'-1') : '1-1';
+        }
+        return s;
+      });
+      // Remover duplicatas
+      mainScores = mainScores.filter(function(s,i){ return mainScores.indexOf(s)===i; });
+    }
+
+    // Garantir 2-2 no Plano B quando over < 1.90
+    if(sinalOver_forte) {
+      var tem22 = protection.includes('2-2');
+      if(!tem22) {
+        // Adicionar 2-2 no Plano B — remove o score menos relevante
+        if(protection.length >= 2) {
+          // Remove 1-0 se existir (menos provável em jogo aberto)
+          var idx10 = protection.indexOf('1-0');
+          if(idx10 >= 0) protection.splice(idx10, 1);
+          else protection.pop(); // remove último
+        }
+        protection.push('2-2');
+      }
+    }
+
+    // Garantir âncora coerente com jogo aberto
+    // Se âncora é score limpo do favorito (1-0) em jogo aberto → mudar para 1-1 ou 2-1
+    if(ancora === '1-0' || ancora === '2-0') {
+      var liq11 = (csOddsLiq && csOddsLiq['1-1']) || 0;
+      var liq21 = (csOddsLiq && csOddsLiq['2-1']) || 0;
+      if(liq11 > 0 || liq21 > 0) {
+        ancora = liq11 >= liq21 ? '1-1' : '2-1';
+      } else {
+        ancora = btts < 1.85 ? '1-1' : '2-1';
+      }
+    }
+  }
+
+  // SINAL 3: BTTS moderado — garantir pelo menos 1 score de ambos marcando
+  if(!sinalJogoAberto && sinalAmbosComGol) {
+    var temAmbos = [...mainScores, ...protection].some(function(s){
+      var p=s.split('-'); return Number(p[0])>0 && Number(p[1])>0;
+    });
+    if(!temAmbos) {
+      // Adicionar 1-1 no Plano B se não existe score de ambos marcando
+      if(!protection.includes('1-1')) {
+        protection.unshift('1-1');
+        if(protection.length > 2) protection.pop();
+      }
+    }
+  }
+
+  // SINAL 4: Liquidez real — âncora sempre no score com maior liquidez do cluster
+  var todosScoresFinal = [...mainScores, ...protection];
+  if(csOddsLiq && Object.keys(csOddsLiq).length > 0) {
+    var melhorLiq = 0;
+    var melhorScore = ancora;
+    todosScoresFinal.forEach(function(s) {
+      var liq = csOddsLiq[s] || 0;
+      if(liq > melhorLiq) { melhorLiq = liq; melhorScore = s; }
+    });
+    // Só troca âncora se a liquidez do melhor score for 3x maior que a da âncora atual
+    var liqAncora = csOddsLiq[ancora] || 0;
+    if(melhorLiq > liqAncora * 3 && melhorScore !== ancora) {
+      ancora = melhorScore;
+    }
   }
 
   // ── DUTCH vs PIRÂMIDE — pelas odds reais (PDF) ───────────
