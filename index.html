@@ -1911,7 +1911,9 @@ function avaliarAprovacaoGenio(ctx) {
   // Regra final:
   // Aprova quando o mercado está legível, odds estão majoritariamente no range,
   // e não há contexto de alto ruído.
-  const hardBlock = amistoso || rotacao || semObjetivo || rangeFails >= 2 || csPouco;
+  // csPouco não bloqueia — só avisa. O usuário pode não ter colado CS ainda.
+  // Bloqueia apenas: amistoso, rotação, sem objetivo, ou 2+ odds de mercado fora
+  const hardBlock = amistoso || rotacao || semObjetivo || rangeFails >= 2;
   const aprovado = !hardBlock && (rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
 
   // Montar mensagem contextual de não aprovado
