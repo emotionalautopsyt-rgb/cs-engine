@@ -4793,7 +4793,12 @@ function regRapido() {
     d: td(), s: gameStake,
     r: v>0?'lucro':v<0?'loss':'be',
     v, sc: S.currentGame?.placar||'',
-    ob:'Resultado Rápido', ts: Date.now()
+    ob:'Resultado Rápido', ts: Date.now(),
+    status: S.currentGame?.aprovacaoStatus || 'historico',
+    oddsFav: S.currentGame?.savedPkFav || '',
+    btts: S.currentGame?.savedPkBtts || '',
+    over: S.currentGame?.savedPkOver || '',
+    cluster: S.currentGame?.cluster || []
   });
   save();
   const rv = document.getElementById('l-rv');
@@ -5258,7 +5263,7 @@ function renderCopa() {
   var COPA = 'Copa do Mundo 2026';
   var h = (S.hist || []).filter(function(r){
     var c = (r.c || '').toLowerCase();
-    return c.includes('copa do mundo') || c.includes('world cup') || c.includes('copa 2026');
+    return c.includes('copa') || c.includes('world cup') || c.includes('mundial');
   }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
 
   var fmt  = function(v){ return (v>=0?'+':'-')+'R$ '+Math.abs(Number(v||0)).toFixed(2); };
