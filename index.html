@@ -3182,14 +3182,14 @@ async function analisarJogo() {
         var probImpl = odd > 0 ? (100/odd).toFixed(1) : '0';
         return { score: s, odd: odd, liq: liq, prob: probImpl };
       })
-      .filter(function(x){ return x.liq > 0 || x.odd > 0; })
-      .sort(function(a,b){ return b.liq - a.liq; })
-      .slice(0, 10);
+      .filter(function(x){ return x.odd > 0; })
+      .sort(function(a,b){ return a.odd - b.odd; }) // ordem por probabilidade — odd menor = mais provável
+      .slice(0, 12);
 
     if(scoresComLiq.length > 0) {
       liquidezEstruturada = scoresComLiq
         .map(function(x){
-          return x.score + ' @ ' + x.odd + ' | prob ' + x.prob + '% | R$' + (x.liq||'?');
+          return x.score + ' @ ' + x.odd + ' | prob ' + x.prob + '%' + (x.liq > 0 ? ' | R$' + x.liq : '');
         })
         .join('\n');
     }
@@ -3214,13 +3214,14 @@ Favorito: ${favEhVisitanteReal ? 'VISITANTE' : 'CASA'}
 fav@${fav} | over@${over} | btts@${btts}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FONTE 3 — LIQUIDEZ REAL BETFAIR (ordenada por dinheiro):
+FONTE 3 — ODDS CS BETFAIR (ordenadas por probabilidade — menor odd = mais provável):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${liquidezEstruturada || 'Não fornecida'}
 
-O mercado já precificou tudo. Onde está o dinheiro é o voto mais honesto.
-Se um score do cluster tem pouca liquidez comparado a outro que não está no cluster,
-isso é um sinal relevante. Mas não mude por liquidez sozinha — precisa de coerência com contexto.
+ODD BAIXA = MAIOR PROBABILIDADE. Esse é o critério mais importante para validar cada score.
+Um score com odd @7.8 tem probabilidade implícita de 12.8% — muito mais real que um score @14.5 (6.9%).
+O cluster deve priorizar os scores com odds mais baixas — são os que o mercado acredita que vão acontecer.
+BTTS e Over 2.5 são a bússola do perfil. As odds CS individuais são a bússola dos scores específicos.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUA TAREFA:
@@ -3228,19 +3229,26 @@ SUA TAREFA:
 Cruze as 3 fontes e valide se cada score do cluster faz sentido para ESTE evento.
 
 REGRAS ABSOLUTAS:
-1. O cluster do motor é a base — mas pode ser ajustado se contexto + mercado contradizerem
-2. Você PODE sugerir até 1 score adicional SE o contexto e liquidez justificarem fortemente
-3. Nunca adicione mais de 1 score extra — o motor já calculou o perfil
-4. Nunca remova mais que 2 scores
-5. A âncora muda se contexto + mercado apontarem claramente para outro score
-6. COERÊNCIA é a regra mais importante — narrativa e cluster devem contar a mesma história
-7. Se cluster estiver coerente com contexto, aprovar tudo sem alterar
+1. ODDS CS são soberanas — scores com odds muito altas (@20+) raramente devem ser âncora
+2. A âncora DEVE ser o score com a odd CS mais baixa do cluster — é o mais provável
+3. Se um score não está no cluster mas tem odd CS muito baixa — pode ser sugerido (máx 1)
+4. O contexto textual confirma ou questiona o que as odds já dizem — não substitui as odds
+5. COERÊNCIA TOTAL — narrativa e cluster devem contar exatamente a mesma história
+6. Nunca adicione mais de 1 score extra
+7. Nunca remova mais que 2 scores
+8. Se cluster estiver coerente com odds CS + contexto — aprovar sem alterar
 
-EXEMPLO DE COERÊNCIA OBRIGATÓRIA:
-- Narrativa diz "jogo aberto, ambos marcam" → cluster deve ter scores de ambos marcando (1-1, 1-2, 2-1)
-- Narrativa diz "favorito domina" → cluster deve ter scores limpos do favorito (1-0, 2-0)
-- Narrativa diz "placar fechado" → cluster não deve ter 3-2 ou 4-1
-- Se cluster contradiz narrativa → ajuste o cluster para ser coerente
+HIERARQUIA DE DECISÃO:
+1º Odds CS (probabilidade implícita) — odd baixa = score mais provável = prioridade no cluster
+2º fav + btts + over — definem o perfil geral do jogo
+3º Contexto textual — H2H, DNA, forma — refinam dentro do perfil
+4º Consenso — quando odds CS + contexto concordam, cluster é forte
+
+EXEMPLOS DE COERÊNCIA OBRIGATÓRIA:
+- btts@1.76 + odd 1-1@7.8 → 1-1 deve ser âncora (12.8% de probabilidade)
+- btts@1.95 + odd 1-0@4.5 → 1-0 pode ser âncora (22% de probabilidade)
+- over@1.87 + btts@1.76 → cluster deve ter scores de 3 gols E ambos marcando
+- Narrativa diz "favorito domina" mas odd 1-1@6.0 → questionar narrativa, 1-1 tem peso real
 
 Responda APENAS com JSON válido, sem texto adicional:
 {
@@ -3254,30 +3262,57 @@ Responda APENAS com JSON válido, sem texto adicional:
 
   // ============================================================
 
-  const prompt = `Analise este jogo como o Gênio dos Placares. Gere o Cluster de Placares.
+  const prompt = `Você é o Gênio dos Placares — um trader de Correct Score com leitura cirúrgica de mercado.
+Você recebeu 3 fontes de informação. Cruzou tudo. O motor já calculou os scores.
+Sua tarefa: escrever a narrativa explicando por que esses scores são os de MAIOR VALOR para este jogo.
 
-CAMPO 1 — DADOS DO JOGO (Academia das Apostas):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 1 — ANÁLISE DO JOGO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${texto}
 
-CAMPO 2 — ODDS CORRECT SCORE BETFAIR (odds BACK reais):
-${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use estimativas e indique.'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 2 — MERCADO (bússola do perfil):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}
+${favEhVisitanteReal ? '⚠️ FAVORITO É O VISITANTE — todos os scores já estão invertidos' : 'Favorito é o time da CASA'}
+Perfil do jogo: ${engine.profileId}
 
-FILTRO DE ENTRADA: Favorito @${fav} | BTTS @${btts} | Over 2.5 @${over}${favEhVisitanteReal ? ' | ⚠️ FAVORITO É O VISITANTE — scores invertidos' : ' | Favorito é o time da CASA'}
-STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
+Interpretação das odds de mercado:
+- BTTS @${btts} = ${(100/btts).toFixed(0)}% de probabilidade de ambos marcarem
+- Over 2.5 @${over} = ${(100/over).toFixed(0)}% de probabilidade de 3+ gols
+- Favorito @${fav} = ${(100/fav).toFixed(0)}% de probabilidade de vitória do favorito
 
-Use o Campo 1 para identificar padrão de resultados e contexto.
-Use o Campo 2 para calcular stakes com as odds reais.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTE 3 — ODDS CS BETFAIR (cada score, sua probabilidade real):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${oddsInfo ? oddsInfo : 'Odds de CS não fornecidas — use as odds de mercado para estimar.'}
 
-SCORES JÁ CALCULADOS PELO MOTOR (NÃO ALTERAR):
+ODD BAIXA = MAIOR PROBABILIDADE. Use isso para justificar cada score na narrativa.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLUSTER CALCULADO PELO MOTOR (USE EXATAMENTE ESSES SCORES):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Plano A: ${engine.mainScores.join(', ')}
 Plano B: ${engine.protection.join(', ')}
-Âncora (PLACAR PROJETADO): ${engine.ancora}
-Pirâmide: ${engine.pyramidType}
-Perfil: ${engine.profileId}
-${engine.caminhoPeso === 'fraco' ? 'NOTA: 1-0 é PONTE FRACA neste perfil — se incluído, é score de passagem, não alvo.' : ''}
-${engine.odd10Used > 9.0 ? 'NOTA: 1-0 tem odd alta (@'+engine.odd10Used+') — alta compressão após gol, bom leverage ao vivo.' : ''}
+Âncora: ${engine.ancora}
+${engine.caminhoPeso === 'fraco' ? 'NOTA: 1-0 é PONTE FRACA — score de passagem, não alvo.' : ''}
+${engine.odd10Used > 9.0 ? 'NOTA: 1-0 odd alta (@'+engine.odd10Used+') — alta compressão após gol.' : ''}
 
-REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova. Não mude o ancora.\n\nLISTA VERTICAL DA NARRATIVA DEVE CONTER TODOS ESSES SCORES:\nPlano A: ${engine.mainScores.join(', ')}\nPlano B: ${engine.protection.join(', ')}\nTotal na lista = ${engine.mainScores.length + engine.protection.length} scores (igual aos cards).\nNenhum score pode ficar fora da lista.\n\nÂNCORA DEFINITIVO: ${engine.ancora}\nNo PARÁGRAFO 3, DEVE aparecer este score como placar projetado.\nExemplo: '2-1 é o placar que esse jogo está pedindo.'\nPROIBIDO: mencionar outro score como mais provável que não seja o ancora.\n\nSua tarefa é escrever a NARRATIVA explicando por que esses scores fazem sentido.`;
+STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRAS ABSOLUTAS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Use EXATAMENTE os scores acima no JSON — não adicione, não remova
+2. A âncora É ${engine.ancora} — mencione como o placar mais provável no parágrafo 3
+3. A narrativa DEVE ser coerente com as odds de mercado:
+   - Se BTTS < 1.85 → narrativa deve mencionar que ambos os times marcam
+   - Se Over < 1.90 → narrativa deve mencionar expectativa de 3+ gols
+   - Se fav > 1.90 → narrativa deve mencionar equilíbrio do jogo
+4. Cada score do cluster deve ser justificado cruzando: odds CS + contexto + mercado
+5. PROIBIDO mencionar score diferente da âncora como "mais provável"
+6. Total na lista vertical = ${engine.mainScores.length + engine.protection.length} scores exatos`;
 
   // Show EPIC loading
   const out = document.getElementById('resultado-out');
