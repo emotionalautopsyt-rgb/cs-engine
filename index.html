@@ -996,6 +996,13 @@ e garantir que o DNA seja lido corretamente."></textarea>
       <div id="perf-ops-list"></div>
     </div>
 
+    <!-- BACKTEST -->
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">🔬 Backtest — Acerto do Cluster</div>
+      <div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">Percentual de jogos onde o placar final estava no cluster gerado pelo Gênio</div>
+      <div id="perf-backtest"></div>
+    </div>
+
     <!-- CAMPEONATOS -->
     <div class="card">
       <div class="card-title">🏆 Desempenho por Competição</div>
@@ -1650,16 +1657,29 @@ function confirmarEncerrar(id) {
   g.status = 'enc';
   g.resultado = isNaN(val) ? 0 : val;
   if(!isNaN(val) && val !== 0) {
+    // Verificar se placar final estava no cluster gerado
+    var clusterSalvo = g.cluster || [];
+    var placarFinal  = g.placar || '';
+    var placarNoCluster = placarFinal && clusterSalvo.some(function(c){
+      return (c.score||c) === placarFinal;
+    });
+    var placarNaAncora = placarFinal && g.savedAncora && g.savedAncora === placarFinal;
+
     S.hist.push({
       gameId: g.id, j: g.name, c: g.comp||'', d: g.data||td(),
       s: g.stake||S.stake, r: val>0?'lucro':val<0?'loss':'be',
-      v: val, sc: g.placar||'', ob: 'Encerrado via sidebar', ts: Date.now(),
-      // Salvar odds e status para a Performance
+      v: val, sc: placarFinal, ob: 'Encerrado via sidebar', ts: Date.now(),
       status: g.aprovacaoStatus || 'historico',
       oddsFav: g.savedPkFav || '',
       btts: g.savedPkBtts || '',
       over: g.savedPkOver || '',
-      cluster: g.cluster || []
+      cluster: clusterSalvo,
+      // BACKTEST — dados para análise de acerto
+      perfil: g.savedPerfil || '',
+      ancora: g.savedAncora || '',
+      placarNoCluster: placarNoCluster,
+      placarNaAncora: placarNaAncora,
+      totalScores: clusterSalvo.length,
     });
     save();
   }
@@ -3798,6 +3818,9 @@ REGRAS ABSOLUTAS:
         S.currentGame.savedPkFav = fav;
         S.currentGame.savedPkBtts = btts;
         S.currentGame.savedPkOver = over;
+        // Salvar perfil e ancora para backtest
+        S.currentGame.savedPerfil = engineFinal ? engineFinal.profileId : '';
+        S.currentGame.savedAncora = engineFinal ? engineFinal.ancora : '';
         // Save ancora from JSON for PLACAR PROJETADO highlight
         try { const jd = JSON.parse(jsonStr||'{}'); S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
@@ -5525,6 +5548,55 @@ function renderPerf() {
           '</div>'+
         '</div>';
       }).join('');
+    }
+  }
+
+  // ── BACKTEST — acerto do cluster ────────────────────────
+  var backEl = document.getElementById('perf-backtest');
+  if(backEl) {
+    var comPlacar = h.filter(function(r){ return r.sc && r.cluster && r.cluster.length > 0; });
+    if(!comPlacar.length) {
+      backEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--txt3);font-size:10px;font-family:Space Mono,monospace;">Registre placares finais para ver o backtest</div>';
+    } else {
+      var noCluster = comPlacar.filter(function(r){ return r.placarNoCluster; }).length;
+      var naAncora  = comPlacar.filter(function(r){ return r.placarNaAncora; }).length;
+      var pctCluster = Math.round(noCluster/comPlacar.length*100);
+      var pctAncora  = Math.round(naAncora/comPlacar.length*100);
+      var cCluster = pctCluster>=50?'var(--grn)':pctCluster>=35?'var(--ylw)':'var(--red)';
+      var cAncora  = pctAncora>=30?'var(--grn)':pctAncora>=20?'var(--ylw)':'var(--red)';
+
+      // Por perfil
+      var porPerfil = {};
+      comPlacar.forEach(function(r){
+        var p = r.perfil||'Sem perfil';
+        if(!porPerfil[p]) porPerfil[p]={total:0,noCluster:0,naAncora:0};
+        porPerfil[p].total++;
+        if(r.placarNoCluster) porPerfil[p].noCluster++;
+        if(r.placarNaAncora)  porPerfil[p].naAncora++;
+      });
+
+      backEl.innerHTML =
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">'+
+          '<div style="background:#0a1520;border:1px solid var(--border);border-radius:9px;padding:14px;text-align:center;">'+
+            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:6px;">PLACAR NO CLUSTER</div>'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:'+cCluster+';">'+pctCluster+'%</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+noCluster+'/'+comPlacar.length+' jogos</div>'+
+          '</div>'+
+          '<div style="background:#0a1520;border:1px solid var(--border);border-radius:9px;padding:14px;text-align:center;">'+
+            '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;margin-bottom:6px;">ÂNCORA ACERTOU</div>'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:'+cAncora+';">'+pctAncora+'%</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+naAncora+'/'+comPlacar.length+' jogos</div>'+
+          '</div>'+
+        '</div>'+
+        Object.keys(porPerfil).map(function(p){
+          var x=porPerfil[p];
+          var pct=Math.round(x.noCluster/x.total*100);
+          return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 12px;background:#0a1520;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">'+
+            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt);">'+p+'</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'+x.total+' j</div>'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:900;color:'+(pct>=50?'var(--grn)':pct>=35?'var(--ylw)':'var(--red)')+';">'+pct+'%</div>'+
+          '</div>';
+        }).join('');
     }
   }
 
