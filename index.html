@@ -1110,6 +1110,7 @@ async function saveGamesServer() {
       key: 'games',
       data: {
         games: S.games,
+        hist: S.hist || [],
         savedAt: new Date().toISOString()
       }
     };
@@ -1145,12 +1146,11 @@ async function loadGamesServer() {
       if(serverGames && serverGames.length > 0) {
         // Merge: usa o servidor se tiver mais jogos ou dados mais recentes
         if(serverGames.length >= S.games.length) {
-          // Merge: combina server + local sem duplicar por ID
+          // Merge games: combina server + local sem duplicar por ID
           var localIds = new Set(S.games.map(function(g){ return g.id; }));
           serverGames.forEach(function(sg){
             if(!localIds.has(sg.id)) S.games.push(sg);
             else {
-              // Atualiza dados do servidor se for mais recente
               var idx = S.games.findIndex(function(g){ return g.id === sg.id; });
               if(idx >= 0 && sg.cluster && sg.cluster.length > 0) {
                 S.games[idx] = Object.assign({}, S.games[idx], sg);
@@ -1158,7 +1158,16 @@ async function loadGamesServer() {
             }
           });
           localStorage.setItem('cs_v6g', JSON.stringify(S.games));
+
+          // Restaurar hist do servidor se tiver mais registros
+          if(json.data.hist && Array.isArray(json.data.hist) && json.data.hist.length > (S.hist||[]).length) {
+            S.hist = json.data.hist;
+            localStorage.setItem('cs_v6h', JSON.stringify(S.hist));
+            console.log('✅ ' + S.hist.length + ' resultados restaurados do servidor');
+          }
+
           renderSidebar();
+          updHdr();
           console.log('✅ ' + serverGames.length + ' jogos do servidor sincronizados');
         }
       }
