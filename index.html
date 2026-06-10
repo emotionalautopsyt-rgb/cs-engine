@@ -1130,7 +1130,11 @@ async function loadGamesServer() {
     if(!resp.ok) return null;
     var json = await resp.json();
     if(json.ok && json.data && Array.isArray(json.data.games)) {
-      return json.data.games;
+      // Retorna objeto com games E hist para restauração completa
+      return {
+        games: json.data.games,
+        hist: Array.isArray(json.data.hist) ? json.data.hist : []
+      };
     }
   } catch(e) {}
   return null;
@@ -1142,7 +1146,9 @@ async function loadGamesServer() {
 (function initFromServer() {
   setTimeout(async function() {
     try {
-      var serverGames = await loadGamesServer();
+      var serverResult = await loadGamesServer();
+      var serverGames = serverResult ? serverResult.games : null;
+      var serverHist  = serverResult ? serverResult.hist  : [];
       if(serverGames && serverGames.length > 0) {
         // Merge: usa o servidor se tiver mais jogos ou dados mais recentes
         if(serverGames.length >= S.games.length) {
@@ -1160,8 +1166,8 @@ async function loadGamesServer() {
           localStorage.setItem('cs_v6g', JSON.stringify(S.games));
 
           // Restaurar hist do servidor se tiver mais registros
-          if(json.data.hist && Array.isArray(json.data.hist) && json.data.hist.length > (S.hist||[]).length) {
-            S.hist = json.data.hist;
+          if(Array.isArray(serverHist) && serverHist.length > (S.hist||[]).length) {
+            S.hist = serverHist;
             localStorage.setItem('cs_v6h', JSON.stringify(S.hist));
             console.log('✅ ' + S.hist.length + ' resultados restaurados do servidor');
           }
@@ -1871,6 +1877,36 @@ function applyStake(v) {
 // ===== APROVAÇÃO OPERACIONAL DO GÊNIO =====
 // Regra binária: o Gênio aprova ou não aprova.
 // O usuário ainda pode operar qualquer jogo, mas a performance registra o status.
+
+function limparTextoStakeReduzida(txt){
+  txt = String(txt || '');
+  return txt
+    .replace(/stake\s*(reduzida|reduzido|ajustada|ajustado)[^.\n]*(\.|\n)/gi, '')
+    .replace(/entrada\s*(cautelosa|reduzida)[^.\n]*(\.|\n)/gi, '')
+    .replace(/\b(70|67)%\s*(da\s*)?stake[^.\n]*(\.|\n)/gi, '')
+    .replace(/odds\s+fora\s+do\s+range\s+ideal\s*→?\s*stake[^.\n]*(\.|\n)/gi, '')
+    .replace(/reduzido\s*—\s*odds\s+fora\s+do\s+range\s+ideal/gi, 'status operacional registrado pelo Gênio')
+    .replace(/reduzida\s*—\s*odds\s+fora\s+do\s+range\s+ideal/gi, 'status operacional registrado pelo Gênio');
+}
+
+
+function blindarAncoraNarrativa(reply, engine, engineFinal){
+  reply = String(reply || '');
+  if(!engineFinal || !engineFinal.ancora) return reply;
+  const nova = String(engineFinal.ancora).trim();
+  const antiga = engine && engine.ancora ? String(engine.ancora).trim() : '';
+  if(antiga && antiga !== nova){
+    const esc = antiga.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    reply = reply.replace(new RegExp(esc, 'g'), nova);
+  }
+  // Blindagem extra para rótulos comuns.
+  reply = reply.replace(/(Âncora\s*:\s*)(\d-\d)/gi, '$1' + nova);
+  reply = reply.replace(/(A\s+âncora\s+(?:é|será)\s*)(\d-\d)/gi, '$1' + nova);
+  reply = reply.replace(/(PLACAR\s+PROJETADO[^0-9]{0,80})(\d-\d)/gi, '$1' + nova);
+  reply = reply.replace(/(Placar\s+Projetado\s+pelo\s+Gênio[^0-9]{0,80})(\d-\d)/gi, '$1' + nova);
+  return reply;
+}
+
 function avaliarAprovacaoGenio(ctx) {
   ctx = ctx || {};
   const fav = parseFloat(ctx.fav ?? document.getElementById('pk-fav')?.value) || 0;
@@ -2224,11 +2260,11 @@ Betfair CS: odds dos placares → calcular stakes e probabilidades.
 PASSO 0 — PRÉ-ANÁLISE (antes de tudo)
 ═══════════════════════════════════════
 Verificar obrigatoriamente:
-→ ESCALAÇÃO: confirmada? SE não → stake -20%
-→ ROTAÇÃO: suspeita? SE sim → NÃO OPERA
+→ ESCALAÇÃO: confirmada? SE não → contexto sensível
+→ ROTAÇÃO: suspeita? SE sim → NÃO APROVADO
 → MOTIVAÇÃO: alta/média/baixa → impacta confiança do DNA
 → CONTEXTO: jogo 2 pernas? Copa? Clássico? Início de temporada (<8 rodadas)?
-→ COPA/ELIMINATÓRIO: confiança MÉDIA máxima + stake -20% + +1 score proteção
+→ COPA/ELIMINATÓRIO: confiança MÉDIA máxima + contexto sensível + +1 score proteção
   Copa NÃO bloqueia DNA nem H2H — apenas xG❌. DNA/H2H com dados disponíveis = usar.
 
 ═══════════════════════════════════════
@@ -2238,7 +2274,7 @@ Favorito: @1.25–2.35 ✅
 BTTS:     até @2.15  ✅
 Over 2.5: @1.40–2.20 ✅
 
-2+ critérios fora → FILTRO RECUSADO → NÃO OPERA. Encerrar análise.
+2+ critérios fora → FILTRO RECUSADO → NÃO APROVADO. Encerrar análise.
 1 critério fora → CAUTELA (declarar, continuar).
 
 ═══════════════════════════════════════
@@ -2263,7 +2299,7 @@ Over @1.40–1.69 = GOLEADA CANDIDATA → confirmar com DNA (3+ gols/jogo OU 3-0
 SE não confirma → usar perfil pela odd do favorito normalmente.
 
 META CS: retorno_simples = (odd_fav - 1) × 100. Meta = retorno × 2.
-SE cluster não atinge meta → NÃO OPERA. Declarar motivo.
+SE cluster não atinge meta → NÃO APROVADO. Declarar motivo.
 
 ═══════════════════════════════════════
 PASSO 2 — DNA + xG
@@ -2290,7 +2326,7 @@ HIERARQUIA DO SCORE ÂNCORA:
 AJUSTES POR TEXTO:
   "já classificado"/"sem objetivo"/"nada a perder" → ⚠️ Motivação reduzida. Stake -15%. Score âncora conservador. NÃO bloquear.
   "má fase"/"derrotas seguidas" → DNA -20% confiança
-  "desfalque atacante fav" → xG_fav × 0.80, stake -20%
+  "desfalque atacante fav" → xG_fav × 0.80, contexto sensível
   "desfalque defensor fav" → xG_adv × 1.15, plano B reforçado
   "desfalque adversário" → xG_adv × 0.85
   "jogo decisivo"/"precisa vencer" → xG_fav × 1.10
@@ -2421,8 +2457,8 @@ VALIDAÇÃO CRUZADA 5/5 — declarar SEMPRE ao final:
   CS:     odd âncora esperada + boa liquidez? ✅/❌
   
   5/5 ou 4/5 → CONFIANÇA MÁXIMA/ALTA 🟢 → opera normalmente
-  2/5        → CONFIANÇA MÉDIA 🟡 → stake -20%, cluster conservador
-  0-1/5      → CONFIANÇA BAIXA 🔴 → NÃO OPERA, declarar motivo
+  2/5        → CONFIANÇA MÉDIA 🟡 → contexto sensível, cluster conservador
+  0-1/5      → CONFIANÇA BAIXA 🔴 → NÃO APROVADO, declarar motivo
 
 DECLARAR SEMPRE:
 "VALIDAÇÃO CRUZADA: X/5 | xG:✅/❌ | DNA:✅/❌ | Over:✅/❌ | BTTS:✅/❌ | CS:✅/❌ | CONFIANÇA: [nível]"
@@ -2646,7 +2682,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
-  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — stake reduzida'; }
+  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — status operacional registrado'; }
 
   // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
@@ -3054,10 +3090,9 @@ async function analisarJogo() {
   const overOk = over>=1.40&&over<=2.20;
   const packballOk = favOk && bttsOk && overOk;
   const failCount = [!favOk,!bttsOk,!overOk].filter(Boolean).length;
-  // Stake: full if passes, -30% if 1 criterion out, block if 2+
-  const stake = failCount===0 ? S.stake :
-                failCount===1 ? parseFloat((S.stake * 0.70).toFixed(2)) :
-                parseFloat((S.stake * 0.67).toFixed(2));
+  // Stake: sempre usa stake configurada — Gênio aprova/reprova mas não mexe na stake
+  // O usuário decide o valor a operar independente da aprovação
+  const stake = S.stake;
 
   if(!texto) { notify('ERRO', 'Cole a análise do jogo primeiro', 'var(--red)'); return; }
   if(!fav || !btts || !over) { notify('ERRO', 'Preencha as odds de mercado primeiro', 'var(--red)'); return; }
@@ -3348,7 +3383,7 @@ Plano B: ${engine.protection.join(', ')}
 ${engine.caminhoPeso === 'fraco' ? 'NOTA: 1-0 é PONTE FRACA — score de passagem, não alvo.' : ''}
 ${engine.odd10Used > 9.0 ? 'NOTA: 1-0 odd alta (@'+engine.odd10Used+') — alta compressão após gol.' : ''}
 
-STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
+STAKE TOTAL: R$${stake}${!packballOk ? ' (status operacional registrado pelo Gênio)' : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS:
@@ -3398,6 +3433,14 @@ REGRAS ABSOLUTAS:
     // ── FASE 1: Validação contextual (Consenso Duplo) ─────────
     // Chamada rápida — só JSON, sem narrativa
     let engineFinal = { ...engine }; // começa com o cluster do motor
+
+    // Deduplicação preventiva — garantir sem scores duplicados
+    engine.mainScores = engine.mainScores.filter(function(s,i,a){ return a.indexOf(s)===i; });
+    engine.protection = engine.protection.filter(function(s,i,a){
+      return a.indexOf(s)===i && !engine.mainScores.includes(s);
+    });
+    engineFinal.mainScores = [...engine.mainScores];
+    engineFinal.protection = [...engine.protection];
     try {
       const respValidacao = await fetch('/.netlify/functions/analyze', {
         method: 'POST',
@@ -3461,6 +3504,8 @@ REGRAS ABSOLUTAS:
       .replace('Plano A: '+engine.mainScores.join(', '), 'Plano A: '+engineFinal.mainScores.join(', '))
       .replace('Plano B: '+engine.protection.join(', '), 'Plano B: '+engineFinal.protection.join(', '))
       .replace('Âncora (PLACAR PROJETADO): '+engine.ancora, 'Âncora (PLACAR PROJETADO): '+engineFinal.ancora)
+      .replace('ÂNCORA DEFINITIVO: '+engine.ancora, 'ÂNCORA DEFINITIVO: '+engineFinal.ancora)
+      .replace("'"+engine.ancora+" é o placar que esse jogo está pedindo.'", "'"+engineFinal.ancora+" é o placar que esse jogo está pedindo.'"  )
       .replace(/Total na lista = \d+ scores/, 'Total na lista = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores');
 
     // ── FASE 2: Narrativa com cluster final ───────────────────
@@ -3499,7 +3544,7 @@ REGRAS ABSOLUTAS:
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
-    const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|NÃO OPERA.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
+    const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|NÃO APROVADO.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
 
     // ── Detecção de contexto (definir ANTES dos indicadores) ─────────
     const isCopa = /copa\s+detectada|⚠️\s*COPA|eliminatório|play.?off|mata.?mata|FA\s+Cup|Champions|Europa\s+League|Taça|knock.?out/i.test(reply);
@@ -3561,21 +3606,21 @@ REGRAS ABSOLUTAS:
       const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
       if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO APROVADO</div>
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
+          <em>"Se o cluster não dobra o retorno simples — não aprova."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
       if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
       S.thinking = false;
-      return;
+      // return removido: jogo não aprovado continua gerando árvore
     }
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">⛔ RECUSADO</span>';
       if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
-        <div class="ab-title" style="color:var(--red);font-size:14px;">⛔ FILTRO RECUSADO — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--red);font-size:14px;">⛔ FILTRO RECUSADO — NÃO APROVADO</div>
         <div class="ab-text" style="margin-top:8px;">
           <strong>2 critérios fora do range.</strong><br><br>
           O bot identificou o problema corretamente e encerrou a análise.<br>
@@ -3584,7 +3629,7 @@ REGRAS ABSOLUTAS:
       </div>`;
       if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
       S.thinking = false;
-      return;
+      // return removido: jogo não aprovado continua gerando árvore
     }
 
     // Meta CS check — if cluster doesn't double the simple return
@@ -3593,24 +3638,24 @@ REGRAS ABSOLUTAS:
       const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
       if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO APROVADO</div>
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
+          <em>"Se o cluster não dobra o retorno simples — não aprova."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
       if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
       S.thinking = false;
-      return;
+      // return removido: jogo não aprovado continua gerando árvore
     }
 
     // Validação cruzada — block if BAIXA confidence (0-1/5)
     if(isLowConf && crossScore < 1.5) {
       if(badge) badge.innerHTML = `<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">🔴 CONFIANÇA BAIXA ${crossScore.toFixed(1)}/5</span>`;
       if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
-        <div class="ab-title" style="color:var(--red);font-size:14px;">🔴 VALIDAÇÃO CRUZADA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--red);font-size:14px;">🔴 VALIDAÇÃO CRUZADA — NÃO APROVADO</div>
         <div class="ab-text" style="margin-top:8px;">
           <strong>Confiança: ${crossScore.toFixed(1)}/5 indicadores</strong><br><br>
           xG:${ind1?'✅':'❌'} | DNA/H2H:${ind2?'✅':'❌'} | Over:${ind3===1?'✅':ind3===0.5?'⚠️':'❌'} | BTTS:${ind4===1?'✅':ind4===0.5?'⚠️':'❌'} | CS:${ind5?'✅':'❌'}<br><br>
@@ -3685,6 +3730,9 @@ REGRAS ABSOLUTAS:
     const alertaText = alertaMatch ? alertaMatch[1].trim() : null;
 
     // Copa/early season + validation cross-check banners
+    reply = blindarAncoraNarrativa(reply, engine, engineFinal);
+    reply = limparTextoStakeReduzida(reply);
+
     let contextWarnings = '';
     contextWarnings += renderGenioApprovalBox(genioApproval);
     // ALERTA DO GÊNIO — destaque máximo + placar projetado
