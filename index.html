@@ -3285,7 +3285,7 @@ function refinoFinal10x(cluster, ctx){
   return cluster;
 }
 
-function analisarJogo() {
+async function analisarJogo() {
   if(S.thinking) return;
   var btnAn = document.getElementById('btn-analisar');
   if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.innerHTML='⏳ ANALISANDO...'; }
