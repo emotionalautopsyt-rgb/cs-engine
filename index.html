@@ -2623,7 +2623,7 @@ REGRAS DO JSON:
 
 // ===== CS ENGINE — MOTOR DETERMINÍSTICO =====
 // Scores, âncora e pirâmide calculados por código. IA só escreve a narrativa.
-function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
+function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   favEhVisitante = favEhVisitante || false;
 
   // Função para inverter score quando favorito é visitante
@@ -2635,6 +2635,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante) {
   }
   function invArr(arr) { return arr.map(inv); }
   csOdds = csOdds || {};
+  csOddsLiq = csOddsLiq || {};
 
   // ── PERFIL ──────────────────────────────────────────────
   // Fiel ao PDF: tabela de perfis por fav + over
@@ -3129,7 +3130,7 @@ async function analisarJogo() {
     (favVisTextual && avgVisitante > 0 && avgVisitante < avgCasa * 0.90);
 
   // ── Motor determinístico — calcular scores por código ──────
-  const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal);
+  const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal, S.csOddsLiq);
 
   // ── PRÉ-REFINO: refinar o cluster do motor ANTES da IA validar ──
   // Ordem correta: motor → refino premium → IA valida → cluster final
