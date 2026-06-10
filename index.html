@@ -1992,20 +1992,25 @@ function checkPackball() {
   const pass = fO && bO && oO;
   const fails = [!fO,!bO,!oO].filter(Boolean).length;
 
-  // Detect profile
+  // Detect profile — lê as 3 odds em conjunto, não só o fav
   let perfil = '', piramide = '';
-  if(over>=1.40&&over<1.70)                        { perfil='GOLEADA';              piramide='INVERTIDA'; } // Over baixo = goleada sempre
-  else if(fav>=1.25&&fav<=1.50&&over<1.70)        { perfil='GOLEADA';              piramide='INVERTIDA'; }
-  else if(fav>=1.25&&fav<=1.50&&over<=1.85)       { perfil='OFENSIVO';             piramide='NORMAL'; }
-  else if(fav>1.50&&fav<=1.65&&over<1.70)         { perfil='GOLEADA';              piramide='INVERTIDA'; }
-  else if(fav>1.50&&fav<=1.65&&over<=1.85)        { perfil='OFENSIVO';             piramide='NORMAL'; }
-  else if(fav>1.50&&fav<=1.65&&over<=2.20)        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
-  else if(fav>=1.65&&fav<=1.80&&over<=1.85)       { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
-  else if(fav>=1.65&&fav<=1.80&&over<=2.00)       { perfil='EQUILIBRADO';          piramide='NORMAL'; }
-  else if(fav>=1.80&&fav<=2.00&&over<=1.85)       { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
-  else if(fav>=1.80&&fav<=2.00&&over<=2.20)       { perfil='CONSERVADOR';          piramide='CONSERVADORA'; }
-  else if(fav>=2.00&&fav<=2.35)                   { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
-  else                                             { perfil='INDEFINIDO';           piramide='NORMAL'; }
+  // Over baixo sempre sinaliza goleada independente do fav
+  if(over<1.70)                                                          { perfil='GOLEADA';              piramide='INVERTIDA'; }
+  // Favorito forte (1.25-1.50)
+  else if(fav<=1.50&&over<=1.85)                                        { perfil='OFENSIVO';             piramide='NORMAL'; }
+  else if(fav<=1.50&&over<=2.20)                                        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
+  // Favorito moderado (1.50-1.80)
+  else if(fav<=1.80&&over<=1.85)                                        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
+  else if(fav<=1.80&&over<=2.10)                                        { perfil='EQUILIBRADO';          piramide='NORMAL'; }
+  // Zona ABERTO/BTTS — btts baixo + over moderado independente do fav até 2.20
+  else if(btts<=1.85&&over<=2.00)                                       { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
+  else if(btts<=1.90&&over<=2.10&&fav<=2.20)                           { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
+  // Favorito fraco mas jogo aberto — não é alto risco, é equilibrado com ambos marcando
+  else if(fav<=2.20&&btts<=2.00&&over<=2.00)                           { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
+  else if(fav<=2.20&&over<=2.20)                                        { perfil='CONSERVADOR';          piramide='CONSERVADORA'; }
+  // Genuinamente alto risco — fav>2.20 OU odds muito abertas
+  else if(fav>2.20&&fav<=2.35)                                          { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
+  else                                                                   { perfil='INDEFINIDO';           piramide='NORMAL'; }
 
   // Verificar também o texto da análise para detectar amistoso
   const textoAnalise = document.getElementById('an-texto')?.value || '';
@@ -3113,18 +3118,26 @@ SUA TAREFA:
 Cruze as 3 fontes e valide se cada score do cluster faz sentido para ESTE evento.
 
 REGRAS ABSOLUTAS:
-1. Só remova score com razão FORTE das 3 fontes — nunca por feeling
-2. Nunca remova mais que 1-2 scores
-3. NUNCA adicione scores fora do cluster do motor
-4. NUNCA aumente a quantidade de scores
-5. A âncora só muda se contexto + mercado contradizerem claramente
-6. Se cluster estiver correto, aprovar tudo sem remover nada
+1. O cluster do motor é a base — mas pode ser ajustado se contexto + mercado contradizerem
+2. Você PODE sugerir até 1 score adicional SE o contexto e liquidez justificarem fortemente
+3. Nunca adicione mais de 1 score extra — o motor já calculou o perfil
+4. Nunca remova mais que 2 scores
+5. A âncora muda se contexto + mercado apontarem claramente para outro score
+6. COERÊNCIA é a regra mais importante — narrativa e cluster devem contar a mesma história
+7. Se cluster estiver coerente com contexto, aprovar tudo sem alterar
+
+EXEMPLO DE COERÊNCIA OBRIGATÓRIA:
+- Narrativa diz "jogo aberto, ambos marcam" → cluster deve ter scores de ambos marcando (1-1, 1-2, 2-1)
+- Narrativa diz "favorito domina" → cluster deve ter scores limpos do favorito (1-0, 2-0)
+- Narrativa diz "placar fechado" → cluster não deve ter 3-2 ou 4-1
+- Se cluster contradiz narrativa → ajuste o cluster para ser coerente
 
 Responda APENAS com JSON válido, sem texto adicional:
 {
   "aprovar": ["scores que fazem sentido — mínimo 3"],
   "remover": ["scores a remover — vazio se nada remover"],
-  "motivo_remocao": "razão objetiva cruzando as 3 fontes, ou vazio",
+  "adicionar": ["score extra se contexto + liquidez justificarem — máximo 1, ou vazio"],
+  "motivo_ajuste": "razão objetiva cruzando as 3 fontes, ou vazio se nada alterar",
   "ancora_final": "score âncora validado pelo consenso",
   "confianca_contexto": 1-5
 }`;
@@ -3216,11 +3229,29 @@ REGRA ABSOLUTA: Use EXATAMENTE esses scores no JSON.\nNão adicione. Não remova
             const todosAprovados = voto.aprovar;
             engineFinal.mainScores = engine.mainScores.filter(s => todosAprovados.includes(s));
             engineFinal.protection = engine.protection.filter(s => todosAprovados.includes(s));
+
+            // IA pode adicionar 1 score extra para garantir coerência com narrativa
+            if(voto.adicionar && Array.isArray(voto.adicionar) && voto.adicionar.length > 0) {
+              const scoreExtra = voto.adicionar[0]; // máximo 1
+              const allScores = [...engineFinal.mainScores, ...engineFinal.protection];
+              const validScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','3-0','0-3','3-1','1-3','2-2','3-2','2-3'];
+              if(scoreExtra && !allScores.includes(scoreExtra) && validScores.includes(scoreExtra)) {
+                // Adiciona no Plano B se ainda cabe (max 2 no Plano B)
+                if(engineFinal.protection.length < 2) {
+                  engineFinal.protection.push(scoreExtra);
+                } else {
+                  // Substitui último do Plano B
+                  engineFinal.protection[engineFinal.protection.length-1] = scoreExtra;
+                }
+              }
+            }
+
             // Garantir que Plano A tem pelo menos 2 scores
             if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores;
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection;
+
             // Âncora validada pela IA
-            if(voto.ancora_final && todosAprovados.includes(voto.ancora_final)) {
+            if(voto.ancora_final && [...engineFinal.mainScores,...engineFinal.protection].includes(voto.ancora_final)) {
               engineFinal.ancora = voto.ancora_final;
             }
           }
