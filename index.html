@@ -1860,7 +1860,7 @@ function selectSbGame(id) {
   // Restore analysis HTML — SOMENTE se usuário clicou explicitamente no jogo
   const outEl = document.getElementById('resultado-out');
   if(outEl && S.currentGame.savedResultadoHtml && window._jogoExplicitamenteSelecionado) {
-    outEl.innerHTML = S.currentGame.savedResultadoHtml;
+    if(window._jogoExplicitamenteSelecionado) outEl.innerHTML = S.currentGame.savedResultadoHtml;
   }
 
   // Update live fields
@@ -1871,7 +1871,7 @@ function selectSbGame(id) {
 
   // Render cluster if available
   if(S.currentCluster.length > 0) {
-    renderCluster(S.currentCluster, S.currentGame.stake || S.stake);
+    if(window._jogoExplicitamenteSelecionado) renderCluster(S.currentCluster, S.currentGame.stake || S.stake);
     renderLiveCluster();
   }
 
@@ -6480,7 +6480,7 @@ function injetarScoresNarrativa(texto, cluster) {
       const clusterSummary = document.getElementById('cluster-summary');
 
       if(out && game.analysisHTML && window._jogoExplicitamenteSelecionado){
-        out.innerHTML = game.analysisHTML;
+        if(window._jogoExplicitamenteSelecionado) out.innerHTML = game.analysisHTML;
       }
 
       if(badge && typeof game.resBadgeHTML === 'string'){
@@ -6930,6 +6930,8 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
   };
 
   window.restaurarAnaliseDoJogo = function(game){
+    // NUNCA restaura se usuário não selecionou jogo explicitamente
+    if(!window._jogoExplicitamenteSelecionado) return;
     try{
       if(!game) game = S && S.currentGame;
       if(!game) return;
@@ -6943,7 +6945,7 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       const financeBox = document.getElementById('finance-box');
 
       if(out && game.analysisHTML && window._jogoExplicitamenteSelecionado){
-        out.innerHTML = game.analysisHTML;
+        if(window._jogoExplicitamenteSelecionado) out.innerHTML = game.analysisHTML;
       }
 
       if(badge && typeof game.resBadgeHTML === 'string'){
