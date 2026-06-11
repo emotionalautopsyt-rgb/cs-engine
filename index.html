@@ -1957,10 +1957,13 @@ function avaliarAprovacaoGenio(ctx) {
   // Regra final:
   // Aprova quando o mercado está legível, odds estão majoritariamente no range,
   // e não há contexto de alto ruído.
-  // csPouco não bloqueia — só avisa. O usuário pode não ter colado CS ainda.
-  // Bloqueia apenas: amistoso, rotação, sem objetivo, ou 2+ odds de mercado fora
-  const hardBlock = amistoso || rotacao || semObjetivo || rangeFails >= 2;
-  const aprovado = !hardBlock && (rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
+  // Favorito muito forte (≤ 1.65) — aprovar sempre independente de BTTS/Over
+  // Mercado está dizendo que o favorito vai marcar — cluster ofensivo tem valor
+  const favMuitoForte = fav <= 1.65;
+  // csPouco não bloqueia — só avisa
+  // Bloqueia apenas: amistoso, rotação, sem objetivo, ou 2+ odds fora (exceto fav forte)
+  const hardBlock = (amistoso || rotacao || semObjetivo) || (!favMuitoForte && rangeFails >= 2);
+  const aprovado = !hardBlock && (favMuitoForte || rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
 
   // Montar mensagem contextual de não aprovado
   var motivoPrincipal = '';
