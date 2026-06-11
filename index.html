@@ -3524,25 +3524,39 @@ REGRAS ABSOLUTAS:
             const removidos   = totalMotor - totalFinal;
 
             if(removidos > 2) {
-              // IA removeu demais — restaurar scores removidos priorizando Plano A
+              // IA removeu demais — restaurar scores até deixar no máximo 2 removidos
               const todosMotor  = [...engine.mainScores, ...engine.protection];
-              const todosFinais = [...engineFinal.mainScores, ...engineFinal.protection];
-              const faltando    = todosMotor.filter(s => !todosFinais.includes(s));
-              // Restaurar até sobrar máximo 2 removidos
-              const restaurar   = faltando.slice(0, removidos - 2);
-              restaurar.forEach(function(s) {
-                // Scores do Plano A do motor voltam para Plano A
+              const todosFinais = new Set([...engineFinal.mainScores, ...engineFinal.protection]);
+              const faltando    = todosMotor.filter(s => !todosFinais.has(s));
+              const qtdRestaurar = removidos - 2;
+              // Priorizar restaurar do Plano A do motor
+              const planoAFaltando = faltando.filter(s => engine.mainScores.includes(s));
+              const planoBFaltando = faltando.filter(s => engine.protection.includes(s));
+              const ordenado = [...planoAFaltando, ...planoBFaltando];
+              ordenado.slice(0, qtdRestaurar).forEach(function(s) {
                 if(engine.mainScores.includes(s)) {
                   engineFinal.mainScores.push(s);
                 } else {
                   engineFinal.protection.push(s);
                 }
               });
+              console.log('[ENFORCEMENT] IA removeu '+removidos+' scores, restaurados '+qtdRestaurar+': '+ordenado.slice(0,qtdRestaurar).join(', '));
             }
 
-            // Garantir mínimos absolutos
+            // Garantir mínimos absolutos — nunca menos de 4 scores no total
             if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores.slice();
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
+            // Se total ainda abaixo de 4, completar com scores do motor
+            const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
+            if(totalAtual < 4) {
+              const faltamScores = 4 - totalAtual;
+              const todosMotorFinal = [...engine.mainScores, ...engine.protection];
+              const jaTem = new Set([...engineFinal.mainScores, ...engineFinal.protection]);
+              todosMotorFinal.filter(s => !jaTem.has(s)).slice(0, faltamScores).forEach(function(s){
+                if(engine.mainScores.includes(s)) engineFinal.mainScores.push(s);
+                else engineFinal.protection.push(s);
+              });
+            }
 
             // Âncora validada pela IA
             if(voto.ancora_final && [...engineFinal.mainScores,...engineFinal.protection].includes(voto.ancora_final)) {
