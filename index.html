@@ -923,18 +923,18 @@ e garantir que o DNA seja lido corretamente."></textarea>
     <div>
       <div class="card" id="resultado-card" style="transition:box-shadow .4s,border-color .4s;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <div class="card-title" style="margin-bottom:0;font-size:12px;letter-spacing:3px;">🎯 CLUSTER GERADO</div>
+          <div class="card-title" style="margin-bottom:0;font-size:12px;letter-spacing:3px;">🧠 ANÁLISE DO GÊNIO</div>
           <div id="res-badge"></div>
         </div>
         <div id="resultado-out">
-          <div style="text-align:center;padding:40px 20px;color:var(--txt3);">
-            <div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div>
-            <div style="display:flex;flex-direction:column;gap:8px;text-align:left;max-width:200px;margin:0 auto;">
-              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">1</span>Cole a análise do jogo</div>
-              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">2</span>Informe as odds de mercado</div>
-              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">3</span>Cole as odds da Betfair</div>
-              <div style="display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:8px;"><span style="width:18px;height:18px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:7px;flex-shrink:0;">4</span>Clique ANALISAR</div>
+          <div style="text-align:center;padding:60px 20px;color:var(--txt3);">
+            <div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;">GÊNIO DOS PLACARES</div>
+            <div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;">
+              <div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;"><span>⚡</span><span>Lendo padrões e contexto</span></div>
+              <div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;"><span>📊</span><span>Analisando odds e perfil</span></div>
+              <div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;"><span>🎯</span><span>Calculando cluster de placares</span></div>
+              <div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;"><span>✍️</span><span>Gerando narrativa</span></div>
             </div>
           </div>
         </div>
@@ -1186,8 +1186,10 @@ async function loadGamesServer() {
           if(!window._jogoExplicitamenteSelecionado) {
             var outS = document.getElementById('resultado-out');
             var liveS = document.getElementById('live-cluster-cards');
-            if(outS) outS.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div><div style="font-size:11px;color:var(--txt3);">Cole a análise e clique ANALISAR</div></div>';
-            if(liveS) liveS.innerHTML = '';
+            var _outE = document.getElementById('resultado-out');
+  if(_outE) _outE.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;">GÊNIO DOS PLACARES</div><div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;"><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>📊</span><span>Analisando odds e perfil</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>🎯</span><span>Calculando cluster de placares</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
+  var _lcE = document.getElementById('live-cluster-cards');
+  if(_lcE) _lcE.innerHTML = '';
           }
         }
       }
@@ -3916,7 +3918,7 @@ REGRAS ABSOLUTAS:
       var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
       if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
       renderCluster(cluster, stake);
-      notify('🎯 CLUSTER GERADO', cluster.length+' scores prontos para operar', 'var(--grn)');
+      notify('🧠 ANÁLISE DO GÊNIO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
       var resCard = document.getElementById('resultado-card');
       if(resCard) {
@@ -4839,7 +4841,7 @@ function resetCluster() {
   const cc = document.getElementById('cluster-card');
   if(cc) cc.style.display = 'none';
   const out = document.getElementById('resultado-out');
-  if(out) out.innerHTML = '<div style="text-align:center;padding:50px 20px;color:var(--txt3);"><div style="font-size:36px;margin-bottom:12px;">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;">AGUARDANDO ANÁLISE</div></div>';
+  if(out) out.innerHTML = '<div style=\"text-align:center;padding:60px 20px;color:var(--txt3);\"><div style=\"font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style=\"font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;\">GÊNIO DOS PLACARES</div><div style=\"display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;\"><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>📊</span><span>Analisando odds e perfil</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>🎯</span><span>Calculando cluster de placares</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
   ['an-texto','cs-paste','pk-fav','pk-btts','pk-over'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const st=document.getElementById('cs-status'); if(st) st.textContent='';
   const pk=document.getElementById('pk-status'); if(pk) pk.innerHTML='';
@@ -6093,12 +6095,10 @@ function registrarResultado(g, num) {
 document.addEventListener('DOMContentLoaded', () => {
   window._jogoExplicitamenteSelecionado = false; // reset ao abrir
   // Garantir tela do cérebro ao abrir — limpar qualquer análise anterior
-  var outInit = document.getElementById('resultado-out');
-  if(outInit) {
-    outInit.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div><div style="font-size:11px;color:var(--txt3);">Cole a análise e clique ANALISAR</div></div>';
-  }
-  var liveCardsInit = document.getElementById('live-cluster-cards');
-  if(liveCardsInit) liveCardsInit.innerHTML = '';
+  var _outE = document.getElementById('resultado-out');
+  if(_outE) _outE.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;">GÊNIO DOS PLACARES</div><div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;"><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>📊</span><span>Analisando odds e perfil</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>🎯</span><span>Calculando cluster de placares</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
+  var _lcE = document.getElementById('live-cluster-cards');
+  if(_lcE) _lcE.innerHTML = '';
   try {
     const t=new Date(), y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
     const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
