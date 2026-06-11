@@ -3049,18 +3049,31 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       }
     }
 
-    // SINAL 4b: Âncora sempre no score com maior probabilidade implícita do cluster
+    // SINAL 4b: Âncora pelo score com maior VALOR combinado de prob + liquidez
+    // Prob sozinha não basta — onde o dinheiro real está é o voto mais honesto
     var todosScoresFinal = [...mainScores, ...protection];
-    var melhorProb = 0;
+    var melhorValor = 0;
     var melhorScore = ancora;
     todosScoresFinal.forEach(function(s) {
-      var odd = csOdds[s] || 0;
+      var odd  = csOdds[s]    || 0;
+      var liq  = csOddsLiq[s] || 0;
       var prob = odd > 0 ? 100/odd : 0;
-      if(prob > melhorProb) { melhorProb = prob; melhorScore = s; }
+      if(prob === 0) return; // sem odd, ignorar
+      // Score combinado: probabilidade normalizada + peso da liquidez
+      // Liquidez acima de R$5k recebe peso extra — mercado profissional votando
+      var pesoLiq = liq > 10000 ? 1.5 : liq > 5000 ? 1.2 : liq > 1000 ? 1.0 : 0.7;
+      var valorCombinado = prob * pesoLiq;
+      if(valorCombinado > melhorValor) {
+        melhorValor = valorCombinado;
+        melhorScore = s;
+      }
     });
-    // Só troca âncora se a diferença for significativa (>50% mais provável)
-    var probAncora = csOdds[ancora] ? 100/csOdds[ancora] : 0;
-    if(melhorProb > probAncora * 1.5 && melhorScore !== ancora) {
+    // Troca âncora se o score mais valioso for significativamente melhor
+    var oddAncora = csOdds[ancora] || 0;
+    var liqAncora = csOddsLiq[ancora] || 0;
+    var pesoAncora = liqAncora > 10000 ? 1.5 : liqAncora > 5000 ? 1.2 : liqAncora > 1000 ? 1.0 : 0.7;
+    var valorAncora = oddAncora > 0 ? (100/oddAncora) * pesoAncora : 0;
+    if(melhorValor > valorAncora * 1.1 && melhorScore !== ancora) {
       ancora = melhorScore;
     }
   }
@@ -3160,7 +3173,7 @@ async function analisarJogo() {
   const favOk  = fav>=1.25&&fav<=2.35;
   const bttsOk = btts>=1.65&&btts<=2.25;
   const overOk = over>=1.40&&over<=2.20;
-  const packballOk = favOk && bttsOk && overOk;
+  const packballOk = (favOk && bttsOk && overOk) || (fav <= 1.65);
   const failCount = [!favOk,!bttsOk,!overOk].filter(Boolean).length;
   // Stake: sempre usa stake configurada — Gênio aprova/reprova mas não mexe na stake
   // O usuário decide o valor a operar independente da aprovação
@@ -3462,7 +3475,7 @@ Plano B: ${engine.protection.join(', ')}
 ${engine.caminhoPeso === 'fraco' ? 'NOTA: 1-0 é PONTE FRACA — score de passagem, não alvo.' : ''}
 ${engine.odd10Used > 9.0 ? 'NOTA: 1-0 odd alta (@'+engine.odd10Used+') — alta compressão após gol.' : ''}
 
-STAKE TOTAL: R$${stake}${!packballOk ? ' (reduzido — odds fora do range ideal)' : ''}
+STAKE TOTAL: R$${stake}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS:
@@ -3905,7 +3918,9 @@ REGRAS ABSOLUTAS:
         S.currentGame.savedPerfil = engineFinal ? engineFinal.profileId : '';
         S.currentGame.savedAncora = engineFinal ? engineFinal.ancora : '';
         // Save ancora from JSON for PLACAR PROJETADO highlight
-        try { const jd = JSON.parse(jsonStr||'{}'); S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
+        // Âncora vem do engineFinal (soberano) — não do JSON da IA
+        S.currentGame.lastAncora = engineFinal ? engineFinal.ancora : null;
+        try { const jd = JSON.parse(jsonStr||'{}'); if(!S.currentGame.lastAncora) S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
         renderSidebar();
       }
