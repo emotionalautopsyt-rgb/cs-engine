@@ -889,13 +889,13 @@ e garantir que o DNA seja lido corretamente."></textarea>
 
 <!-- ODDS CORRECT SCORE - campo separado obrigatório -->
         <div class="dv"></div>
-        <div class="card-title" style="margin-bottom:10px;">💹 Odds Correct Score — Betfair</div>
+        <div class="card-title" style="margin-bottom:10px;">💹 Odds Correct Score — Exchange</div>
         <div class="ab ab-b" style="margin-bottom:9px;">
           <div class="ab-title" style="color:var(--acc);">CAMPO OBRIGATÓRIO — ODDS DO MERCADO CS</div>
           <div class="ab-text">
-            Cole aqui as odds de Correct Score direto da Betfair.<br>
+            Cole aqui as odds de Correct Score direto da Exchange.<br>
             <strong style="color:var(--txt);">Estas são as odds PRÉ-LIVE reais do mercado</strong> — o app extrai as odds BACK automaticamente e usa para calcular stakes e probabilidades.<br>
-            <small style="color:var(--txt3);">Formato: cole o texto do mercado CS da Betfair (back e lay juntos — o app separa automaticamente).</small>
+            <small style="color:var(--txt3);">Formato: cole o texto do mercado CS da Exchange (back e lay juntos — o app separa automaticamente).</small>
           </div>
         </div>
         <div>
@@ -1963,7 +1963,8 @@ function avaliarAprovacaoGenio(ctx) {
   // csPouco não bloqueia — só avisa
   // Bloqueia apenas: amistoso, rotação, sem objetivo, ou 2+ odds fora (exceto fav forte)
   const hardBlock = (amistoso || rotacao || semObjetivo) || (!favMuitoForte && rangeFails >= 2);
-  const aprovado = !hardBlock && (favMuitoForte || rangeFails <= 1) && (crossScore === null || crossScore >= 3.0);
+  // favMuitoForte (fav <= 1.65): aprova sempre independente de BTTS/Over
+  const aprovado = favMuitoForte || (!hardBlock && rangeFails <= 1 && (crossScore === null || crossScore >= 3.0));
 
   // Montar mensagem contextual de não aprovado
   var motivoPrincipal = '';
@@ -1989,16 +1990,19 @@ function avaliarAprovacaoGenio(ctx) {
   };
 }
 
-function renderGenioApprovalBox(ap) {
+function renderGenioApprovalBox(ap, favOverride) {
   if(!ap) ap = avaliarAprovacaoGenio({});
-  const cor = ap.aprovado ? 'var(--grn)' : 'var(--red)';
-  const bg  = ap.aprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,77,106,.05)';
+  // Se fav muito forte (<=1.65), sempre verde mesmo que odds estejam fora do range
+  const efAprovado = ap.aprovado || (favOverride && favOverride <= 1.65);
+  const cor = efAprovado ? 'var(--grn)' : 'var(--ylw)';
+  const bg  = efAprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,184,0,.06)';
+  const labelFinal = efAprovado ? '🟢 GÊNIO APROVOU O JOGO' : '⚠️ ALERTA DO GÊNIO';
   const itens = (ap.motivos || []).map(function(m){ return '<div style="margin-top:3px;opacity:.8;">• '+m+'</div>'; }).join('');
   const sub = ap.submensagem
     ? '<div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">'+ap.submensagem+'</div>'
     : '';
   return '<div class="ab '+(ap.aprovado?'ab-g':'ab-r')+'" style="background:'+bg+';border-color:'+cor+';margin-bottom:10px;padding:12px 14px;">'
-    + '<div class="ab-title" style="color:'+cor+';font-size:12px;letter-spacing:2px;margin-bottom:6px;">'+ap.label+'</div>'
+    + '<div class="ab-title" style="color:'+cor+';font-size:12px;letter-spacing:2px;margin-bottom:6px;">'+labelFinal+'</div>'
     + '<div class="ab-text" style="font-size:11px;line-height:1.6;">'+ap.resumo+'</div>'
     + (itens ? '<div style="margin-top:6px;font-size:10px;color:var(--txt2);">'+itens+'</div>' : '')
     + sub
@@ -3862,7 +3866,7 @@ REGRAS ABSOLUTAS:
 
     // Copa/early season + validation cross-check banners
     let contextWarnings = '';
-    contextWarnings += renderGenioApprovalBox(genioApproval);
+    contextWarnings += renderGenioApprovalBox(genioApproval, fav);
     // ALERTA DO GÊNIO — destaque máximo + placar projetado
     if(alertaText) contextWarnings +=
       '<div style="background:linear-gradient(135deg,rgba(255,199,64,.14),rgba(255,122,53,.10));border:1px solid rgba(255,199,64,.5);border-radius:14px;padding:18px 20px;margin-bottom:12px;position:relative;overflow:hidden;">'+
