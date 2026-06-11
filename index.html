@@ -2858,12 +2858,26 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   var textoAnalise = document.getElementById('an-texto') ?
     (document.getElementById('an-texto').value || '') : '';
   var dnaEmpateGols = false;
+  var dnaEmpateScore = 0; // score de intensidade do padrão
   if(textoAnalise) {
-    var empatesComGols = (textoAnalise.match(/2-2|1-1.*2-2|empat.*gol|gol.*empat/gi) || []).length;
-    var empatesFora    = (textoAnalise.match(/empat.*fora|fora.*empat/gi) || []).length;
-    var bttsHistorico  = (textoAnalise.match(/ambos.*marc|marc.*ambos|BTTS/gi) || []).length;
-    // Ativa DNA_EMPATE_GOLS se há padrão claro no texto
-    dnaEmpateGols = (empatesComGols >= 2) || (empatesFora >= 1 && bttsHistorico >= 1);
+    var tL = textoAnalise.toLowerCase();
+    // Padrões diretos de placares históricos
+    var pat22    = (tL.match(/2-2|2 a 2/g) || []).length;
+    var pat11    = (tL.match(/1-1|1 a 1/g) || []).length;
+    var patEmpate = (tL.match(/empat/g) || []).length;
+    // Padrões comportamentais
+    var patAmbos  = (tL.match(/ambos marc|marc.*ambos|os dois marc|ambas as equip.*marc/g) || []).length;
+    var patFora   = (tL.match(/empat.*fora|fora.*empat|visitante.*empat|empat.*visitante/g) || []).length;
+    var patResiste = (tL.match(/resist|respond|virar|volta|reação|reage/g) || []).length;
+    var patAberto = (tL.match(/jogo aberto|aberto|equilibr/g) || []).length;
+
+    // Score ponderado
+    dnaEmpateScore = (pat22 * 3) + (pat11 * 2) + (patAmbos * 2) +
+                     (patFora * 2) + (patResiste * 1) + (patAberto * 1) +
+                     (patEmpate * 0.5);
+
+    // Ativa com threshold menor — qualquer sinal moderado já ativa
+    dnaEmpateGols = dnaEmpateScore >= 3;
   }
 
   // SINAL 4 — FAVORITO VISITANTE SOBERANO
@@ -2950,14 +2964,33 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   }
 
   // ── MELHORIA 2: FAVORITO VISITANTE SOBERANO ─────────────
-  // Quando visitante favorito ≤ 2.15 + BTTS vivo + Over vivo
-  // O cluster invertido já foi calculado — aqui garantimos que
-  // scores do mandante limpos (ex: 2-0 original) não dominam indevidamente
-  // A inversão pelo favEhVisitante já trata isso — apenas reforçamos
-  // que a âncora invertida é soberana e não pode ser sobrescrita
-  if(favVisitanteForte && ancora) {
-    // Âncora invertida já está correta — preservar sem override
-    // (nenhuma lógica posterior deve inverter de volta)
+  // Quando visitante é favorito, o cluster deve refletir isso com clareza
+  if(favVisitanteForte) {
+    // Garantir que âncora é do visitante (score tipo 0-1, 0-2, 1-2)
+    var ancoraEhVisitante = ancora && ancora.split('-')[1] > ancora.split('-')[0];
+    if(!ancoraEhVisitante) {
+      // Âncora está apontando para mandante — corrigir para 0-1 ou 1-2
+      var scoreVisitanteNoCluster = [...mainScores, ...protection].find(function(s){
+        var p = s.split('-');
+        return Number(p[1]) > Number(p[0]);
+      });
+      if(scoreVisitanteNoCluster) ancora = scoreVisitanteNoCluster;
+    }
+    // Garantir que Plano A tem pelo menos 2 scores do visitante
+    var scoresVisitanteA = mainScores.filter(function(s){
+      var p = s.split('-'); return Number(p[1]) >= Number(p[0]);
+    });
+    if(scoresVisitanteA.length < 2) {
+      // Adicionar scores do visitante no Plano A se faltam
+      if(!mainScores.includes('0-1') && !mainScores.includes('0-2')) {
+        mainScores.push('0-1');
+      }
+      if(!mainScores.includes('1-2') && !mainScores.includes('0-2')) {
+        mainScores.push('1-2');
+      }
+      // Limitar tamanho do Plano A
+      if(mainScores.length > 5) mainScores = mainScores.slice(0, 5);
+    }
   }
 
   // SINAL 4: Odds CS reais — remover scores de baixíssima probabilidade do Plano A
@@ -3359,6 +3392,13 @@ HIERARQUIA DE DECISÃO:
 2º fav + btts + over — definem o perfil geral do jogo
 3º Contexto textual — H2H, DNA, forma — refinam dentro do perfil
 4º Consenso — quando odds CS + contexto concordam, cluster é forte
+
+ROTAS NATURAIS — o cluster deve parecer uma evolução de jogo, não placares soltos:
+- Favorito forte: 1-0 → 2-0 → 2-1 → 3-0 → 3-1 (escada ofensiva)
+- Jogo equilibrado: 1-0 → 1-1 → 2-1 (ida e volta)
+- Visitante favorito: 0-1 → 0-2 → 1-2 (visitante controla)
+- Jogo aberto: 1-1 → 2-1 → 2-2 → 1-2 (equilíbrio com gols)
+O cluster deve contar uma história de como o jogo pode evoluir — cada score deve ser o próximo passo natural do anterior.
 
 EXEMPLOS DE COERÊNCIA OBRIGATÓRIA:
 - btts@1.76 + odd 1-1@7.8 → 1-1 deve ser âncora (12.8% de probabilidade)
