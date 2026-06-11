@@ -6082,6 +6082,13 @@ function registrarResultado(g, num) {
 
 document.addEventListener('DOMContentLoaded', () => {
   window._jogoExplicitamenteSelecionado = false; // reset ao abrir
+  // Garantir tela do cérebro ao abrir — limpar qualquer análise anterior
+  var outInit = document.getElementById('resultado-out');
+  if(outInit) {
+    outInit.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div><div style="font-size:11px;color:var(--txt3);">Cole a análise e clique ANALISAR</div></div>';
+  }
+  var liveCardsInit = document.getElementById('live-cluster-cards');
+  if(liveCardsInit) liveCardsInit.innerHTML = '';
   try {
     const t=new Date(), y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
     const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
