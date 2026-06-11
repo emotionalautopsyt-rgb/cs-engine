@@ -1933,7 +1933,9 @@ function avaliarAprovacaoGenio(ctx) {
   if(overOk) positivos.push('Over 2.5 dentro da zona operacional');
   else motivos.push('Over 2.5 fora da zona operacional');
 
-  const amistoso = /amistoso|friendly|club friendly|pre.?season|pré.?temporada|exibição|preparação/i.test(fullText);
+  // Verificar se é Copa do Mundo ou competição oficial antes de detectar amistoso
+  const isCompOficial = /copa do mundo|world cup|champions league|premier league|la liga|bundesliga|serie a|ligue 1|eliminatórias|euro|copa america|nations league/i.test(fullText);
+  const amistoso = !isCompOficial && /amistoso|friendly|club friendly|pre.?season|pré.?temporada|exibição|preparação/i.test(fullText);
   const rotacao = /reserva|reservas|rotação|rodízio|poupar|poupando|escalação alternativa|time misto|sem titulares|desfalque pesado/i.test(fullText);
   const semObjetivo = /sem objetivo|sem motivação|já classificado|ja classificado|eliminado|cumpre tabela|nada em jogo|amistoso sem pressão/i.test(fullText);
   const baixaLiq = (S.csOddsLiq && Object.keys(S.csOddsLiq).length >= 3)
@@ -2049,7 +2051,8 @@ function checkPackball() {
 
   // Verificar também o texto da análise para detectar amistoso
   const textoAnalise = document.getElementById('an-texto')?.value || '';
-  const isAmistoso = /amistoso|friendly|pre.?season|pré.?temporada|preparação/i.test(textoAnalise);
+  const _isCompOficial = /copa do mundo|world cup|champions league|premier league|la liga|bundesliga|serie a|ligue 1|eliminatórias|euro|copa america|nations league/i.test(textoAnalise);
+  const isAmistoso = !_isCompOficial && /amistoso|friendly|pre.?season|pré.?temporada|preparação/i.test(textoAnalise);
   const semMotivacao = /sem objetivo|sem motivação|já classificado|eliminado|cumpre tabela|nada em jogo/i.test(textoAnalise);
   const contextoBloqueio = isAmistoso || semMotivacao;
 
@@ -2061,8 +2064,8 @@ function checkPackball() {
   if(fails <= 1 && !contextoBloqueio) {
     el.innerHTML = `<div class="ab ab-g" style="border-left-color:var(--grn);background:rgba(0,201,110,.07);padding:12px 14px;"><div class="ab-title" style="color:var(--grn);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🟢 GÊNIO APROVOU O JOGO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">Edge identificado. Árvore liberada com alta confiança operacional.</div></div>`;
   } else {
-    var motivoEl = contextoBloqueio ? motivoContexto : 'As odds estão fora do perfil onde o Gênio tem maior edge histórico.';
-    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--red);background:rgba(255,77,106,.05);padding:12px 14px;"><div class="ab-title" style="color:var(--red);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🔴 FORA DA ZONA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">${motivoEl}</div><div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">Você ainda pode analisar e operar — o resultado ficará registrado separadamente para comparação.</div></div>`;
+    var motivoEl = contextoBloqueio ? motivoContexto : 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
+    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--ylw);background:rgba(255,184,0,.06);padding:12px 14px;border:1px solid rgba(255,184,0,.3);border-radius:8px;"><div class="ab-title" style="color:var(--ylw);font-size:11px;letter-spacing:2px;margin-bottom:6px;">⚠️ ALERTA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;color:var(--txt2);">${motivoEl}</div></div>`;
   }
 
   // Comunicação final oficial: binário e profissional
@@ -6671,7 +6674,7 @@ function injetarScoresNarrativa(texto, cluster) {
   function detectContextFlags(text){
     const t = (text || '').toLowerCase();
     return {
-      amistoso: /amistoso|friendly|amigável|sem pressão|teste/.test(t),
+      amistoso: !/copa do mundo|world cup|champions league|premier league|eliminatórias/i.test(t) && /amistoso|friendly|amigável|sem pressão|teste/.test(t),
       defesasRuins: /sofreu gols|sofreram gols|defesa.*vaz|defensiva.*frágil|permitiu gols|gols sofridos|permeabilidade defensiva/.test(t),
       ataqueForte: /marcou gols|ataque.*regular|ofensivo|volume ofensivo|média de gols marcados|cria muitas/.test(t),
       golsTardios: /76-90|61-75|segundo tempo|gols tardios|fase final|reta final/.test(t),
