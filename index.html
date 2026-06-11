@@ -1182,6 +1182,13 @@ async function loadGamesServer() {
           renderSidebar();
           updHdr();
           console.log('✅ ' + serverGames.length + ' jogos do servidor sincronizados');
+          // Após sync do servidor: mostrar cérebro se nenhum jogo foi selecionado
+          if(!window._jogoExplicitamenteSelecionado) {
+            var outS = document.getElementById('resultado-out');
+            var liveS = document.getElementById('live-cluster-cards');
+            if(outS) outS.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(0,212,255,.3));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:900;letter-spacing:3px;margin-bottom:14px;color:var(--acc);">AGUARDANDO ANÁLISE</div><div style="font-size:11px;color:var(--txt3);">Cole a análise e clique ANALISAR</div></div>';
+            if(liveS) liveS.innerHTML = '';
+          }
         }
       }
     } catch(e) {
@@ -5072,7 +5079,10 @@ function toggleOpcional(score) {
   if(!s) return;
   s._incluido = !s._incluido;
   notify(s._incluido ? '✅ INCLUÍDO' : '❌ REMOVIDO', score + ' do cluster', s._incluido ? 'var(--org)' : 'var(--txt3)');
-  renderCluster(S.currentCluster, S.currentGame?.stake || S.stake);
+  // Só renderiza cluster no init se usuário selecionou jogo explicitamente
+  if(window._jogoExplicitamenteSelecionado && S.currentCluster && S.currentCluster.length > 0) {
+    renderCluster(S.currentCluster, S.currentGame?.stake || S.stake);
+  }
 }
 
 function renderLiveCluster() {
