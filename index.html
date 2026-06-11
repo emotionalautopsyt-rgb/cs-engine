@@ -3518,9 +3518,31 @@ REGRAS ABSOLUTAS:
               }
             }
 
-            // Garantir que Plano A tem pelo menos 2 scores
-            if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores;
-            if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection;
+            // ── ENFORCEMENT: IA não pode remover mais de 2 scores do total ──
+            const totalMotor  = engine.mainScores.length + engine.protection.length;
+            const totalFinal  = engineFinal.mainScores.length + engineFinal.protection.length;
+            const removidos   = totalMotor - totalFinal;
+
+            if(removidos > 2) {
+              // IA removeu demais — restaurar scores removidos priorizando Plano A
+              const todosMotor  = [...engine.mainScores, ...engine.protection];
+              const todosFinais = [...engineFinal.mainScores, ...engineFinal.protection];
+              const faltando    = todosMotor.filter(s => !todosFinais.includes(s));
+              // Restaurar até sobrar máximo 2 removidos
+              const restaurar   = faltando.slice(0, removidos - 2);
+              restaurar.forEach(function(s) {
+                // Scores do Plano A do motor voltam para Plano A
+                if(engine.mainScores.includes(s)) {
+                  engineFinal.mainScores.push(s);
+                } else {
+                  engineFinal.protection.push(s);
+                }
+              });
+            }
+
+            // Garantir mínimos absolutos
+            if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores.slice();
+            if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
 
             // Âncora validada pela IA
             if(voto.ancora_final && [...engineFinal.mainScores,...engineFinal.protection].includes(voto.ancora_final)) {
