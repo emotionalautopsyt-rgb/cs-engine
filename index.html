@@ -2964,32 +2964,24 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   }
 
   // ── MELHORIA 2: FAVORITO VISITANTE SOBERANO ─────────────
-  // Quando visitante é favorito, o cluster deve refletir isso com clareza
+  // IMPORTANTE: este bloco roda ANTES da inversão final (linha ~3102)
+  // Aqui os scores ainda estão na perspectiva do favorito (1-0, 2-0, 2-1)
+  // A inversão final vai transformar tudo em perspectiva de visitante
+  // Então NÃO adicionamos 0-1 ou 1-2 aqui — a inversão faz isso
   if(favVisitanteForte) {
-    // Garantir que âncora é do visitante (score tipo 0-1, 0-2, 1-2)
-    var ancoraEhVisitante = ancora && ancora.split('-')[1] > ancora.split('-')[0];
-    if(!ancoraEhVisitante) {
-      // Âncora está apontando para mandante — corrigir para 0-1 ou 1-2
-      var scoreVisitanteNoCluster = [...mainScores, ...protection].find(function(s){
-        var p = s.split('-');
-        return Number(p[1]) > Number(p[0]);
-      });
-      if(scoreVisitanteNoCluster) ancora = scoreVisitanteNoCluster;
-    }
-    // Garantir que Plano A tem pelo menos 2 scores do visitante
-    var scoresVisitanteA = mainScores.filter(function(s){
-      var p = s.split('-'); return Number(p[1]) >= Number(p[0]);
-    });
-    if(scoresVisitanteA.length < 2) {
-      // Adicionar scores do visitante no Plano A se faltam
-      if(!mainScores.includes('0-1') && !mainScores.includes('0-2')) {
-        mainScores.push('0-1');
+    // Garantir que Plano A tem pelo menos 2 scores do favorito (pré-inversão)
+    // Após inversão: 1-0 → 0-1, 2-1 → 1-2, 1-2 → 2-1
+    // O que queremos pós-inversão: 0-1, 0-2, 1-2 no Plano A
+    // O que precisamos pré-inversão: 1-0, 2-0, 2-1 no Plano A — já está!
+    // Só precisamos garantir que a âncora pré-inversão está certa
+    // Âncora pré-inversão deve ser 1-0 ou 2-1 (pós = 0-1 ou 1-2)
+    if(ancora !== '1-0' && ancora !== '2-1' && ancora !== '2-0') {
+      // Se âncora é 1-1 ou outro empate, verificar se faz sentido para visitante favorito
+      // 1-1 invertido continua 1-1 — pode ser válido se btts baixo
+      // Manter âncora atual se for empate com btts forte
+      if(ancora !== '1-1' || btts > 1.95) {
+        ancora = '1-0'; // pós-inversão vira 0-1 — score mais natural do visitante favorito
       }
-      if(!mainScores.includes('1-2') && !mainScores.includes('0-2')) {
-        mainScores.push('1-2');
-      }
-      // Limitar tamanho do Plano A
-      if(mainScores.length > 5) mainScores = mainScores.slice(0, 5);
     }
   }
 
