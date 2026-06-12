@@ -3309,13 +3309,10 @@ async function analisarJogo() {
   // Camada 3: texto da análise
   const textoLower = texto.toLowerCase();
   const favVisTextual = (
-    textoLower.includes('joga fora') ||
-    textoLower.includes('time visitante') ||
-    textoLower.includes('favorito fora') ||
-    textoLower.includes('como visitante') ||
     textoLower.includes('fora de casa como favorito') ||
     textoLower.includes('visitante é favorito') ||
-    textoLower.includes('favorito é visitante')
+    textoLower.includes('favorito é visitante') ||
+    textoLower.includes('favorito visitante')
   );
 
   // Aciona se qualquer camada confirmar:
