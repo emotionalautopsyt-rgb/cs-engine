@@ -2287,7 +2287,7 @@ Favorito: @1.25–2.35 ✅
 BTTS:     até @2.15  ✅
 Over 2.5: @1.40–2.20 ✅
 
-2+ critérios fora → FILTRO RECUSADO → GÊNIO NÃO APROVOU. Encerrar análise.
+2+ critérios fora → FILTRO RECUSADO → GÊNIO NÃO APROVOU. (Apenas sinalizar — análise continua sempre.)
 1 critério fora → CAUTELA (declarar, continuar).
 
 ═══════════════════════════════════════
@@ -2727,8 +2727,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // btts 1.85-2.00 (zona normal) → AMBOS 3-0 e 3-1 (cap pelo refinador)
   // Favorito < 1.55 (dominante) → preferência ao 3-0, mas 3-1 ainda entra
 
-  var odd30cs = csOdds['3-0'] || 0;
-  var odd31cs = csOdds['3-1'] || 0;
+  var odd30cs = oddScoreMotor('3-0'); // favorito visitante: lê 0-3
+  var odd31cs = oddScoreMotor('3-1'); // favorito visitante: lê 1-3
 
   // Decidir quais scores de expansão incluir
   function getExpansao() {
@@ -2875,7 +2875,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // 2-1 = favorito vence com ambos marcando — o mais comum neste perfil
     // Se odd CS do 2-1 for muito maior que 1-1 → preferir 1-1 como âncora
     var odd21cs = oddScoreMotor('2-1');
-    var odd11cs = csOdds && csOdds['1-1'] ? csOdds['1-1'] : 0; // 1-1 não inverte
+    var odd11cs = csOdds['1-1'] || 0; // 1-1 é simétrico — não inverte
     if(odd11cs > 0 && odd21cs > 0 && odd11cs < odd21cs * 0.70) {
       // 1-1 tem probabilidade significativamente maior que 2-1 → âncora 1-1
       ancora = '1-1';
@@ -2989,8 +2989,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // Garantir âncora coerente com jogo aberto
     // Se âncora é score limpo do favorito (1-0) em jogo aberto → mudar para 1-1 ou 2-1
     if(ancora === '1-0' || ancora === '2-0') {
-      var liq11 = (csOddsLiq && csOddsLiq['1-1']) || 0;
-      var liq21 = (csOddsLiq && csOddsLiq['2-1']) || 0;
+      var liq11 = liqScoreMotor('1-1'); // 1-1 simétrico
+      var liq21 = liqScoreMotor('2-1'); // favorito visitante: lê 1-2
       if(liq11 > 0 || liq21 > 0) {
         ancora = liq11 >= liq21 ? '1-1' : '2-1';
       } else {
@@ -3775,57 +3775,13 @@ REGRAS ABSOLUTAS:
 
 
 
+    // isRecusado e isMetaFail: registram status mas NÃO bloqueiam análise
+    // O Gênio sinaliza risco mas sempre gera a melhor árvore possível
     if(isRecusado) {
-
-    // Meta CS check — if cluster doesn't double the simple return
-    if(isMetaFail) {
-      const metaVal = metaMatch ? metaMatch[1] : '?';
-      const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
-      if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
-      if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — GÊNIO NÃO APROVOU</div>
-        <div class="ab-text" style="margin-top:8px;">
-          Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
-          O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — Gênio não aprova como zona ideal."</em> — Gênio dos Placares<br><br>
-          Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
-        </div>
-      </div>`;
-      if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
-      S.thinking = false;
-      return;
+      console.warn('[Gênio] Filtro recusado — análise continua');
     }
-      if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">⛔ RECUSADO</span>';
-      if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
-        <div class="ab-title" style="color:var(--red);font-size:14px;">⛔ FILTRO RECUSADO — GÊNIO NÃO APROVOU</div>
-        <div class="ab-text" style="margin-top:8px;">
-          <strong>2 critérios fora do range.</strong><br><br>
-          O bot identificou o problema corretamente e encerrou a análise.<br>
-          Sem cluster. Sem risco. Aguarda próximo jogo.
-        </div>
-      </div>`;
-      if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
-      S.thinking = false;
-      return;
-    }
-
-    // Meta CS check — if cluster doesn't double the simple return
     if(isMetaFail) {
-      const metaVal = metaMatch ? metaMatch[1] : '?';
-      const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
-      if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
-      if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — GÊNIO NÃO APROVOU</div>
-        <div class="ab-text" style="margin-top:8px;">
-          Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
-          O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — Gênio não aprova como zona ideal."</em> — Gênio dos Placares<br><br>
-          Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
-        </div>
-      </div>`;
-      if(S.currentGame) { S.currentGame.savedAnTexto = document.getElementById('an-texto')?.value || ''; S.currentGame.savedResultadoHtml = out?.innerHTML || ''; saveGames(); }
-      S.thinking = false;
-      return;
+      console.warn('[Gênio] Meta CS não atingida — análise continua');
     }
 
     // Validação cruzada — block if BAIXA confidence (0-1/5)
