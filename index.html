@@ -2694,7 +2694,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
-  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — stake reduzida'; }
+  else if(fav <= 3.20)                 { profileId='SUPER_EQUILIBRADO';     profileLabel='Jogo sem favorito claro — equilíbrio real'; }
+  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
 
   // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
