@@ -1919,7 +1919,7 @@ function avaliarAprovacaoGenio(ctx) {
   const motivos = [];
   const positivos = [];
 
-  const favOk = fav >= 1.25 && fav <= 2.35;
+  const favOk = fav >= 1.25 && fav <= 3.20; // inclui SUPER_EQUILIBRADO
   const bttsOk = btts >= 1.65 && btts <= 2.25;
   const overOk = over >= 1.40 && over <= 2.20;
   const rangeFails = [!favOk, !bttsOk, !overOk].filter(Boolean).length;
@@ -1937,7 +1937,7 @@ function avaliarAprovacaoGenio(ctx) {
   const isCompOficial = /copa do mundo|world cup|champions league|premier league|la liga|bundesliga|serie a|ligue 1|eliminatórias|euro|copa america|nations league/i.test(fullText);
   const amistoso = !isCompOficial && /amistoso|friendly|club friendly|pre.?season|pré.?temporada|exibição|preparação/i.test(fullText);
   const rotacao = /reserva|reservas|rotação|rodízio|poupar|poupando|escalação alternativa|time misto|sem titulares|desfalque pesado/i.test(fullText);
-  const semObjetivo = /sem objetivo|sem motivação|já classificado|ja classificado|eliminado|cumpre tabela|nada em jogo|amistoso sem pressão/i.test(fullText);
+  const semObjetivo = !isCompOficial && /sem objetivo|sem motivação|já classificado|ja classificado|eliminado|cumpre tabela|nada em jogo|amistoso sem pressão/i.test(fullText);
   const baixaLiq = (S.csOddsLiq && Object.keys(S.csOddsLiq).length >= 3)
     ? Object.values(S.csOddsLiq).filter(v => Number(v||0) > 0).length < 3
     : false;
@@ -2054,13 +2054,14 @@ function checkPackball() {
   else if(fav<=2.20&&over<=2.20)                                        { perfil='CONSERVADOR';          piramide='CONSERVADORA'; }
   // Genuinamente alto risco — fav>2.20 OU odds muito abertas
   else if(fav>2.20&&fav<=2.35)                                          { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
+  else if(fav>2.35&&fav<=3.20)                                          { perfil='SUPER EQUILIBRADO';     piramide='NORMAL'; }
   else                                                                   { perfil='INDEFINIDO';           piramide='NORMAL'; }
 
   // Verificar também o texto da análise para detectar amistoso
   const textoAnalise = document.getElementById('an-texto')?.value || '';
   const _isCompOficial = /copa do mundo|world cup|champions league|premier league|la liga|bundesliga|serie a|ligue 1|eliminatórias|euro|copa america|nations league/i.test(textoAnalise);
   const isAmistoso = !_isCompOficial && /amistoso|friendly|pre.?season|pré.?temporada|preparação/i.test(textoAnalise);
-  const semMotivacao = /sem objetivo|sem motivação|já classificado|eliminado|cumpre tabela|nada em jogo/i.test(textoAnalise);
+  const semMotivacao = !_isCompOficial && /sem objetivo|sem motivação|já classificado|eliminado|cumpre tabela|nada em jogo/i.test(textoAnalise);
   const contextoBloqueio = isAmistoso || semMotivacao;
 
   // Mensagem contextual de bloqueio
@@ -2763,6 +2764,11 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // PDF: 1-0 / 2-0 / 2-1 (sem expansão)
     mainScores = ['1-0','2-0','2-1'];
 
+  } else if(profileId === 'SUPER_EQUILIBRADO') {
+    // Jogo sem favorito claro — cluster centrado no equilíbrio
+    // Âncora: 1-1. Vitórias mínimas dos dois lados + BTTS coberto
+    mainScores = ['1-1','1-0','0-1'];
+    if(btts <= 2.05) mainScores.push('2-1'); // ambos marcam → 2-1 entra
   } else {
     // ALTO_RISCO: máx 3 scores Plano A (total 5 com PB)
     mainScores = ['1-0','2-0','2-1'];
@@ -2817,8 +2823,12 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       protection = ['1-1','0-1','2-2'];
     }
 
+  } else if(profileId === 'SUPER_EQUILIBRADO') {
+    // Jogo sem favorito claro — Plano B cobre BTTS e visitante
+    // 2-2 entra sempre que btts suporta — é o score de equilíbrio ofensivo
+    protection = btts <= 2.05 ? ['1-2','2-2'] : ['0-2','1-2'];
+
   } else {
-    // ALTO_RISCO: PB robusto — 2 scores principais
     // PDF confirma: 0-1 / 1-1 / 1-2 → mas máx 5 scores total
     // Plano A = 3 scores → Plano B = 2 scores para não ultrapassar 5
     // 1-2 entra só se fav > 2.15 (risco muito alto)
@@ -2854,6 +2864,9 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     ancora = btts < 1.85 ? '1-1' : '2-1';
   } else if(profileId === 'CONSERVADOR') {
     ancora = '1-0';
+  } else if(profileId === 'SUPER_EQUILIBRADO') {
+    // Sem favorito claro — âncora sempre 1-1
+    ancora = '1-1';
   } else {
     // ALTO_RISCO
     ancora = '1-0';
@@ -3174,7 +3187,7 @@ async function analisarJogo() {
   const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
 
   // Packball check — auto-reduce stake if one criterion outside range
-  const favOk  = fav>=1.25&&fav<=2.35;
+  const favOk  = fav>=1.25&&fav<=3.20;
   const bttsOk = btts>=1.65&&btts<=2.25;
   const overOk = over>=1.40&&over<=2.20;
   const packballOk = (favOk && bttsOk && overOk) || (fav <= 1.65);
