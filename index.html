@@ -2273,11 +2273,11 @@ Betfair CS: odds dos placares → calcular stakes e probabilidades.
 PASSO 0 — PRÉ-ANÁLISE (antes de tudo)
 ═══════════════════════════════════════
 Verificar obrigatoriamente:
-→ ESCALAÇÃO: confirmada? SE não → stake -20%
-→ ROTAÇÃO: suspeita? SE sim → NÃO OPERA
+→ ESCALAÇÃO: confirmada? SE não → contexto sensível
+→ ROTAÇÃO: suspeita? SE sim → GÊNIO NÃO APROVOU
 → MOTIVAÇÃO: alta/média/baixa → impacta confiança do DNA
 → CONTEXTO: jogo 2 pernas? Copa? Clássico? Início de temporada (<8 rodadas)?
-→ COPA/ELIMINATÓRIO: confiança MÉDIA máxima + stake -20% + +1 score proteção
+→ COPA/ELIMINATÓRIO: confiança MÉDIA máxima + contexto sensível + +1 score proteção
   Copa NÃO bloqueia DNA nem H2H — apenas xG❌. DNA/H2H com dados disponíveis = usar.
 
 ═══════════════════════════════════════
@@ -2287,7 +2287,7 @@ Favorito: @1.25–2.35 ✅
 BTTS:     até @2.15  ✅
 Over 2.5: @1.40–2.20 ✅
 
-2+ critérios fora → FILTRO RECUSADO → NÃO OPERA. Encerrar análise.
+2+ critérios fora → FILTRO RECUSADO → GÊNIO NÃO APROVOU. Encerrar análise.
 1 critério fora → CAUTELA (declarar, continuar).
 
 ═══════════════════════════════════════
@@ -2312,7 +2312,7 @@ Over @1.40–1.69 = GOLEADA CANDIDATA → confirmar com DNA (3+ gols/jogo OU 3-0
 SE não confirma → usar perfil pela odd do favorito normalmente.
 
 META CS: retorno_simples = (odd_fav - 1) × 100. Meta = retorno × 2.
-SE cluster não atinge meta → NÃO OPERA. Declarar motivo.
+SE cluster não atinge meta → GÊNIO NÃO APROVOU. Declarar motivo.
 
 ═══════════════════════════════════════
 PASSO 2 — DNA + xG
@@ -2339,7 +2339,7 @@ HIERARQUIA DO SCORE ÂNCORA:
 AJUSTES POR TEXTO:
   "já classificado"/"sem objetivo"/"nada a perder" → ⚠️ Motivação reduzida. Stake -15%. Score âncora conservador. NÃO bloquear.
   "má fase"/"derrotas seguidas" → DNA -20% confiança
-  "desfalque atacante fav" → xG_fav × 0.80, stake -20%
+  "desfalque atacante fav" → xG_fav × 0.80, contexto sensível
   "desfalque defensor fav" → xG_adv × 1.15, plano B reforçado
   "desfalque adversário" → xG_adv × 0.85
   "jogo decisivo"/"precisa vencer" → xG_fav × 1.10
@@ -2472,8 +2472,8 @@ VALIDAÇÃO CRUZADA 5/5 — declarar SEMPRE ao final:
   CS:     odd âncora esperada + boa liquidez? ✅/❌
   
   5/5 ou 4/5 → CONFIANÇA MÁXIMA/ALTA 🟢 → opera normalmente
-  2/5        → CONFIANÇA MÉDIA 🟡 → stake -20%, cluster conservador
-  0-1/5      → CONFIANÇA BAIXA 🔴 → NÃO OPERA, declarar motivo
+  2/5        → CONFIANÇA MÉDIA 🟡 → contexto sensível, cluster conservador
+  0-1/5      → CONFIANÇA BAIXA 🔴 → GÊNIO NÃO APROVOU, declarar motivo
 
 DECLARAR SEMPRE:
 "VALIDAÇÃO CRUZADA: X/5 | xG:✅/❌ | DNA:✅/❌ | Over:✅/❌ | BTTS:✅/❌ | CS:✅/❌ | CONFIANÇA: [nível]"
@@ -2688,15 +2688,29 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   csOdds = csOdds || {};
   csOddsLiq = csOddsLiq || {};
 
+  // ── HELPERS PRÉ-INVERSÃO ─────────────────────────────
+  // Quando favorito é visitante, as odds CS estão nos scores invertidos
+  // Ex: pré-inversão 1-0 do favorito = score real 0-1 na Betfair
+  function oddScoreMotor(score) {
+    var realScore = favEhVisitante ? inv(score) : score;
+    return csOdds[realScore] || 0;
+  }
+  function liqScoreMotor(score) {
+    var realScore = favEhVisitante ? inv(score) : score;
+    return (csOddsLiq && csOddsLiq[realScore]) ? csOddsLiq[realScore] : 0;
+  }
+
   // ── PERFIL ──────────────────────────────────────────────
   // Fiel ao PDF: tabela de perfis por fav + over
   let profileId, profileLabel;
   if     (fav <= 1.64 && over < 1.70)  { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
   else if(fav <= 1.64 && over <= 1.85) { profileId='OFENSIVO';             profileLabel='Favorito forte com rota ofensiva'; }
-  else if(fav <= 1.80 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.64 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.80 && over <= 1.85) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
   else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
+  else if(fav <= 2.35)                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
   else if(fav <= 3.20)                 { profileId='SUPER_EQUILIBRADO';     profileLabel='Jogo sem favorito claro — equilíbrio real'; }
   else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
 
@@ -2768,7 +2782,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // PDF: 1-0 / 2-0 / 2-1
     // 3-1 entra se liquidez real justifica (visitante marca no final)
     mainScores = ['1-0','2-0','2-1'];
-    var liq31 = csOddsLiq && csOddsLiq['3-1'] ? csOddsLiq['3-1'] : 0;
+    var liq31 = liqScoreMotor('3-1'); // usa liq real do favorito
     if(liq31 >= 10000) mainScores.push('3-1');
 
   } else if(profileId === 'SUPER_EQUILIBRADO') {
@@ -2783,7 +2797,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   // ── REGRA DO 1-0 — pela odd real do CS (PDF) ─────────────
   // Lê a odd real do 1-0 que o usuário colou na Betfair
-  var odd10 = csOdds['1-0'] || 0;
+  var odd10 = oddScoreMotor('1-0'); // usa odd real do favorito (pré-inversão)
 
   if(profileId === 'GOLEADA') {
     // No perfil GOLEADA: 1-0 é "ponte fraca"
@@ -2860,8 +2874,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // PDF: âncora no score mais operacional do perfil
     // 2-1 = favorito vence com ambos marcando — o mais comum neste perfil
     // Se odd CS do 2-1 for muito maior que 1-1 → preferir 1-1 como âncora
-    var odd21cs = csOdds && csOdds['2-1'] ? csOdds['2-1'] : 0;
-    var odd11cs = csOdds && csOdds['1-1'] ? csOdds['1-1'] : 0;
+    var odd21cs = oddScoreMotor('2-1');
+    var odd11cs = csOdds && csOdds['1-1'] ? csOdds['1-1'] : 0; // 1-1 não inverte
     if(odd11cs > 0 && odd21cs > 0 && odd11cs < odd21cs * 0.70) {
       // 1-1 tem probabilidade significativamente maior que 2-1 → âncora 1-1
       ancora = '1-1';
@@ -3707,7 +3721,7 @@ REGRAS ABSOLUTAS:
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
-    const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|NÃO OPERA.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
+    const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|GÊNIO NÃO APROVOU.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
 
     // ── Detecção de contexto (definir ANTES dos indicadores) ─────────
     const isCopa = /copa\s+detectada|⚠️\s*COPA|eliminatório|play.?off|mata.?mata|FA\s+Cup|Champions|Europa\s+League|Taça|knock.?out/i.test(reply);
@@ -3769,11 +3783,11 @@ REGRAS ABSOLUTAS:
       const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
       if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — GÊNIO NÃO APROVOU</div>
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
+          <em>"Se o cluster não dobra o retorno simples — Gênio não aprova como zona ideal."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -3783,7 +3797,7 @@ REGRAS ABSOLUTAS:
     }
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">⛔ RECUSADO</span>';
       if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
-        <div class="ab-title" style="color:var(--red);font-size:14px;">⛔ FILTRO RECUSADO — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--red);font-size:14px;">⛔ FILTRO RECUSADO — GÊNIO NÃO APROVOU</div>
         <div class="ab-text" style="margin-top:8px;">
           <strong>2 critérios fora do range.</strong><br><br>
           O bot identificou o problema corretamente e encerrou a análise.<br>
@@ -3801,11 +3815,11 @@ REGRAS ABSOLUTAS:
       const ofVal   = ofereceMatch ? ofereceMatch[1] : '?';
       if(badge) badge.innerHTML = '<span class="bdg" style="background:rgba(255,184,48,.15);color:var(--ylw);border:1px solid rgba(255,184,48,.3);">⚠️ META NÃO ATINGIDA</span>';
       if(out) out.innerHTML = `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);">
-        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--ylw);font-size:14px;">⚠️ META CS NÃO ATINGIDA — GÊNIO NÃO APROVOU</div>
         <div class="ab-text" style="margin-top:8px;">
           Meta: <strong>${metaVal}%</strong> | Cluster oferece: <strong>${ofVal}%</strong><br><br>
           O cluster não dobra o retorno simples.<br>
-          <em>"Se o cluster não dobra o retorno simples — não opera."</em> — Gênio dos Placares<br><br>
+          <em>"Se o cluster não dobra o retorno simples — Gênio não aprova como zona ideal."</em> — Gênio dos Placares<br><br>
           Odds do CS muito comprimidas para esse favorito. Aguarda próximo jogo.
         </div>
       </div>`;
@@ -3818,7 +3832,7 @@ REGRAS ABSOLUTAS:
     if(isLowConf && crossScore < 1.5) {
       if(badge) badge.innerHTML = `<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">🔴 CONFIANÇA BAIXA ${crossScore.toFixed(1)}/5</span>`;
       if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
-        <div class="ab-title" style="color:var(--red);font-size:14px;">🔴 VALIDAÇÃO CRUZADA — NÃO OPERA</div>
+        <div class="ab-title" style="color:var(--red);font-size:14px;">🔴 VALIDAÇÃO CRUZADA — GÊNIO NÃO APROVOU</div>
         <div class="ab-text" style="margin-top:8px;">
           <strong>Confiança: ${crossScore.toFixed(1)}/5 indicadores</strong><br><br>
           xG:${ind1?'✅':'❌'} | DNA/H2H:${ind2?'✅':'❌'} | Over:${ind3===1?'✅':ind3===0.5?'⚠️':'❌'} | BTTS:${ind4===1?'✅':ind4===0.5?'⚠️':'❌'} | CS:${ind5?'✅':'❌'}<br><br>
