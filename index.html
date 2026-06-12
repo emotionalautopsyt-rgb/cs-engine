@@ -1837,7 +1837,7 @@ function selectSbGame(id) {
   const out = document.getElementById('resultado-out');
   if(out) out.innerHTML = '';
   const liveCards = document.getElementById('live-cluster-cards');
-  if(liveCards) liveCards.innerHTML = '<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px;grid-column:1/-1;">Analise um jogo no Pré-Live primeiro.</div>';
+  // Não limpar cards — serão preenchidos pelo renderCluster abaixo
   const liveList = document.getElementById('live-cluster');
   if(liveList) liveList.innerHTML = '';
 
@@ -1871,9 +1871,9 @@ function selectSbGame(id) {
   const lgf = document.getElementById('l-gf'); if(lgf) lgf.value = S.currentGame.placar?.split('-')[1]||0;
   const lm  = document.getElementById('l-m');  if(lm)  lm.value  = S.currentGame.min||0;
 
-  // Render cluster if available
-  if(S.currentCluster.length > 0) {
-    if(window._jogoExplicitamenteSelecionado) renderCluster(S.currentCluster, S.currentGame.stake || S.stake);
+  // Render cluster se disponível — ao selecionar jogo sempre renderiza
+  if(S.currentCluster && S.currentCluster.length > 0) {
+    renderCluster(S.currentCluster, S.currentGame?.stake || S.stake);
     renderLiveCluster();
   }
 
