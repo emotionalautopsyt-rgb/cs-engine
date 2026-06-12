@@ -1674,8 +1674,11 @@ function confirmarEncerrar(id) {
     });
     var placarNaAncora = placarFinal && g.savedAncora && g.savedAncora === placarFinal;
 
+    // Detectar se é Copa do Mundo pelo nome do jogo ou comp
+    var _isCopa = /copa do mundo|world cup|copa 2026/i.test((g.comp||'')+(g.name||''));
     S.hist.push({
-      gameId: g.id, j: g.name, c: g.comp||'', d: g.data||td(),
+      gameId: g.id, j: g.name, c: g.comp||'Copa do Mundo 2026', d: g.data||td(),
+      isCopa: _isCopa,
       s: g.stake||S.stake, r: val>0?'lucro':val<0?'loss':'be',
       v: val, sc: placarFinal, ob: 'Encerrado via sidebar', ts: Date.now(),
       status: g.aprovacaoStatus || 'historico',
@@ -5749,7 +5752,12 @@ function renderCopa() {
   var COPA = 'Copa do Mundo 2026';
   var h = (S.hist || []).filter(function(r){
     var c = (r.c || '').toLowerCase();
-    return c.includes('copa') || c.includes('world cup') || c.includes('mundial');
+    var j = (r.j || '').toLowerCase();
+    var ob = (r.ob || '').toLowerCase();
+    // Detectar Copa pelo campo competição OU pelo status isCopa OU pelo texto
+    return c.includes('copa') || c.includes('world cup') || c.includes('mundial') ||
+           r.isCopa === true || r.status === 'copa' ||
+           ob.includes('copa') || ob.includes('world cup');
   }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
 
   var fmt  = function(v){ return (v>=0?'+':'-')+'R$ '+Math.abs(Number(v||0)).toFixed(2); };
