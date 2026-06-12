@@ -3620,13 +3620,14 @@ REGRAS ABSOLUTAS:
               console.log('[ENFORCEMENT] IA removeu '+removidos+' scores, restaurados '+qtdRestaurar+': '+ordenado.slice(0,qtdRestaurar).join(', '));
             }
 
-            // Garantir mínimos absolutos — nunca menos de 4 scores no total
+            // Garantir mínimos absolutos por perfil
             if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores.slice();
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
-            // Se total ainda abaixo de 4, completar com scores do motor
+            // SUPER_EQUILIBRADO precisa de pelo menos 6 scores
+            const minimoScores = engine.profileId === 'SUPER_EQUILIBRADO' ? 6 : 4;
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
-            if(totalAtual < 4) {
-              const faltamScores = 4 - totalAtual;
+            if(totalAtual < minimoScores) {
+              const faltamScores = minimoScores - totalAtual;
               const todosMotorFinal = [...engine.mainScores, ...engine.protection];
               const jaTem = new Set([...engineFinal.mainScores, ...engineFinal.protection]);
               todosMotorFinal.filter(s => !jaTem.has(s)).slice(0, faltamScores).forEach(function(s){
