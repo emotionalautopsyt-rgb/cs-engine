@@ -883,6 +883,10 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
           <div><label>BTTS Sim</label><input id="pk-btts" type="number" step="0.01" placeholder="1.90" oninput="checkPackball()"></div>
           <div><label>Over 2.5</label><input id="pk-over" type="number" step="0.01" placeholder="1.95" oninput="checkPackball()"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <label style="margin:0;font-size:10px;color:var(--txt3);">Fav é Visitante?</label>
+            <button id="btn-fav-vis" onclick="toggleFavVis()" style="padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--txt3);font-size:10px;cursor:pointer;font-family:Space Mono,monospace;">NÃO</button>
+          </div>
         </div>
         <div id="pk-status"></div>
         <div id="liga-status"></div>
@@ -3377,7 +3381,9 @@ async function analisarJogo() {
   );
 
   // Aciona se qualquer camada confirmar:
-  const favEhVisitanteReal = favPorOdds || favPorLiq || favPorCombinado ||
+  // _favVisManual tem prioridade absoluta — clique manual do usuário
+  const favEhVisitanteReal = (window._favVisManual === true) ||
+    favPorOdds || favPorLiq || favPorCombinado ||
     (favVisTextual && avgVisitante > 0 && avgVisitante < avgCasa * 0.90);
 
   // ── Motor determinístico — calcular scores por código ──────
@@ -3960,6 +3966,8 @@ REGRAS ABSOLUTAS:
         // Save ancora from JSON for PLACAR PROJETADO highlight
         // Âncora vem do engineFinal (soberano) — não do JSON da IA
         S.currentGame.lastAncora = engineFinal ? engineFinal.ancora : null;
+        // Forçar save para garantir persistência do card roxo
+        if(S.currentGame.lastAncora) saveGames();
         try { const jd = JSON.parse(jsonStr||'{}'); if(!S.currentGame.lastAncora) S.currentGame.lastAncora = jd.ancora||null; } catch(e) {}
         saveGames();
         renderSidebar();
@@ -6159,7 +6167,13 @@ function registrarResultado(g, num) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  window._jogoExplicitamenteSelecionado = false; // reset ao abrir
+  window._jogoExplicitamenteSelecionado = false;
+  // Resetar toggle de favorito visitante ao abrir novo jogo
+  if(window._favVisManual) {
+    window._favVisManual = false;
+    var btnFV = document.getElementById('btn-fav-vis');
+    if(btnFV) { btnFV.textContent='NÃO'; btnFV.style.background='var(--bg2)'; btnFV.style.color='var(--txt3)'; btnFV.style.borderColor='var(--border)'; }
+  } // reset ao abrir
   // Garantir tela do cérebro ao abrir — limpar qualquer análise anterior
   var _outE = document.getElementById('resultado-out');
   if(_outE) _outE.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;">GÊNIO DOS PLACARES</div><div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;"><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>📊</span><span>Analisando odds e perfil</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>🎯</span><span>Calculando cluster de placares</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
