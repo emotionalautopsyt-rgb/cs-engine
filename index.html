@@ -2838,12 +2838,11 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   if(profileId === 'GOLEADA') {
     // PDF: 0-1 e 1-1 (stake mínima)
-    // Para favorito visitante: 1-3 (score real) = 3-1 pré-inversão
-    // Para favorito casa: 3-1 (score real) entra como destino
-    var scorePB3 = favEhVisitante ? '1-3' : '3-1';
-    var liq13 = (csOddsLiq && csOddsLiq[scorePB3]) ? csOddsLiq[scorePB3] : 0;
-    if(liq13 >= 10000) {
-      protection = ['1-1','0-1', scorePB3];
+    // 3-1 só entra quando btts suporta ambos marcarem (btts < 2.10)
+    // btts alto (>2.10) = mercado não acredita que adversário marca → sem 3-1
+    var liq31 = liqScoreMotor('3-1');
+    if(liq31 >= 10000 && btts < 2.10) {
+      protection = ['1-1','0-1','3-1'];
     } else {
       protection = ['1-1','0-1'];
     }
