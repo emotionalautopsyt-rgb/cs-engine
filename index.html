@@ -2143,13 +2143,29 @@ function parseCS() {
         if(/^\d{1,2}x\d{1,2}$/i.test(nx)) break;
         if(/[a-zA-ZÀ-ú]{3,}/.test(nx) && !/R\$/.test(nx)) break;
 
-        // Formato "9.4R$ 1.30k" — odd colada com liquidez
+        // Formato Betfair completo: múltiplos pares oddR$liq na mesma linha
+        // Ex: "6.6R$ 109.90k6.8R$ 75.68k7.0R$ 80.42k"
+        // Regex extrai todos os pares mesmo grudados
+        const pairesOddLiq = nx.match(/(\d{1,3}(?:[.,]\d{1,2})?)R\$\s*([\d]+(?:[.,]\d{1,2})?)([kK]?)/g);
+        if(pairesOddLiq && pairesOddLiq.length > 0) {
+          pairesOddLiq.forEach(function(par) {
+            const m = par.match(/(\d{1,3}(?:[.,]\d{1,2})?)R\$\s*([\d]+(?:[.,]\d{1,2})?)([kK]?)/);
+            if(m) {
+              const odd = parseFloat(m[1].replace(',','.'));
+              const liqRaw = parseFloat(m[2].replace(',','.'));
+              const liq = m[3] ? liqRaw*1000 : liqRaw;
+              if(odd>=1.5&&odd<=1000) allOdds.push({v:odd, liq:liq});
+            }
+          });
+          continue;
+        }
+        // Formato simples "9.4R$ 1.30k"
         const mOddLiq = nx.match(/^(\d{1,3}(?:[.,]\d{1,2})?)R\$\s*([\d.,]+)[Kk]?$/);
         if(mOddLiq) {
           const odd = parseFloat(mOddLiq[1].replace(',','.'));
           const liqRaw = mOddLiq[2].replace(',','.');
           const liq = nx.includes('k')||nx.includes('K') ? parseFloat(liqRaw)*1000 : parseFloat(liqRaw);
-          if(odd>=3.0&&odd<=500) allOdds.push({v:odd, liq:liq});
+          if(odd>=1.5&&odd<=1000) allOdds.push({v:odd, liq:liq});
           continue;
         }
         // Formato "R$ 1.30k" ou "R$ 283.98" — liquidez isolada
@@ -2177,14 +2193,14 @@ function parseCS() {
       let backLiq = 0;
 
       if(allOdds.length > 0) {
-        // Pegar a menor odd com liquidez associada = BACK
+        // Pegar a menor odd = BACK
         const sorted = allOdds.sort((a,b) => a.v - b.v);
         const bestBack = sorted[0];
         backOdd = bestBack.v;
-        backLiq = bestBack.liq;
-        // Se a liquidez não veio colada, pegar da lista de liqs
+        // SOMAR toda liquidez dos múltiplos níveis — não pegar só o primeiro
+        backLiq = allOdds.reduce(function(acc, o){ return acc + (o.liq||0); }, 0);
         if(backLiq === 0 && allLiqs.length > 0) {
-          backLiq = Math.max(...allLiqs); // maior liquidez = BACK
+          backLiq = allLiqs.reduce(function(a,b){ return a+b; }, 0);
         }
       }
 
