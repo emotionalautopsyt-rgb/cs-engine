@@ -3248,7 +3248,9 @@ async function analisarJogo() {
   if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.innerHTML='⏳ ANALISANDO...'; }
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
 
-  const texto = document.getElementById('an-texto')?.value?.trim() || '';
+  const textoRaw = document.getElementById('an-texto')?.value?.trim() || '';
+  // Limitar a 3000 chars para evitar timeout na API
+  const texto = textoRaw.length > 3000 ? textoRaw.substring(0, 3000) + '...' : textoRaw;
   const fav = parseFloat(document.getElementById('pk-fav')?.value) || 0;
   const btts = parseFloat(document.getElementById('pk-btts')?.value) || 0;
   const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
@@ -3433,13 +3435,14 @@ async function analisarJogo() {
         return { score: s, odd: odd, liq: liq, prob: probImpl };
       })
       .filter(function(x){ return x.odd > 0; })
-      .sort(function(a,b){ return a.odd - b.odd; }) // ordem por probabilidade — odd menor = mais provável
-      .slice(0, 12);
+      .sort(function(a,b){ return a.odd - b.odd; })
+      .slice(0, 8); // máx 8 scores — evita timeout
 
     if(scoresComLiq.length > 0) {
       liquidezEstruturada = scoresComLiq
         .map(function(x){
-          return x.score + ' @ ' + x.odd + ' | prob ' + x.prob + '%' + (x.liq > 0 ? ' | R$' + x.liq : '');
+          var liqFmt = x.liq > 0 ? ' | R$' + (x.liq >= 1000 ? (x.liq/1000).toFixed(0)+'k' : x.liq.toFixed(0)) : '';
+          return x.score + ' @ ' + x.odd + ' | ' + x.prob + '%' + liqFmt;
         })
         .join('\n');
     }
