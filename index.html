@@ -884,8 +884,17 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div><label>BTTS Sim</label><input id="pk-btts" type="number" step="0.01" placeholder="1.90" oninput="checkPackball()"></div>
           <div><label>Over 2.5</label><input id="pk-over" type="number" step="0.01" placeholder="1.95" oninput="checkPackball()"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-            <label style="margin:0;font-size:10px;color:var(--txt3);">Fav é Visitante?</label>
-            <button id="btn-fav-vis" onclick="toggleFavVis()" style="padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--txt3);font-size:10px;cursor:pointer;font-family:Space Mono,monospace;">NÃO</button>
+            <label style="margin:0;font-size:10px;color:var(--txt3);display:block;margin-bottom:4px;">Favorito é:</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt);cursor:pointer;margin:0;">
+                <input type="radio" name="fav-pos" id="fav-casa" value="casa" checked onchange="toggleFavVis()" style="accent-color:var(--acc);cursor:pointer;">
+                🏠 Casa
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt);cursor:pointer;margin:0;">
+                <input type="radio" name="fav-pos" id="fav-vis" value="visitante" onchange="toggleFavVis()" style="accent-color:var(--acc);cursor:pointer;">
+                ✈️ Visitante
+              </label>
+            </div>
           </div>
         </div>
         <div id="pk-status"></div>
@@ -1296,14 +1305,8 @@ function notify(t, b, c='var(--acc)') {
 // Toggle favorito visitante — manual e soberano
 var _favVisManual = false;
 function toggleFavVis() {
-  _favVisManual = !_favVisManual;
-  var btn = document.getElementById('btn-fav-vis');
-  if(btn) {
-    btn.textContent = _favVisManual ? 'SIM ✅' : 'NÃO';
-    btn.style.background = _favVisManual ? 'rgba(0,201,110,.2)' : 'var(--bg2)';
-    btn.style.color = _favVisManual ? 'var(--grn)' : 'var(--txt3)';
-    btn.style.borderColor = _favVisManual ? 'var(--grn)' : 'var(--border)';
-  }
+  var radio = document.querySelector('input[name="fav-pos"]:checked');
+  _favVisManual = radio ? radio.value === 'visitante' : false;
 }
 
 function showTab(t, el) {
@@ -6184,8 +6187,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Resetar toggle de favorito visitante ao abrir novo jogo
   if(window._favVisManual) {
     window._favVisManual = false;
-    var btnFV = document.getElementById('btn-fav-vis');
-    if(btnFV) { btnFV.textContent='NÃO'; btnFV.style.background='var(--bg2)'; btnFV.style.color='var(--txt3)'; btnFV.style.borderColor='var(--border)'; }
+    var radioCasa = document.getElementById('fav-casa');
+    if(radioCasa) { radioCasa.checked = true; _favVisManual = false; }
   } // reset ao abrir
   // Garantir tela do cérebro ao abrir — limpar qualquer análise anterior
   var _outE = document.getElementById('resultado-out');
