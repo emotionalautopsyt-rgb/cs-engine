@@ -3162,12 +3162,12 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
 
     // SINAL 4b: Âncora pelo score com maior probabilidade implícita real
-    // Odds CS são o sinal principal — probabilidade implícita pura
+    // Roda ANTES da inversão final — usar oddScoreMotor para ler odds corretas
     var todosScoresFinal = [...mainScores, ...protection];
     var melhorProb = 0;
     var melhorScore = ancora;
     todosScoresFinal.forEach(function(s) {
-      var odd  = csOdds[s] || 0;
+      var odd  = oddScoreMotor(s);
       var prob = odd > 0 ? 100/odd : 0;
       if(prob > melhorProb) {
         melhorProb = prob;
@@ -3175,7 +3175,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       }
     });
     // Troca âncora se o score mais provável for significativamente melhor
-    var oddAncora = csOdds[ancora] || 0;
+    var oddAncora = oddScoreMotor(ancora);
     var probAncora = oddAncora > 0 ? 100/oddAncora : 0;
     if(melhorProb > probAncora * 1.1 && melhorScore !== ancora) {
       ancora = melhorScore;
@@ -3188,7 +3188,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   let pyramidType = 'NORMAL';
   var clusterScores = mainScores.concat(protection);
   var clusterOdds = clusterScores
-    .map(function(s){ return csOdds[s] || 0; })
+    .map(function(s){ return oddScoreMotor(s); })
     .filter(function(o){ return o > 0; });
 
   if(clusterOdds.length >= 2) {
@@ -4004,6 +4004,10 @@ REGRAS ABSOLUTAS:
         .replace(/(⚠️[^<]*)/gi, '<span style="color:var(--ylw);">$1</span>');
       var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
       if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
+      // Garantir lastAncora disponível antes de renderizar
+      if(S.currentGame && engineFinal && engineFinal.ancora) {
+        S.currentGame.lastAncora = engineFinal.ancora;
+      }
       renderCluster(cluster, stake);
       notify('🧠 ANÁLISE DO GÊNIO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
