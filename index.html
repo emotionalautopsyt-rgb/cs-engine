@@ -2858,10 +2858,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   if(profileId === 'GOLEADA') {
     // PDF: 0-1 e 1-1 (stake mínima)
-    // 3-1 só entra quando btts suporta ambos marcarem (btts < 2.10)
-    // btts alto (>2.10) = mercado não acredita que adversário marca → sem 3-1
-    var liq31 = liqScoreMotor('3-1');
-    if(liq31 >= 10000 && btts < 2.10) {
+    // 3-1 entra quando odd indica probabilidade real (>=2%) E btts<2.10
+    var odd31 = oddScoreMotor('3-1');
+    var prob31 = odd31 > 0 ? 100/odd31 : 0;
+    if(prob31 >= 2.0 && btts < 2.10) {
       protection = ['1-1','0-1','3-1'];
     } else {
       protection = ['1-1','0-1'];
@@ -2869,8 +2869,15 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
     // PDF: 0-1 e 1-1
-    // BTTS < 1.85 → 0-1 com stake maior (marcamos com high01)
-    protection = ['1-1','0-1'];
+    // Se over E btts ambos no range de jogo aberto (over<=1.85, btts<=1.95)
+    // 2-2 entra como proteção de equilíbrio ofensivo — odd do 2-2 deve ter prob real (>=4%)
+    var odd22eo = oddScoreMotor('2-2');
+    var prob22eo = odd22eo > 0 ? 100/odd22eo : 0;
+    if(over <= 1.85 && btts <= 1.95 && prob22eo >= 4.0) {
+      protection = ['1-1','0-1','2-2'];
+    } else {
+      protection = ['1-1','0-1'];
+    }
 
   } else if(profileId === 'EQUILIBRADO' || profileId === 'CONSERVADOR') {
     // PDF: 0-1 e 1-1 (mais leve)
@@ -2910,16 +2917,15 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // BTTS > 1.90 + GOLEADA → âncora limpa (3-0)
   let ancora = '';
   if(profileId === 'GOLEADA') {
-    // Âncora cruza over + liquidez CS real
-    // over muito baixo (<1.75) + liquidez maior no score de 3 gols → âncora no 3-0 ou 3-1
-    var liqAnc30 = oddScoreMotor ? (csOddsLiq[favEhVisitante?'0-3':'3-0']||0) : 0;
-    var liqAnc20 = oddScoreMotor ? (csOddsLiq[favEhVisitante?'0-2':'2-0']||0) : 0;
-    var liqAnc21 = oddScoreMotor ? (csOddsLiq[favEhVisitante?'1-2':'2-1']||0) : 0;
-    if(over < 1.75 && liqAnc30 > liqAnc20 * 0.9) {
-      // Over muito baixo + mercado concentrado em 3 gols → âncora no 3-0
+    // Âncora pela probabilidade implícita das odds CS reais
+    // Compara odd do 3-0 vs odd do 2-0 (pré-inversão)
+    var odd30g = oddScoreMotor('3-0');
+    var odd20g = oddScoreMotor('2-0');
+    var prob30g = odd30g > 0 ? 100/odd30g : 0;
+    var prob20g = odd20g > 0 ? 100/odd20g : 0;
+    if(over < 1.75 && prob30g >= prob20g * 0.85) {
+      // Over muito baixo + 3-0 com prob próxima do 2-0 → âncora no 3-0
       ancora = btts > 1.90 ? '3-0' : '3-1';
-    } else if(liqAnc21 > liqAnc20 * 1.2 && btts <= 1.90) {
-      ancora = '2-1';
     } else {
       ancora = btts > 1.90 ? '3-0' : '2-1';
     }
@@ -3152,31 +3158,23 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       }
     }
 
-    // SINAL 4b: Âncora pelo score com maior VALOR combinado de prob + liquidez
-    // Prob sozinha não basta — onde o dinheiro real está é o voto mais honesto
+    // SINAL 4b: Âncora pelo score com maior probabilidade implícita real
+    // Odds CS são o sinal principal — probabilidade implícita pura
     var todosScoresFinal = [...mainScores, ...protection];
-    var melhorValor = 0;
+    var melhorProb = 0;
     var melhorScore = ancora;
     todosScoresFinal.forEach(function(s) {
-      var odd  = csOdds[s]    || 0;
-      var liq  = csOddsLiq[s] || 0;
+      var odd  = csOdds[s] || 0;
       var prob = odd > 0 ? 100/odd : 0;
-      if(prob === 0) return; // sem odd, ignorar
-      // Score combinado: probabilidade normalizada + peso da liquidez
-      // Liquidez acima de R$5k recebe peso extra — mercado profissional votando
-      var pesoLiq = liq > 10000 ? 1.5 : liq > 5000 ? 1.2 : liq > 1000 ? 1.0 : 0.7;
-      var valorCombinado = prob * pesoLiq;
-      if(valorCombinado > melhorValor) {
-        melhorValor = valorCombinado;
+      if(prob > melhorProb) {
+        melhorProb = prob;
         melhorScore = s;
       }
     });
-    // Troca âncora se o score mais valioso for significativamente melhor
+    // Troca âncora se o score mais provável for significativamente melhor
     var oddAncora = csOdds[ancora] || 0;
-    var liqAncora = csOddsLiq[ancora] || 0;
-    var pesoAncora = liqAncora > 10000 ? 1.5 : liqAncora > 5000 ? 1.2 : liqAncora > 1000 ? 1.0 : 0.7;
-    var valorAncora = oddAncora > 0 ? (100/oddAncora) * pesoAncora : 0;
-    if(melhorValor > valorAncora * 1.1 && melhorScore !== ancora) {
+    var probAncora = oddAncora > 0 ? 100/oddAncora : 0;
+    if(melhorProb > probAncora * 1.1 && melhorScore !== ancora) {
       ancora = melhorScore;
     }
   }
