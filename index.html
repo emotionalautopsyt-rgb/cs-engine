@@ -2869,12 +2869,15 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   } else if(profileId === 'OFENSIVO' || profileId === 'EQUILIBRADO_OFENSIVO') {
     // PDF: 0-1 e 1-1
-    // Se over E btts ambos no range de jogo aberto (over<=1.85, btts<=1.95)
-    // 2-2 entra como proteção de equilíbrio ofensivo — odd do 2-2 deve ter prob real (>=4%)
+    // Terceiro score de proteção: escolher entre 2-2 (equilíbrio) e 3-1 (zebra com 1 gol)
+    // pela MAIOR probabilidade implícita real — não forçar um ou outro
     var odd22eo = oddScoreMotor('2-2');
+    var odd31eo = oddScoreMotor('3-1');
     var prob22eo = odd22eo > 0 ? 100/odd22eo : 0;
-    if(over <= 1.85 && btts <= 1.95 && prob22eo >= 4.0) {
-      protection = ['1-1','0-1','2-2'];
+    var prob31eo = odd31eo > 0 ? 100/odd31eo : 0;
+    if(over <= 1.85 && btts <= 1.95 && Math.max(prob22eo, prob31eo) >= 4.0) {
+      var terceiroScore = prob31eo > prob22eo ? '3-1' : '2-2';
+      protection = ['1-1','0-1', terceiroScore];
     } else {
       protection = ['1-1','0-1'];
     }
@@ -3709,8 +3712,9 @@ REGRAS ABSOLUTAS:
             // Garantir mínimos absolutos por perfil
             if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores.slice();
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
-            // SUPER_EQUILIBRADO precisa de pelo menos 6 scores
-            const minimoScores = engine.profileId === 'SUPER_EQUILIBRADO' ? 6 : 4;
+            // SUPER_EQUILIBRADO ou cluster com 2-2 (jogo aberto) precisa de pelo menos 6 scores
+            const motorTinhaDoisDois = engine.protection.includes('2-2') || engine.mainScores.includes('2-2');
+            const minimoScores = (engine.profileId === 'SUPER_EQUILIBRADO' || motorTinhaDoisDois) ? 6 : 4;
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
             if(totalAtual < minimoScores) {
               const faltamScores = minimoScores - totalAtual;
