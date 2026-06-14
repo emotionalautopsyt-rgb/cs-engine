@@ -2850,6 +2850,11 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     if(odd10 > 0 && odd10 < 5.0 && condicoesDominante) {
       // Remove o 1-0 — cluster inicia no 2-0
       mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
+      // Compensar: adicionar 3-1 ao Plano A se ainda não estiver presente
+      // mantém o total em pelo menos 3 no Plano A (5 total com PB)
+      if(!mainScores.includes('3-1')) {
+        mainScores.push('3-1');
+      }
     }
   }
 
@@ -3733,7 +3738,7 @@ REGRAS ABSOLUTAS:
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
             // SUPER_EQUILIBRADO ou cluster com 2-2 (jogo aberto) precisa de pelo menos 6 scores
             const motorTinhaDoisDois = engine.protection.includes('2-2') || engine.mainScores.includes('2-2');
-            const minimoScores = (engine.profileId === 'SUPER_EQUILIBRADO' || motorTinhaDoisDois) ? 6 : 4;
+            const minimoScores = (engine.profileId === 'SUPER_EQUILIBRADO' || motorTinhaDoisDois) ? 6 : 5;
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
             if(totalAtual < minimoScores) {
               const faltamScores = minimoScores - totalAtual;
