@@ -3182,6 +3182,14 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
   }
 
+  // ── GARANTIR ÂNCORA NO PLANO A (pós SINAL 4b) ───────────
+  // SINAL 4b pode ter trocado a âncora para um score do Plano B
+  // Repetir a garantia para cobrir esse caso
+  if(ancora && !mainScores.includes(ancora) && protection.includes(ancora)) {
+    protection = protection.filter(function(s){ return s !== ancora; });
+    mainScores.unshift(ancora);
+  }
+
   // ── DUTCH vs PIRÂMIDE — pelas odds reais (PDF) ───────────
   // Se diferença entre maior e menor odd do cluster < 2.0 → Dutch
   // Se > 2.0 → Pirâmide
@@ -3668,18 +3676,27 @@ REGRAS ABSOLUTAS:
             engineFinal.mainScores = engine.mainScores.filter(s => todosAprovados.includes(s));
             engineFinal.protection = engine.protection.filter(s => todosAprovados.includes(s));
 
-            // IA pode adicionar 1 score extra para garantir coerência com narrativa
+            // IA pode sugerir 1 score extra — mas só entra se tiver probabilidade real (>=3%)
+            // As odds CS são soberanas — a IA não pode inserir scores sem suporte do mercado
             if(voto.adicionar && Array.isArray(voto.adicionar) && voto.adicionar.length > 0) {
               const scoreExtra = voto.adicionar[0]; // máximo 1
               const allScores = [...engineFinal.mainScores, ...engineFinal.protection];
               const validScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','3-0','0-3','3-1','1-3','2-2','3-2','2-3'];
               if(scoreExtra && !allScores.includes(scoreExtra) && validScores.includes(scoreExtra)) {
-                // Adiciona no Plano B se ainda cabe (max 2 no Plano B)
-                if(engineFinal.protection.length < 2) {
-                  engineFinal.protection.push(scoreExtra);
+                // Validar pela odd real — aplicar inversão manualmente (oddScoreMotor não está no escopo)
+                const invScore = function(s){ const p=s.split('-'); return p[1]+'-'+p[0]; };
+                const realScoreExtra = favEhVisitanteReal ? invScore(scoreExtra) : scoreExtra;
+                const oddExtra = (S.csOdds && S.csOdds[realScoreExtra]) ? S.csOdds[realScoreExtra] : 0;
+                const probExtra = oddExtra > 0 ? 100/oddExtra : 0;
+                if(oddExtra === 0 || probExtra >= 3.0) {
+                  // Sem odds CS coladas → permite (fallback). Com odds → exige prob real
+                  if(engineFinal.protection.length < 2) {
+                    engineFinal.protection.push(scoreExtra);
+                  } else {
+                    engineFinal.protection[engineFinal.protection.length-1] = scoreExtra;
+                  }
                 } else {
-                  // Substitui último do Plano B
-                  engineFinal.protection[engineFinal.protection.length-1] = scoreExtra;
+                  console.log('[CONSENSO] IA sugeriu '+scoreExtra+' mas odd implica '+probExtra.toFixed(1)+'% — abaixo de 3%, ignorado');
                 }
               }
             }
@@ -3690,12 +3707,14 @@ REGRAS ABSOLUTAS:
             const removidos   = totalMotor - totalFinal;
 
             if(removidos > 2) {
-              // IA removeu demais — restaurar scores até deixar no máximo 2 removidos
+              // IA removeu demais — restaurar respeitando a estrutura original do motor
+              // O motor já decidiu Plano A (favorito) vs Plano B (proteção/zebra) com propósito
+              // Não reordenar por probabilidade — isso pode remover proteção intencional
               const todosMotor  = [...engine.mainScores, ...engine.protection];
               const todosFinais = new Set([...engineFinal.mainScores, ...engineFinal.protection]);
               const faltando    = todosMotor.filter(s => !todosFinais.has(s));
               const qtdRestaurar = removidos - 2;
-              // Priorizar restaurar do Plano A do motor
+              // Priorizar restaurar do Plano A do motor (estrutura original)
               const planoAFaltando = faltando.filter(s => engine.mainScores.includes(s));
               const planoBFaltando = faltando.filter(s => engine.protection.includes(s));
               const ordenado = [...planoAFaltando, ...planoBFaltando];
@@ -3706,7 +3725,7 @@ REGRAS ABSOLUTAS:
                   engineFinal.protection.push(s);
                 }
               });
-              console.log('[ENFORCEMENT] IA removeu '+removidos+' scores, restaurados '+qtdRestaurar+': '+ordenado.slice(0,qtdRestaurar).join(', '));
+              console.log('[ENFORCEMENT] IA removeu '+removidos+' scores, restaurados '+qtdRestaurar+' (estrutura original): '+ordenado.slice(0,qtdRestaurar).join(', '));
             }
 
             // Garantir mínimos absolutos por perfil
