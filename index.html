@@ -884,17 +884,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div><label>BTTS Sim</label><input id="pk-btts" type="number" step="0.01" placeholder="1.90" oninput="checkPackball()"></div>
           <div><label>Over 2.5</label><input id="pk-over" type="number" step="0.01" placeholder="1.95" oninput="checkPackball()"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-            <label style="margin:0;font-size:10px;color:var(--txt3);display:block;margin-bottom:4px;">Favorito é:</label>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt);cursor:pointer;margin:0;">
-                <input type="radio" name="fav-pos" id="fav-casa" value="casa" checked onchange="toggleFavVis()" style="accent-color:var(--acc);cursor:pointer;">
-                🏠 Casa
-              </label>
-              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt);cursor:pointer;margin:0;">
-                <input type="radio" name="fav-pos" id="fav-vis" value="visitante" onchange="toggleFavVis()" style="accent-color:var(--acc);cursor:pointer;">
-                ✈️ Visitante
-              </label>
-            </div>
+
           </div>
         </div>
         <div id="pk-status"></div>
@@ -1300,13 +1290,6 @@ function notify(t, b, c='var(--acc)') {
     if(nb) nb.textContent=b;
     if(el) { el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 3000); }
   } catch(e) {}
-}
-
-// Toggle favorito visitante — manual e soberano
-var _favVisManual = false;
-function toggleFavVis() {
-  var radio = document.querySelector('input[name="fav-pos"]:checked');
-  _favVisManual = radio ? radio.value === 'visitante' : false;
 }
 
 function showTab(t, el) {
@@ -3416,9 +3399,8 @@ async function analisarJogo() {
   );
 
   // Aciona se qualquer camada confirmar:
-  // _favVisManual tem prioridade absoluta — clique manual do usuário
-  const favEhVisitanteReal = (window._favVisManual === true) ||
-    favPorOdds || favPorLiq || favPorCombinado ||
+  // Detecção automática — odds, liquidez ou texto
+  const favEhVisitanteReal = favPorOdds || favPorLiq || favPorCombinado ||
     (favVisTextual && avgVisitante > 0 && avgVisitante < avgCasa * 0.90);
 
   // ── Motor determinístico — calcular scores por código ──────
@@ -3536,6 +3518,16 @@ HIERARQUIA DE DECISÃO:
 2º fav + btts + over — definem o perfil geral do jogo
 3º Contexto textual — H2H, DNA, forma — refinam dentro do perfil
 4º Consenso — quando odds CS + contexto concordam, cluster é forte
+
+REGRA DO "ancora_final" (MUITO IMPORTANTE):
+- Em geral, ancora_final = score com a MENOR odd CS do cluster (maior probabilidade).
+- EXCEÇÃO — empate técnico: se dois scores têm probabilidades implícitas muito próximas
+  (diferença menor que ~1.5 pontos percentuais, ex: 13.5% vs 12.8%), o contexto textual
+  PODE desempatar entre eles. Só nesse caso de empate técnico sugira um ancora_final
+  diferente do de menor odd — e justifique em motivo_ajuste citando o padrão textual específico.
+- Se NÃO houver empate técnico (diferença grande, ex: 14% vs 8%), ancora_final DEVE ser
+  o score de menor odd, mesmo que o texto sugira outra coisa. As odds são soberanas
+  fora de empates técnicos.
 
 ROTAS NATURAIS — o cluster deve parecer uma evolução de jogo, não placares soltos:
 - Favorito forte: 1-0 → 2-0 → 2-1 → 3-0 → 3-1 (escada ofensiva)
@@ -3755,9 +3747,45 @@ REGRAS ABSOLUTAS:
               });
             }
 
-            // Âncora validada pela IA
-            if(voto.ancora_final && [...engineFinal.mainScores,...engineFinal.protection].includes(voto.ancora_final)) {
-              engineFinal.ancora = voto.ancora_final;
+            // ── CAMADA 3: DESEMPATE TEXTUAL RESTRITO ──────────────
+            // A IA só pode trocar a âncora se houver EMPATE TÉCNICO real
+            // entre a âncora atual (do motor) e a sugerida pela IA.
+            // Empate técnico = diferença de probabilidade implícita < 1.5pp.
+            // Fora dessa margem, a Camada 1 (odds) é soberana e a IA não pode mudar.
+            if(voto.ancora_final &&
+               [...engineFinal.mainScores,...engineFinal.protection].includes(voto.ancora_final) &&
+               voto.ancora_final !== engineFinal.ancora) {
+
+              const invScoreA = function(s){ const p=s.split('-'); return p[1]+'-'+p[0]; };
+              const oddDoScore = function(s) {
+                const real = favEhVisitanteReal ? invScoreA(s) : s;
+                return (S.csOdds && S.csOdds[real]) ? S.csOdds[real] : 0;
+              };
+
+              const oddAtual    = oddDoScore(engineFinal.ancora);
+              const oddSugerida = oddDoScore(voto.ancora_final);
+
+              if(oddAtual > 0 && oddSugerida > 0) {
+                const probAtual    = 100 / oddAtual;
+                const probSugerida = 100 / oddSugerida;
+                const diferenca = Math.abs(probAtual - probSugerida);
+
+                if(diferenca < 1.5) {
+                  // Empate técnico — texto pode desempatar
+                  console.log('[CAMADA 3] Empate técnico ('+diferenca.toFixed(2)+'pp) entre '+
+                    engineFinal.ancora+' ('+probAtual.toFixed(1)+'%) e '+
+                    voto.ancora_final+' ('+probSugerida.toFixed(1)+'%) — IA desempatou via contexto');
+                  engineFinal.ancora = voto.ancora_final;
+                } else {
+                  // Diferença real — odds são soberanas, ignora sugestão da IA
+                  console.log('[CAMADA 3] IA sugeriu '+voto.ancora_final+' ('+probSugerida.toFixed(1)+
+                    '%) mas '+engineFinal.ancora+' tem '+probAtual.toFixed(1)+
+                    '% — diferença de '+diferenca.toFixed(2)+'pp > 1.5pp, mantendo âncora do motor');
+                }
+              } else {
+                // Sem odds CS para validar — fallback ao comportamento anterior (permissivo)
+                engineFinal.ancora = voto.ancora_final;
+              }
             }
           }
         }
@@ -6219,12 +6247,7 @@ function registrarResultado(g, num) {
 
 document.addEventListener('DOMContentLoaded', () => {
   window._jogoExplicitamenteSelecionado = false;
-  // Resetar toggle de favorito visitante ao abrir novo jogo
-  if(window._favVisManual) {
-    window._favVisManual = false;
-    var radioCasa = document.getElementById('fav-casa');
-    if(radioCasa) { radioCasa.checked = true; _favVisManual = false; }
-  } // reset ao abrir
+ // reset ao abrir
   // Garantir tela do cérebro ao abrir — limpar qualquer análise anterior
   var _outE = document.getElementById('resultado-out');
   if(_outE) _outE.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--txt3);"><div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;">GÊNIO DOS PLACARES</div><div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;"><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>📊</span><span>Analisando odds e perfil</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>🎯</span><span>Calculando cluster de placares</span></div><div style="display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.6;"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
