@@ -1650,7 +1650,9 @@ function encerrarJogo(id) {
   div.innerHTML = `
     <div style="font-size:10px;color:var(--acc);margin-bottom:8px;letter-spacing:1px;">ENCERRAR JOGO</div>
     <div style="font-size:9px;color:var(--txt2);margin-bottom:12px;">${g.name}</div>
-    <input id="enc-val" type="number" step="0.01" placeholder="ex: 48 ou -36" style="width:100%;margin-bottom:12px;text-align:center;font-size:16px;">
+    <input id="enc-val" type="number" step="0.01" placeholder="ex: 48 ou -36" style="width:100%;margin-bottom:10px;text-align:center;font-size:16px;">
+    <div style="font-size:8px;color:var(--txt3);margin-bottom:4px;">Placar final real (ex: 2-1)</div>
+    <input id="enc-placar" type="text" placeholder="ex: 2-1" value="${g.placar||''}" style="width:100%;margin-bottom:12px;text-align:center;font-size:14px;">
     <div style="display:flex;gap:8px;">
       <button onclick="document.getElementById('enc-overlay').remove()" style="flex:1;background:#0a1520;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--txt3);cursor:pointer;font-family:inherit;font-size:9px;">CANCELAR</button>
       <button onclick="confirmarEncerrar('${id}')" style="flex:2;background:rgba(0,212,255,.1);border:1px solid var(--acc);border-radius:6px;padding:8px;color:var(--acc);cursor:pointer;font-family:inherit;font-size:9px;font-weight:700;">CONFIRMAR</button>
@@ -1664,14 +1666,16 @@ function confirmarEncerrar(id) {
   const g = S.games.find(x => x.id === id);
   if(!g) return;
   const v = document.getElementById('enc-val')?.value;
+  const placarReal = document.getElementById('enc-placar')?.value?.trim() || g.placar || '';
   document.getElementById('enc-overlay')?.remove();
   const val = parseFloat(v);
   g.status = 'enc';
+  g.placar = placarReal; // atualiza placar real do jogo
   g.resultado = isNaN(val) ? 0 : val;
   if(!isNaN(val) && val !== 0) {
     // Verificar se placar final estava no cluster gerado
     var clusterSalvo = g.cluster || [];
-    var placarFinal  = g.placar || '';
+    var placarFinal  = placarReal;
     var placarNoCluster = placarFinal && clusterSalvo.some(function(c){
       return (c.score||c) === placarFinal;
     });
@@ -5585,28 +5589,11 @@ function renderPerf() {
       card('📅','HOJE',fmt(todaySaldo),todayCount+' jogo(s)',clr(todaySaldo));
   }
 
-  // ── STATUS SPLIT ─────────────────────────────────────────
+  // ── STATUS SPLIT — REMOVIDO, apenas saldo total já é mostrado no topo ──
   var splitEl = document.getElementById('perf-status-split');
   if(splitEl) {
-    var sCard = function(icon,label,arr,bColor){
-      var s=calcSaldo(arr),r=calcROI(arr),w=calcWR(arr);
-      return '<div class="card" style="margin:0;padding:12px;background:linear-gradient(145deg,#0c1622,#0f1e2e);border-color:'+bColor+';border-width:1.5px;">'+
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'+
-          '<span style="font-size:13px;">'+icon+'</span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);letter-spacing:1px;">'+label+'</span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-left:auto;">'+arr.length+'j</span>'+
-        '</div>'+
-        '<div style="font-family:Barlow Condensed,sans-serif;font-size:20px;font-weight:900;color:'+clr(s)+';">'+fmt(s)+'</div>'+
-        '<div style="display:flex;gap:8px;margin-top:4px;">'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">ROI <b style="color:'+(parseFloat(r)>=0?'var(--grn)':'var(--red)')+';">'+(parseFloat(r)>=0?'+':'')+r+'%</b></span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">WR <b style="color:'+(w>=55?'var(--grn)':w>=45?'var(--ylw)':'var(--red)')+';">'+w+'%</b></span>'+
-        '</div>'+
-      '</div>';
-    };
-    splitEl.innerHTML =
-      sCard('🟢','APROVADOS PELO GÊNIO',aprovados,'rgba(0,255,136,.3)')+
-      sCard('🔴','NÃO APROVADOS PELO GÊNIO',naoAprovados,'rgba(255,68,68,.3)')+
-      sCard('🟡','HISTÓRICO ANTIGO',semStatus,'rgba(255,215,0,.2)');
+    splitEl.innerHTML = '';
+    splitEl.style.display = 'none';
   }
 
   // ── GRÁFICO PREMIUM — igual à imagem de referência ─────────
@@ -5686,7 +5673,7 @@ function renderPerf() {
       }
     });
 
-    // Bolinhas brancas em TODOS os pontos (estilo da imagem)
+    // Bolinhas com tooltip interativo (hover mostra saldo + valor do jogo + data)
     var dots='';
     var showDot=coords.length<=30;
     var skipDot=Math.max(1,Math.floor(coords.length/25));
@@ -5694,10 +5681,18 @@ function renderPerf() {
       var isLast=i===coords.length-1;
       if(isLast||showDot||i%skipDot===0){
         var r=isLast?6:4;
-        // Bolinha branca com borda verde — igual à imagem
         var dotFill = isLast ? gc : '#ffffff';
         var dotStroke = gc;
-        dots+='<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+r+'" fill="'+dotFill+'" stroke="'+dotStroke+'" stroke-width="'+(isLast?2:1.5)+'"'+(isLast?' filter="url(#lineGlow)"':'')+'/>';
+        var pVal = pts[i].val;
+        var pCum = pts[i].v;
+        var tipDate = pts[i].d || '';
+        var tipValLabel = (pVal>=0?'+':'')+'R$ '+pVal.toFixed(2);
+        var tipCumLabel = (pCum>=0?'+':'')+'R$ '+pCum.toFixed(2);
+        dots+='<g class="chart-pt" style="cursor:pointer;">'+
+          '<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+(r+6)+'" fill="transparent"/>'+ // área de hover maior
+          '<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+r+'" fill="'+dotFill+'" stroke="'+dotStroke+'" stroke-width="'+(isLast?2:1.5)+'"'+(isLast?' filter="url(#lineGlow)"':'')+'/>'+
+          '<title>'+tipDate+'\nJogo: '+tipValLabel+'\nSaldo acumulado: '+tipCumLabel+'</title>'+
+        '</g>';
       }
     });
 
@@ -5904,27 +5899,11 @@ function renderCopa() {
       cc('⚽','JOGOS',total,'Copa do Mundo 2026','var(--acc)');
   }
 
-  // ── SPLIT APROVADOS ──
+  // ── SPLIT APROVADOS — REMOVIDO, apenas saldo total no topo ──
   var splitEl = document.getElementById('copa-split');
   if(splitEl) {
-    var sc = function(icon,label,arr,bColor){
-      var s=calcSaldo(arr),r=calcROI(arr),w=calcWR(arr);
-      return '<div class="card" style="margin:0;padding:14px;background:linear-gradient(145deg,#0c1410,#0f1e14);border-color:'+bColor+';border-width:1.5px;">'+
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'+
-          '<span style="font-size:16px;">'+icon+'</span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:8px;color:#ffd700;letter-spacing:1px;">'+label+'</span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-left:auto;">'+arr.length+' jogos</span>'+
-        '</div>'+
-        '<div style="font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:900;color:'+clr(s)+';">'+fmt(s)+'</div>'+
-        '<div style="display:flex;gap:10px;margin-top:6px;">'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">ROI <b style="color:'+(parseFloat(r)>=0?'var(--grn)':'var(--red)')+';">'+(parseFloat(r)>=0?'+':'')+r+'%</b></span>'+
-          '<span style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">WR <b style="color:'+(w>=55?'var(--grn)':w>=45?'var(--ylw)':'var(--red)')+';">'+w+'%</b></span>'+
-        '</div>'+
-      '</div>';
-    };
-    splitEl.innerHTML =
-      sc('🟢','APROVADOS PELO GÊNIO',aprov,'rgba(0,255,136,.3)')+
-      sc('🔴','NÃO APROVADOS PELO GÊNIO',naoAp,'rgba(255,68,68,.3)');
+    splitEl.innerHTML = '';
+    splitEl.style.display = 'none';
   }
 
   // ── GRÁFICO COPA ──
@@ -5997,11 +5976,24 @@ function renderCopa() {
       mapaEl.innerHTML=h.map(function(r){
         var v=Number(r.v||0);
         var sc=r.sc||'';
+        var stake=Number(r.s||S.stake||300);
         var cluster=r.cluster&&r.cluster.length?r.cluster.map(function(c){return c.score||c;}):[]; 
         var noCluster=sc&&cluster.length>0&&cluster.indexOf(sc)>=0;
-        var emoji=v>10?'🟩':v<-10?'🟥':v===0&&sc?'🟨':'⬜';
-        if(sc&&cluster.length>0) emoji=noCluster?'🟩':'🟥';
-        var title=r.j+(sc?' — '+sc:'')+(v!==0?' ('+fmt(v)+')':'');
+        // Faixa neutra: resultado dentro de ±10% da stake = variação normal de cobertura,
+        // não reflete erro/acerto real do robô na escolha do placar
+        var faixaNeutra = stake * 0.10;
+        var dentroFaixaNeutra = Math.abs(v) <= faixaNeutra;
+
+        var emoji;
+        if(dentroFaixaNeutra) {
+          emoji = '🟨'; // neutro — resultado pequeno demais pra julgar
+        } else if(sc && cluster.length>0) {
+          emoji = noCluster ? '🟩' : '🟥';
+        } else {
+          emoji = v>0 ? '🟩' : '🟥';
+        }
+
+        var title=r.j+(sc?' — '+sc:'')+(v!==0?' ('+fmt(v)+')':'')+(dentroFaixaNeutra?' [neutro: dentro de 10% da stake]':'');
         return '<div title="'+title+'" style="font-size:22px;cursor:default;">'+emoji+'</div>';
       }).join('');
     }
