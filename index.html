@@ -2169,13 +2169,28 @@ function checkPackball() {
   if(isAmistoso) motivoContexto = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
   else if(semMotivacao) motivoContexto = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
 
-  // ── ÍNDICE DE ENTRADA — mesma lógica usada após a análise ──
-  // Critério 1 — Favorito (30%)
-  var pFav = fav <= 1.80 ? 10 : fav <= 2.00 ? 6 : fav <= 2.35 ? 3 : 1;
-  // Critério 2 — Over 2.5 (25%)
-  var pOver = over <= 1.80 ? 10 : over <= 2.10 ? 6 : 2;
-  // Critério 3 — BTTS (25%)
-  var pBtts = btts <= 1.85 ? 10 : btts <= 2.10 ? 6 : 2;
+  // ── ÍNDICE DE ENTRADA — escala suave, sem saltos abruptos em pontos de corte ──
+  // Função de interpolação: dado um valor e pontos de referência, calcula score gradual
+  function escalaSuave(valor, pontos) {
+    // pontos = [[valor1,score1], [valor2,score2], ...] em ordem crescente de valor
+    for(var i=0; i<pontos.length-1; i++) {
+      var v1=pontos[i][0], s1=pontos[i][1], v2=pontos[i+1][0], s2=pontos[i+1][1];
+      if(valor <= v1) return s1;
+      if(valor <= v2) {
+        var t = (valor-v1)/(v2-v1);
+        return s1 + t*(s2-s1);
+      }
+    }
+    return pontos[pontos.length-1][1];
+  }
+
+  // Critério 1 — Favorito (30%): ideal 1.40-1.80, degrada suavemente até 2.35+
+  var pFav = escalaSuave(fav, [[1.40,10],[1.80,10],[2.00,6],[2.35,3],[2.80,1]]);
+  // Critério 2 — Over 2.5 (25%): ideal <=1.80, degrada até 2.10+
+  var pOver = escalaSuave(over, [[1.50,10],[1.80,10],[2.10,6],[2.50,2]]);
+  // Critério 3 — BTTS (25%): ideal <=1.85, degrada até 2.10+
+  var pBtts = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,6],[2.50,2]]);
+  pFav = Math.round(pFav*10)/10; pOver = Math.round(pOver*10)/10; pBtts = Math.round(pBtts*10)/10;
   // Critério 4 — Liquidez CS (10%) — pode não estar disponível ainda nesse momento
   var liqTotal = 0;
   if(S.csOddsLiq) {
@@ -2692,6 +2707,13 @@ Minha seleção inclui o Plano A
 junto com o Plano B
 (proteção via [scores tipo planb]).
 [1 frase de contexto].
+
+REGRA CRÍTICA DE CONSISTÊNCIA — LEIA COM ATENÇÃO:
+Os scores entre parênteses do "Plano A" e "Plano B" acima DEVEM ser EXATAMENTE
+os mesmos scores já escritos na lista vertical acima, sem adicionar, remover,
+ou trocar nenhum. Não reescreva de memória — copie os mesmos scores já listados.
+Se a lista vertical tem [1-0, 2-0, 2-1, 1-1, 0-1], o texto deve dizer
+"Plano A (1-0, 2-0, 2-1) junto com o Plano B (1-1, 0-1)" — nunca scores diferentes.
 
 - Risco de gol cedo: [BAIXO/MÉDIO/ALTO] — [comportamento timing].
 - Potencial tardio: [time] concentra gols entre 75-90' — [janela/atenção].
@@ -3787,7 +3809,7 @@ STAKE TOTAL: R$${stake}
 REGRAS ABSOLUTAS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Use EXATAMENTE os scores acima no JSON — não adicione, não remova
-2. A âncora É ${engine.ancora} — mencione como o placar mais provável no parágrafo 3
+2. A âncora sugerida pelo motor É ${engine.ancora} — mencione como o placar mais provável no parágrafo 3. Esta é a âncora a usar na narrativa; não mencione nenhum outro score como "mais provável" ou "âncora".
 3. A narrativa DEVE ser coerente com as odds de mercado:
    - Se BTTS < 1.85 → narrativa deve mencionar que ambos os times marcam
    - Se Over < 1.90 → narrativa deve mencionar expectativa de 3+ gols
@@ -3997,10 +4019,9 @@ REGRAS ABSOLUTAS:
     const promptFinal = prompt
       .replace('Plano A: '+engine.mainScores.join(', '), 'Plano A: '+engineFinal.mainScores.join(', '))
       .replace('Plano B: '+engine.protection.join(', '), 'Plano B: '+engineFinal.protection.join(', '))
-      .replace('Âncora (PLACAR PROJETADO): '+engine.ancora, 'Âncora (PLACAR PROJETADO): '+engineFinal.ancora)
-      .replace('ÂNCORA DEFINITIVO: '+engine.ancora, 'ÂNCORA DEFINITIVO: '+engineFinal.ancora)
-      .replace("'"+engine.ancora+" é o placar que esse jogo está pedindo.'", "'"+engineFinal.ancora+" é o placar que esse jogo está pedindo.'"  )
-      .replace(/Total na lista = \d+ scores/, 'Total na lista = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores');
+      .replace('Âncora: '+engine.ancora, 'Âncora: '+engineFinal.ancora)
+      .replace('2. A âncora sugerida pelo motor É '+engine.ancora, '2. A âncora sugerida pelo motor É '+engineFinal.ancora)
+      .replace(/Total na lista vertical = \d+ scores exatos/, 'Total na lista vertical = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores exatos');
 
     // ── FASE 2: Narrativa com cluster final ───────────────────
     const resp = await fetch('/.netlify/functions/analyze', {
@@ -4351,8 +4372,7 @@ function extractCluster(text, stake) {
       cluster.forEach(s => {
         if(!s.odd && S.csOdds[s.score]) {
           s.odd = S.csOdds[s.score];
-          s.prob = parseFloat((100/s.odd).toFixed(1));
-        }
+          s.prob = parseFloat((100/s.odd).toFixed(1));        }
       });
 
       // Ensure 1-1 present
@@ -4379,6 +4399,25 @@ function extractCluster(text, stake) {
           s.odd = 0; s.prob = 0; // invalidar — odd de outro mercado
         }
       });
+
+      // CHECAGEM DE SANIDADE — narrativa vs cluster real
+      // Detecta se algum score mencionado na narrativa (texto livre antes do JSON)
+      // não existe no cluster final, ou se a âncora narrada difere da âncora do JSON.
+      // Apenas loga — não bloqueia, mas ajuda a diagnosticar divergências.
+      try {
+        const textoNarrativa = text.split(/##JSON_START##|\x60\x60\x60json/)[0] || '';
+        const scoresNoCluster = cluster.map(c => c.score);
+        const regexScores = /\b([0-9])-([0-9])\b/g;
+        let mScore, scoresNaNarrativa = [];
+        while((mScore = regexScores.exec(textoNarrativa)) !== null) {
+          const sc = mScore[1]+'-'+mScore[2];
+          if(!scoresNaNarrativa.includes(sc)) scoresNaNarrativa.push(sc);
+        }
+        const foraDoCluster = scoresNaNarrativa.filter(s => !scoresNoCluster.includes(s) && s !== '0-0');
+        if(foraDoCluster.length > 0) {
+          console.warn('[SANIDADE NARRATIVA] Scores mencionados no texto mas ausentes do cluster final:', foraDoCluster, '| Cluster real:', scoresNoCluster);
+        }
+      } catch(eSanidade) { /* checagem best-effort, nunca bloqueia */ }
 
       if(cluster.length > 0) calcStakes(cluster, stake, text);
       return cluster;
