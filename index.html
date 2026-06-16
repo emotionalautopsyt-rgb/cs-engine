@@ -943,6 +943,9 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
       </div>
 
+      <!-- ÍNDICE DE CONFIANÇA DE ENTRADA -->
+      <div id="indice-entrada"></div>
+
       <!-- CLUSTER TRAVADO -->
       <div class="card" id="cluster-card" style="display:none;border-color:rgba(0,201,110,.3);box-shadow:0 0 20px rgba(0,201,110,.08);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -1985,6 +1988,64 @@ function avaliarAprovacaoGenio(ctx) {
   else if(rangeFails >= 2) motivoPrincipal = 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
   else motivoPrincipal = 'Perfil fora da zona ideal — a árvore pode ter menor precisão.';
 
+  // ── ÍNDICE DE CONFIANÇA DE ENTRADA ──────────────────────
+  // Critério 1: Favorito (30 pontos máx)
+  var pFav = fav >= 1.40 && fav <= 1.80 ? 30
+           : fav > 1.80 && fav <= 2.00  ? 18
+           : fav > 2.00 && fav <= 2.35  ? 9
+           : 3;
+
+  // Critério 2: Over 2.5 (25 pontos máx)
+  var pOver = over <= 1.80 ? 25
+            : over <= 2.10 ? 15
+            : over <= 2.30 ? 8
+            : 3;
+
+  // Critério 3: BTTS (25 pontos máx)
+  var pBtts = btts <= 1.85 ? 25
+            : btts <= 2.10 ? 15
+            : btts <= 2.30 ? 8
+            : 3;
+
+  // Critério 4: Liquidez CS (10 pontos máx)
+  var liqTotal = 0;
+  if(S && S.csOddsLiq) {
+    var topScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','0-0'];
+    topScores.forEach(function(sc){ liqTotal += (S.csOddsLiq[sc]||0); });
+  }
+  var pLiq = liqTotal >= 200000 ? 10
+           : liqTotal >= 100000 ? 6
+           : liqTotal >= 50000  ? 3
+           : liqTotal > 0 ? 1 : 5; // sem odds coladas → neutro
+
+  // Critério 5: Contexto/Motivação (10 pontos máx)
+  var isCopa = /copa do mundo|world cup|copa 2026/i.test(fullText);
+  var semMotivacao = /amistoso|sem motivação|already qualified|já classificado/i.test(fullText);
+  var pCtx = semMotivacao ? 1
+           : isCopa       ? 10
+           : 5;
+
+  var indiceEntrada = pFav + pOver + pBtts + pLiq + pCtx;
+
+  var recomendacao, corIndice, iconIndice;
+  if(indiceEntrada >= 75) {
+    recomendacao = 'ENTRE — zona ideal';
+    corIndice = 'var(--grn)';
+    iconIndice = '🟢';
+  } else if(indiceEntrada >= 55) {
+    recomendacao = 'ENTRE COM STAKE REDUZIDA';
+    corIndice = 'var(--ylw)';
+    iconIndice = '🟡';
+  } else if(indiceEntrada >= 35) {
+    recomendacao = 'CAUTELA — stake mínima';
+    corIndice = '#ff8c00';
+    iconIndice = '🟠';
+  } else {
+    recomendacao = 'EVITE — fora do perfil';
+    corIndice = 'var(--red)';
+    iconIndice = '🔴';
+  }
+
   return {
     aprovado,
     status: aprovado ? 'aprovado' : 'nao_aprovado',
@@ -1996,8 +2057,37 @@ function avaliarAprovacaoGenio(ctx) {
       ? ''
       : 'Você ainda pode analisar e operar — o resultado será registrado separadamente para comparação.',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
-    fav, btts, over
+    fav, btts, over,
+    // Índice de Confiança de Entrada
+    indiceEntrada, recomendacao, corIndice, iconIndice,
+    detalhesIndice: { pFav, pOver, pBtts, pLiq, pCtx }
   };
+}
+
+function renderIndiceConfianca(ap) {
+  if(!ap || typeof ap.indiceEntrada === 'undefined') return '';
+  var idx = ap.indiceEntrada;
+  var d = ap.detalhesIndice || {};
+  var barW = Math.round(idx) + '%';
+  var barColor = ap.corIndice || 'var(--acc)';
+
+  return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;margin-bottom:10px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+      + '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;">ÍNDICE DE ENTRADA</span>'
+      + '<span style="font-family:Barlow Condensed,sans-serif;font-size:20px;font-weight:900;color:'+barColor+';">'+ap.iconIndice+' '+idx+'<span style="font-size:11px;color:var(--txt3);">/100</span></span>'
+    + '</div>'
+    + '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:6px;margin-bottom:8px;">'
+      + '<div style="background:'+barColor+';height:100%;border-radius:4px;width:'+barW+';transition:width .5s;"></div>'
+    + '</div>'
+    + '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;color:'+barColor+';margin-bottom:8px;">'+ap.recomendacao+'</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito <b style="color:var(--txt);">'+d.pFav+'/30</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over 2.5 <b style="color:var(--txt);">'+d.pOver+'/25</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS <b style="color:var(--txt);">'+d.pBtts+'/25</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez CS <b style="color:var(--txt);">'+d.pLiq+'/10</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto <b style="color:var(--txt);">'+d.pCtx+'/10</b></div>'
+    + '</div>'
+  + '</div>';
 }
 
 function renderGenioApprovalBox(ap, favOverride) {
@@ -2028,7 +2118,7 @@ function updatePkStatusFromApproval() {
   if(!fav || !btts || !over) return;
   const ap = avaliarAprovacaoGenio({fav,btts,over});
   S.lastGenioApproval = ap;
-  el.innerHTML = renderGenioApprovalBox(ap);
+  el.innerHTML = renderIndiceConfianca(ap) + renderGenioApprovalBox(ap);
 }
 
 
@@ -4089,6 +4179,70 @@ REGRAS ABSOLUTAS:
         .replace(/(⚠️[^<]*)/gi, '<span style="color:var(--ylw);">$1</span>');
       var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
       if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
+      // ── ÍNDICE DE CONFIANÇA DE ENTRADA ──────────────────────
+      // Formaliza os critérios do método para decisão de entrada
+      (function renderIndiceEntrada(){
+        var el = document.getElementById('indice-entrada');
+        if(!el) return;
+
+        // Critério 1 — Favorito (30%)
+        var pFav = fav <= 1.80 ? 10 : fav <= 2.00 ? 6 : fav <= 2.35 ? 3 : 1;
+
+        // Critério 2 — Over 2.5 (25%)
+        var pOver = over <= 1.80 ? 10 : over <= 2.10 ? 6 : 2;
+
+        // Critério 3 — BTTS (25%)
+        var pBtts = btts <= 1.85 ? 10 : btts <= 2.10 ? 6 : 2;
+
+        // Critério 4 — Liquidez CS (10%)
+        var liqTotal = 0;
+        if(S.csOddsLiq) {
+          var topScores = ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3'];
+          topScores.forEach(function(s){ liqTotal += S.csOddsLiq[s]||0; });
+        }
+        var pLiq = liqTotal > 200000 ? 10 : liqTotal > 100000 ? 6 : liqTotal > 50000 ? 3 : 1;
+
+        // Critério 5 — Contexto/Copa (10%)
+        var pContexto = isCopa ? 10 : 5;
+
+        // Score ponderado
+        var score = Math.round(pFav*0.30 + pOver*0.25 + pBtts*0.25 + pLiq*0.10 + pContexto*0.10);
+
+        // Classificação
+        var nivel, cor, icone, stakeRec;
+        if(score >= 8) {
+          nivel='ENTRE'; cor='var(--grn)'; icone='🟢';
+          stakeRec='Stake normal — zona ideal do método';
+        } else if(score >= 6) {
+          nivel='ENTRE COM CAUTELA'; cor='var(--ylw)'; icone='🟡';
+          stakeRec='Considere stake reduzida (50-75%)';
+        } else if(score >= 4) {
+          nivel='STAKE MÍNIMA'; cor='#ff9800'; icone='🟠';
+          stakeRec='Stake mínima se entrar — risco elevado';
+        } else {
+          nivel='EVITE'; cor='var(--red)'; icone='🔴';
+          stakeRec='Fora do perfil do método — não recomendado';
+        }
+
+        el.innerHTML =
+          '<div style="background:linear-gradient(135deg,rgba(13,28,42,.9),rgba(8,18,28,.95));'+
+          'border:1px solid '+cor+';border-radius:10px;padding:14px 16px;margin:10px 0;">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+              '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:2px;">ÍNDICE DE ENTRADA</span>'+
+              '<span style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:'+cor+';">'+score+'/10</span>'+
+            '</div>'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:'+cor+';margin-bottom:6px;">'+icone+' '+nivel+'</div>'+
+            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">'+stakeRec+'</div>'+
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito: <b style="color:var(--txt);">'+pFav+'/10</b></div>'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over: <b style="color:var(--txt);">'+pOver+'/10</b></div>'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS: <b style="color:var(--txt);">'+pBtts+'/10</b></div>'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez: <b style="color:var(--txt);">'+pLiq+'/10</b></div>'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto: <b style="color:var(--txt);">'+pContexto+'/10</b></div>'+
+            '</div>'+
+          '</div>';
+      })();
+
       // Garantir lastAncora disponível antes de renderizar
       if(S.currentGame && engineFinal && engineFinal.ancora) {
         S.currentGame.lastAncora = engineFinal.ancora;
