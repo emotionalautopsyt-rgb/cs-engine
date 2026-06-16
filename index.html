@@ -2169,12 +2169,51 @@ function checkPackball() {
   if(isAmistoso) motivoContexto = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
   else if(semMotivacao) motivoContexto = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
 
-  if(fails <= 1 && !contextoBloqueio) {
-    el.innerHTML = `<div class="ab ab-g" style="border-left-color:var(--grn);background:rgba(0,201,110,.07);padding:12px 14px;"><div class="ab-title" style="color:var(--grn);font-size:11px;letter-spacing:2px;margin-bottom:6px;">🟢 GÊNIO APROVOU O JOGO</div><div class="ab-text" style="font-size:11px;line-height:1.6;">Edge identificado. Árvore liberada com alta confiança operacional.</div></div>`;
-  } else {
-    var motivoEl = contextoBloqueio ? motivoContexto : 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
-    el.innerHTML = `<div class="ab ab-r" style="border-left-color:var(--ylw);background:rgba(255,184,0,.06);padding:12px 14px;border:1px solid rgba(255,184,0,.3);border-radius:8px;"><div class="ab-title" style="color:var(--ylw);font-size:11px;letter-spacing:2px;margin-bottom:6px;">⚠️ ALERTA DO GÊNIO</div><div class="ab-text" style="font-size:11px;line-height:1.6;color:var(--txt2);">${motivoEl}</div></div>`;
+  // ── ÍNDICE DE ENTRADA — mesma lógica usada após a análise ──
+  // Critério 1 — Favorito (30%)
+  var pFav = fav <= 1.80 ? 10 : fav <= 2.00 ? 6 : fav <= 2.35 ? 3 : 1;
+  // Critério 2 — Over 2.5 (25%)
+  var pOver = over <= 1.80 ? 10 : over <= 2.10 ? 6 : 2;
+  // Critério 3 — BTTS (25%)
+  var pBtts = btts <= 1.85 ? 10 : btts <= 2.10 ? 6 : 2;
+  // Critério 4 — Liquidez CS (10%) — pode não estar disponível ainda nesse momento
+  var liqTotal = 0;
+  if(S.csOddsLiq) {
+    ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3'].forEach(function(s){ liqTotal += S.csOddsLiq[s]||0; });
   }
+  var pLiq = liqTotal > 200000 ? 10 : liqTotal > 100000 ? 6 : liqTotal > 50000 ? 3 : 1;
+  // Critério 5 — Contexto (10%)
+  var pContexto = _isCompOficial ? 10 : 5;
+
+  var scoreIdx = Math.round(pFav*0.30 + pOver*0.25 + pBtts*0.25 + pLiq*0.10 + pContexto*0.10);
+
+  var nivel, cor, icone, corBg, corBorder, desc;
+  if(contextoBloqueio) {
+    nivel='FORA DA ZONA DO GÊNIO'; cor='var(--red)'; icone='🔴';
+    corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
+    desc = motivoContexto;
+  } else if(scoreIdx >= 8) {
+    nivel='GÊNIO APROVOU O JOGO'; cor='var(--grn)'; icone='🟢';
+    corBg='rgba(0,201,110,.07)'; corBorder='rgba(0,201,110,.3)';
+    desc = 'Edge identificado. Árvore liberada com alta confiança operacional.';
+  } else if(scoreIdx >= 6) {
+    nivel='GÊNIO PEDE CAUTELA'; cor='var(--ylw)'; icone='🟡';
+    corBg='rgba(255,184,0,.06)'; corBorder='rgba(255,184,0,.3)';
+    desc = 'Jogo operável, mas fora da zona ideal. Considere stake reduzida.';
+  } else if(scoreIdx >= 4) {
+    nivel='GÊNIO RECOMENDA STAKE MÍNIMA'; cor='#ff9800'; icone='🟠';
+    corBg='rgba(255,152,0,.06)'; corBorder='rgba(255,152,0,.3)';
+    desc = 'Risco elevado — odds bem fora da zona de maior edge histórico.';
+  } else {
+    nivel='ALERTA DO GÊNIO'; cor='var(--red)'; icone='🔴';
+    corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
+    desc = 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
+  }
+
+  el.innerHTML = '<div class="ab" style="border-left-color:'+cor+';background:'+corBg+';padding:12px 14px;border:1px solid '+corBorder+';border-radius:8px;">'+
+    '<div class="ab-title" style="color:'+cor+';font-size:11px;letter-spacing:2px;margin-bottom:6px;">'+icone+' '+nivel+'</div>'+
+    '<div class="ab-text" style="font-size:11px;line-height:1.6;color:var(--txt2);">'+desc+'</div>'+
+  '</div>';
 
   // Comunicação final oficial: binário e profissional
   updatePkStatusFromApproval();
@@ -4179,69 +4218,11 @@ REGRAS ABSOLUTAS:
         .replace(/(⚠️[^<]*)/gi, '<span style="color:var(--ylw);">$1</span>');
       var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
       if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
-      // ── ÍNDICE DE CONFIANÇA DE ENTRADA ──────────────────────
-      // Formaliza os critérios do método para decisão de entrada
-      (function renderIndiceEntrada(){
-        var el = document.getElementById('indice-entrada');
-        if(!el) return;
-
-        // Critério 1 — Favorito (30%)
-        var pFav = fav <= 1.80 ? 10 : fav <= 2.00 ? 6 : fav <= 2.35 ? 3 : 1;
-
-        // Critério 2 — Over 2.5 (25%)
-        var pOver = over <= 1.80 ? 10 : over <= 2.10 ? 6 : 2;
-
-        // Critério 3 — BTTS (25%)
-        var pBtts = btts <= 1.85 ? 10 : btts <= 2.10 ? 6 : 2;
-
-        // Critério 4 — Liquidez CS (10%)
-        var liqTotal = 0;
-        if(S.csOddsLiq) {
-          var topScores = ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3'];
-          topScores.forEach(function(s){ liqTotal += S.csOddsLiq[s]||0; });
-        }
-        var pLiq = liqTotal > 200000 ? 10 : liqTotal > 100000 ? 6 : liqTotal > 50000 ? 3 : 1;
-
-        // Critério 5 — Contexto/Copa (10%)
-        var pContexto = isCopa ? 10 : 5;
-
-        // Score ponderado
-        var score = Math.round(pFav*0.30 + pOver*0.25 + pBtts*0.25 + pLiq*0.10 + pContexto*0.10);
-
-        // Classificação
-        var nivel, cor, icone, stakeRec;
-        if(score >= 8) {
-          nivel='ENTRE'; cor='var(--grn)'; icone='🟢';
-          stakeRec='Stake normal — zona ideal do método';
-        } else if(score >= 6) {
-          nivel='ENTRE COM CAUTELA'; cor='var(--ylw)'; icone='🟡';
-          stakeRec='Considere stake reduzida (50-75%)';
-        } else if(score >= 4) {
-          nivel='STAKE MÍNIMA'; cor='#ff9800'; icone='🟠';
-          stakeRec='Stake mínima se entrar — risco elevado';
-        } else {
-          nivel='EVITE'; cor='var(--red)'; icone='🔴';
-          stakeRec='Fora do perfil do método — não recomendado';
-        }
-
-        el.innerHTML =
-          '<div style="background:linear-gradient(135deg,rgba(13,28,42,.9),rgba(8,18,28,.95));'+
-          'border:1px solid '+cor+';border-radius:10px;padding:14px 16px;margin:10px 0;">'+
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
-              '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:2px;">ÍNDICE DE ENTRADA</span>'+
-              '<span style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:900;color:'+cor+';">'+score+'/10</span>'+
-            '</div>'+
-            '<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:'+cor+';margin-bottom:6px;">'+icone+' '+nivel+'</div>'+
-            '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);margin-bottom:10px;">'+stakeRec+'</div>'+
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
-              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito: <b style="color:var(--txt);">'+pFav+'/10</b></div>'+
-              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over: <b style="color:var(--txt);">'+pOver+'/10</b></div>'+
-              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS: <b style="color:var(--txt);">'+pBtts+'/10</b></div>'+
-              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez: <b style="color:var(--txt);">'+pLiq+'/10</b></div>'+
-              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto: <b style="color:var(--txt);">'+pContexto+'/10</b></div>'+
-            '</div>'+
-          '</div>';
-      })();
+      // ── ÍNDICE DE ENTRADA — removido como card separado ──
+      // Já unificado no card "GÊNIO APROVOU/CAUTELA" que aparece
+      // ao preencher as odds (checkPackball), evitando duplicação visual
+      var elIndiceRemover = document.getElementById('indice-entrada');
+      if(elIndiceRemover) { elIndiceRemover.innerHTML=''; elIndiceRemover.style.display='none'; }
 
       // Garantir lastAncora disponível antes de renderizar
       if(S.currentGame && engineFinal && engineFinal.ancora) {
