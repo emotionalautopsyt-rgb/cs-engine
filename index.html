@@ -4187,6 +4187,9 @@ REGRAS ABSOLUTAS:
     // engineFinal já foi validado pelo Consenso Duplo e pelo refino premium
     let cluster = [];
     if(engineFinal && engineFinal.mainScores) {
+      console.log('[DIAGNÓSTICO] engineFinal.mainScores:', JSON.stringify(engineFinal.mainScores));
+      console.log('[DIAGNÓSTICO] engineFinal.protection:', JSON.stringify(engineFinal.protection));
+      console.log('[DIAGNÓSTICO] engineFinal.ancora:', engineFinal.ancora);
       // Construir cluster diretamente do engineFinal travado
       const todosScoresFinais = [
         ...engineFinal.mainScores,
@@ -4231,9 +4234,30 @@ REGRAS ABSOLUTAS:
         if(ancScore && ancScore.tipo !== 'caminho') ancScore.tipo = 'destino';
       }
       // CLUSTER SOBERANO DEFINITIVO:
-      // depois do engineFinal validado, nenhum refino pode adicionar/remover/reordenar scores.
-      // Calcula apenas stake/lucro/odd pós-gol, preservando exatamente a árvore final.
+      // depois do engineFinal validado, nenhum refino pode adicionar/remover/reordenar
+      // os SCORES de aposta. Mas o alerta informativo de GOLEADA (any_other) é seguro —
+      // não modifica cluster de apostas, só adiciona um card visual de aviso.
       calcStakes(cluster, stake, texto);
+      try {
+        const favAwayExp = !!(engine && engine.favEhVisitante);
+        const expScore = favAwayExp ? 'any_other_away' : 'any_other_home';
+        const expOdd = favAwayExp
+          ? (S.csOdds['any_other_away'] || 0)
+          : (S.csOdds['any_other_home'] || 0);
+        const jaTemExp = cluster.some(function(s){ return s.score === expScore; });
+        const probExp = expOdd > 0 ? 100/expOdd : 0;
+        const piorProbCluster = cluster.length > 0
+          ? Math.min.apply(null, cluster.map(function(s){ return s.prob || 100; }))
+          : 100;
+        const expDominante = probExp > 0 && probExp > piorProbCluster;
+        if(!jaTemExp && expOdd > 0 && expDominante) {
+          console.log('[ALERTA GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+
+            '% implícita — MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd');
+          cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
+            tipo:'expansao', stake:0, lucro:0, oddPG:0,
+            _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
+        }
+      } catch(eGol) { console.warn('Alerta goleada falhou:', eGol.message); }
     } else {
       // Fallback: se engineFinal não disponível, usar extractCluster
       cluster = extractCluster(reply, stake);
