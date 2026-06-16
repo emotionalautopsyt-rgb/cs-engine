@@ -3754,9 +3754,16 @@ REGRAS ABSOLUTAS:
             // Garantir mínimos absolutos por perfil
             if(engineFinal.mainScores.length < 2) engineFinal.mainScores = engine.mainScores.slice();
             if(engineFinal.protection.length < 1) engineFinal.protection = engine.protection.slice();
-            // SUPER_EQUILIBRADO ou cluster com 2-2 (jogo aberto) precisa de pelo menos 6 scores
+            // SUPER_EQUILIBRADO, 2-2 ou 0-0 no motor = mínimo 6 scores
             const motorTinhaDoisDois = engine.protection.includes('2-2') || engine.mainScores.includes('2-2');
-            const minimoScores = (engine.profileId === 'SUPER_EQUILIBRADO' || motorTinhaDoisDois) ? 6 : 5;
+            const motorTinhaZeroZero = engine.protection.includes('0-0') || engine.mainScores.includes('0-0');
+            const minimoScores = (engine.profileId === 'SUPER_EQUILIBRADO' || motorTinhaDoisDois || motorTinhaZeroZero) ? 6 : 5;
+
+            // Se 0-0 foi removido pela IA mas motor incluiu intencionalmente — restaurar
+            if(motorTinhaZeroZero && !engineFinal.protection.includes('0-0') && !engineFinal.mainScores.includes('0-0')) {
+              engineFinal.protection.push('0-0');
+              console.log('[ENFORCEMENT] 0-0 restaurado — motor incluiu intencionalmente (jogo fechado)');
+            }
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
             if(totalAtual < minimoScores) {
               const faltamScores = minimoScores - totalAtual;
