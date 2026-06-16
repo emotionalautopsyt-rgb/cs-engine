@@ -3703,7 +3703,8 @@ REGRAS ABSOLUTAS:
             if(voto.adicionar && Array.isArray(voto.adicionar) && voto.adicionar.length > 0) {
               const scoreExtra = voto.adicionar[0]; // máximo 1
               const allScores = [...engineFinal.mainScores, ...engineFinal.protection];
-              const validScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','3-0','0-3','3-1','1-3','2-2','3-2','2-3'];
+              const validScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','3-0','0-3','3-1','1-3','2-2','3-2','2-3','0-0'];
+              // any_other_home/away não são placares válidos de correct score — bloquear sempre
               if(scoreExtra && !allScores.includes(scoreExtra) && validScores.includes(scoreExtra)) {
                 // Validar pela odd real — aplicar inversão manualmente (oddScoreMotor não está no escopo)
                 const invScore = function(s){ const p=s.split('-'); return p[1]+'-'+p[0]; };
@@ -4486,7 +4487,7 @@ function calcStakes(cluster, stake, analysisText) {
       : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
     const hasAnyOtherFav = cluster.some(s => s.score === expansionScore);
     const goleadaH2H = /H2H.*[4-9]-\d|[4-9]-\d.*H2H|4\+\s*gols|DNA.*3[.,][5-9]|3[.,][5-9].*gols/i.test(text);
-    if(!hasAnyOtherFav && expansionOdd > 0 && (overForGol < 1.60 || goleadaH2H)) {
+    if(!hasAnyOtherFav && expansionOdd > 0 && overForGol < 1.60 && goleadaH2H && prof === 'goleada') {
       cluster.push({score:expansionScore, odd:expansionOdd, tipo:'expansao',
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
