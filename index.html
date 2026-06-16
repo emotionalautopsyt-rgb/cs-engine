@@ -2964,17 +2964,35 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
     // Se odd < 6.0 ou não informada → não inclui (cluster inicia no 2-0)
   } else {
-    // Outros perfis: 1-0 já está no cluster
-    // PDF: odd > @9.0 → stake maior (tratado no label do tipo)
-    // Odd < @5.0 com fav < 1.45 + over < 1.70 → remover
-    var condicoesDominante = (fav < 1.45 && over < 1.70);
-    if(odd10 > 0 && odd10 < 5.0 && condicoesDominante) {
-      // Remove o 1-0 — cluster inicia no 2-0
+    // ── REGRA "PULAR O 1 GOL" — padrão observado no método original ──
+    // Quando o favorito é forte (over baixo = mercado espera volume de gols)
+    // E as odds CS reais mostram que 2-0 é mais provável que 1-0,
+    // o cluster pula o placar mínimo e já trabalha em "2+ gols do favorito".
+    // Isso é decidido pela ODD REAL, nunca por suposição — Camada 1 soberana.
+    var odd20comp = oddScoreMotor('2-0');
+    var prob10 = odd10 > 0 ? 100/odd10 : 0;
+    var prob20 = odd20comp > 0 ? 100/odd20comp : 0;
+
+    // Só considera o "pulo" em jogos de favorito forte com over baixo —
+    // é exatamente o cenário onde o mercado precifica volume de gols do favorito
+    var cenarioVolumeGols = fav <= 1.70 && over <= 1.75;
+
+    if(cenarioVolumeGols && prob20 > 0 && prob20 > prob10 * 1.15) {
+      // 2-0 tem probabilidade real e significativamente maior que 1-0 (>15%)
+      // Pula o 1-0 — cluster inicia no 2-0, igual ao padrão do Arsenal x Leeds (terminou 0-3)
       mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
-      // Compensar: adicionar 3-1 ao Plano A se ainda não estiver presente
-      // mantém o total em pelo menos 3 no Plano A (5 total com PB)
-      if(!mainScores.includes('3-1')) {
-        mainScores.push('3-1');
+      if(!mainScores.includes('3-0')) mainScores.push('3-0');
+      console.log('[REGRA PULAR 1 GOL] 1-0 ('+prob10.toFixed(1)+'%) < 2-0 ('+prob20.toFixed(1)+
+        '%) com fav forte+over baixo — cluster pula para volume de gols, 3-0 adicionado');
+    } else {
+      // PDF: odd > @9.0 → stake maior (tratado no label do tipo)
+      // Odd < @5.0 com fav < 1.45 + over < 1.70 → remover (regra original, mais restrita)
+      var condicoesDominante = (fav < 1.45 && over < 1.70);
+      if(odd10 > 0 && odd10 < 5.0 && condicoesDominante) {
+        mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
+        if(!mainScores.includes('3-1')) {
+          mainScores.push('3-1');
+        }
       }
     }
   }
@@ -3053,6 +3071,31 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       // Sempre adicionar 0-0 como proteção extra — jogo muito fechado
       // Não remove 0-1, ambos coexistem no Plano B
       protection.push('0-0');
+    }
+  }
+
+  // ── SALTO DE GOLS (padrão observado em traders profissionais) ──
+  // Quando o favorito é forte E o mercado espera VOLUME de gols dele
+  // (over baixo), o placar mínimo "1 gol" muitas vezes tem probabilidade
+  // real MENOR que "2 gols" — o mercado já assume que se o favorito abrir,
+  // não vai parar em 1. Nesse caso, odds reais decidem: comparamos 1-0 vs 2-0
+  // (ou 0-1 vs 0-2 se favorito visitante) e substituímos se 2-0 for
+  // significativamente mais provável.
+  // Só ativa quando: over < 1.65 (mercado espera muitos gols) E fav <= 1.70
+  // (favorito forte o suficiente para fazer 2+ sozinho).
+  if(over < 1.65 && fav <= 1.70 && mainScores.includes('1-0')) {
+    var odd10salto = oddScoreMotor('1-0');
+    var odd20salto = oddScoreMotor('2-0');
+    var prob10salto = odd10salto > 0 ? 100/odd10salto : 0;
+    var prob20salto = odd20salto > 0 ? 100/odd20salto : 0;
+    // Só salta se 2-0 tiver probabilidade real e for visivelmente maior (diferença >= 2pp)
+    if(prob20salto > 0 && prob20salto >= prob10salto + 2.0 && !mainScores.includes('2-0')) {
+      mainScores = mainScores.map(function(s){ return s === '1-0' ? '2-0' : s; });
+      console.log('[SALTO DE GOLS] 1-0 ('+prob10salto.toFixed(1)+'%) substituído por 2-0 ('+prob20salto.toFixed(1)+'%) — favorito forte + over baixo, mercado espera volume');
+    } else if(prob20salto > 0 && prob10salto > 0 && prob20salto >= prob10salto - 1.0 && !mainScores.includes('2-0')) {
+      // Empate técnico — adiciona 2-0 ao lado do 1-0 em vez de substituir
+      mainScores.push('2-0');
+      console.log('[SALTO DE GOLS] 2-0 adicionado ao lado de 1-0 — probabilidades próximas, ambos relevantes');
     }
   }
 
