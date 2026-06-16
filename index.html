@@ -2977,9 +2977,20 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   var odd10 = oddScoreMotor('1-0'); // usa odd real do favorito (pré-inversão)
 
   if(profileId === 'GOLEADA') {
-    // No perfil GOLEADA: 1-0 é "ponte fraca"
-    // Só inclui se odd CS ≥ @6.0 (PDF: avaliar odd do CS)
-    if(odd10 >= 6.0) {
+    // No perfil GOLEADA: 1-0 entra como "ponte fraca" SE a odd justificar
+    // E SE não houver sinal mais forte de que 2-0 é muito mais provável
+    var odd20gol = oddScoreMotor('2-0');
+    var prob10gol = odd10 > 0 ? 100/odd10 : 0;
+    var prob20gol = odd20gol > 0 ? 100/odd20gol : 0;
+
+    // Mesma regra "pular o 1 gol" aplicada também ao perfil GOLEADA —
+    // é justamente aqui que o padrão Arsenal/Iraque-Noruega se encaixa,
+    // já que fav muito forte cai naturalmente em GOLEADA, não em outros perfis
+    if(prob20gol > 0 && prob10gol > 0 && prob20gol > prob10gol * 1.15) {
+      console.log('[REGRA PULAR 1 GOL — GOLEADA] 1-0 ('+prob10gol.toFixed(1)+'%) < 2-0 ('+
+        prob20gol.toFixed(1)+'%) — cluster não inclui 1-0, mantém foco em 2+ gols');
+      // Não inclui 1-0 — cluster já inicia em 2-0/3-0 (estrutura padrão do GOLEADA)
+    } else if(odd10 >= 6.0) {
       mainScores.push('1-0'); // entra como ponte fraca no final
     }
     // Se odd < 6.0 ou não informada → não inclui (cluster inicia no 2-0)
@@ -4709,7 +4720,22 @@ function calcStakes(cluster, stake, analysisText) {
       : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
     const hasAnyOtherFav = cluster.some(s => s.score === expansionScore);
     const goleadaH2H = /H2H.*[4-9]-\d|[4-9]-\d.*H2H|4\+\s*gols|DNA.*3[.,][5-9]|3[.,][5-9].*gols/i.test(text);
-    if(!hasAnyOtherFav && expansionOdd > 0 && overForGol < 1.60 && goleadaH2H && prof === 'goleada') {
+
+    // ── GATILHO DIRETO PELA ODD REAL — mais confiável que over/H2H ──
+    // Se "qualquer outra vitória" tem probabilidade implícita MAIOR que o
+    // menor score do cluster, o mercado está dizendo que a goleada "fora do
+    // script" é mais provável que os placares específicos cobertos.
+    // Isso é sinal direto e objetivo — não depende de inferir pelo over.
+    const probAnyOther = expansionOdd > 0 ? 100/expansionOdd : 0;
+    const piorProbCluster = cluster.length > 0
+      ? Math.min.apply(null, cluster.map(function(s){ return s.prob || 100; }))
+      : 100;
+    const anyOtherDominante = probAnyOther > 0 && probAnyOther > piorProbCluster;
+
+    if(!hasAnyOtherFav && expansionOdd > 0 &&
+       (anyOtherDominante || (overForGol < 1.60 && goleadaH2H && prof === 'goleada'))) {
+      console.log('[ALERTA GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+
+        '% implícita — '+(anyOtherDominante ? 'MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd' : 'via H2H/over'));
       cluster.push({score:expansionScore, odd:expansionOdd, tipo:'expansao',
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
