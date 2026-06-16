@@ -880,9 +880,9 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div class="ab-text">O Gênio opera qualquer liga se as odds de mercado tiverem edge real. A liga não importa — o jogo específico importa. Preencha as 3 odds abaixo para ver a avaliação do Gênio.</div>
         </div>
         <div class="g3">
-          <div><label>Odd Favorito</label><input id="pk-fav" type="number" step="0.01" placeholder="1.75" oninput="checkPackball()"></div>
-          <div><label>BTTS Sim</label><input id="pk-btts" type="number" step="0.01" placeholder="1.90" oninput="checkPackball()"></div>
-          <div><label>Over 2.5</label><input id="pk-over" type="number" step="0.01" placeholder="1.95" oninput="checkPackball()"></div>
+          <div><label>Odd Favorito</label><input id="pk-fav" type="text" inputmode="decimal" step="0.01" placeholder="1.75" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
+          <div><label>BTTS Sim</label><input id="pk-btts" type="text" inputmode="decimal" step="0.01" placeholder="1.90" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
+          <div><label>Over 2.5</label><input id="pk-over" type="text" inputmode="decimal" step="0.01" placeholder="1.95" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
 
           </div>
@@ -3912,17 +3912,30 @@ REGRAS ABSOLUTAS:
                 // Validar pela odd real — aplicar inversão manualmente (oddScoreMotor não está no escopo)
                 const invScore = function(s){ const p=s.split('-'); return p[1]+'-'+p[0]; };
                 const realScoreExtra = favEhVisitanteReal ? invScore(scoreExtra) : scoreExtra;
-                const oddExtra = (S.csOdds && S.csOdds[realScoreExtra]) ? S.csOdds[realScoreExtra] : 0;
+                // Buscar odd nos dois sentidos possíveis (a IA pode ter enviado
+                // o score já pós-inversão OU literal — checar ambos por segurança)
+                const oddDireta = (S.csOdds && S.csOdds[scoreExtra]) ? S.csOdds[scoreExtra] : 0;
+                const oddInvertida = (S.csOdds && S.csOdds[realScoreExtra]) ? S.csOdds[realScoreExtra] : 0;
+                const oddExtra = favEhVisitanteReal ? oddInvertida : oddDireta;
                 const probExtra = oddExtra > 0 ? 100/oddExtra : 0;
-                if(oddExtra === 0 || probExtra >= 3.0) {
-                  // Sem odds CS coladas → permite (fallback). Com odds → exige prob real
+                // Se o score já está representado (mesmo sentido oposto) no cluster, bloquear duplicata conceitual
+                const scoreJaRepresentado = allScores.includes(scoreExtra) ||
+                  (engineFinal.protection.includes(realScoreExtra) || engineFinal.mainScores.includes(realScoreExtra));
+                // Verificar se o usuário colou odds CS de fato (não apenas esse score específico)
+                const temOddsColadas = S.csOdds && Object.keys(S.csOdds).length >= 5;
+                if(!scoreJaRepresentado && ((!temOddsColadas) || probExtra >= 3.0)) {
+                  // Sem odds CS coladas no geral → permite (fallback).
+                  // COM odds coladas mas esse score não existe no mercado real
+                  // (matematicamente improvável/impossível dado o contexto) → BLOQUEAR.
                   if(engineFinal.protection.length < 2) {
                     engineFinal.protection.push(scoreExtra);
                   } else {
                     engineFinal.protection[engineFinal.protection.length-1] = scoreExtra;
                   }
                 } else {
-                  console.log('[CONSENSO] IA sugeriu '+scoreExtra+' mas odd implica '+probExtra.toFixed(1)+'% — abaixo de 3%, ignorado');
+                  console.log('[CONSENSO] IA sugeriu '+scoreExtra+' mas '+
+                    (oddExtra===0 ? 'não existe no mercado real colado (score impossível/improvável dado o contexto)' : 'odd implica '+probExtra.toFixed(1)+'% — abaixo de 3%')+
+                    ' — ignorado');
                 }
               }
             }
