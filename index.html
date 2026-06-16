@@ -2267,7 +2267,7 @@ function calcProb(odd) { return odd>0 ? parseFloat(((1/odd)*100).toFixed(1)) : 0
 // Validates a score string — rejects timing strings like "31-45", "76-90"
 // Valid scores: each side must be single digit 0-9 (max 9 goals per team)
 function validScore(s) {
-  if(s === '0-0') return false; // 0-0 NUNCA entra no cluster
+  // 0-0 pode entrar quando over > 2.30 e btts > 2.20 (jogo muito fechado)
   if(!s) return false;
   const parts = s.split('-');
   if(parts.length !== 2) return false;
@@ -2450,7 +2450,7 @@ Nunca ignorar BTTS < @1.75 — é sinal forte que adversário vai marcar.
 ═══════════════════════════════════════
 PASSO 5B — MERCADOS ESPECIAIS
 ═══════════════════════════════════════
-0-0 NUNCA entra no cluster. Em nenhum jogo. Nunca.
+0-0 só entra quando o motor determinar (over muito alto + btts muito alto). Nunca incluir por iniciativa própria.
 
 🏠 QUALQUER OUTRA VITÓRIA EM CASA (= "GOLEADA"):
   Incluir quando: H2H tem 4+ gols OU DNA > 3.0 gols/jogo OU Over < @1.65
@@ -2682,10 +2682,10 @@ REGRAS DO JSON:
 - "tipo" deve ser: "caminho", "destino" ou "planb"
 - "scores" sempre tem 5-7 items
 - "ancora" = score de MAIOR probabilidade cruzando liquidez + contexto + btts. Em jogos ABERTO/BTTS com btts < 1.85, o 1-1 PODE e DEVE ser âncora se liquidez confirmar. Em jogos ofensivos, favorito (1-0, 2-0, 2-1). A âncora reflete o mercado, não apenas o favorito.
-- Nunca incluir 0-0
+- 0-0 só se o motor já incluiu no cluster
 - 1-1 SEMPRE obrigatório como planb em todos os jogos
 - 0-1 SEMPRE obrigatório como planb quando favorito é casa
-- 0-0 NUNCA incluir
+- 0-0 só se o motor já incluiu
 - Odds NÃO vão no JSON — vêm do campo CS da Betfair
 `;
 
