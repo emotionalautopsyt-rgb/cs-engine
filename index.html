@@ -2214,10 +2214,8 @@ function checkPackball() {
     '<div class="ab-title" style="color:'+cor+';font-size:11px;letter-spacing:2px;margin-bottom:6px;">'+icone+' '+nivel+'</div>'+
     '<div class="ab-text" style="font-size:11px;line-height:1.6;color:var(--txt2);">'+desc+'</div>'+
   '</div>';
-
-  // Comunicação final oficial: binário e profissional
-  updatePkStatusFromApproval();
-
+  // NÃO chamar updatePkStatusFromApproval() — sobrescreveria este card unificado
+  // com o sistema antigo duplicado (ÍNDICE DE ENTRADA + GÊNIO APROVOU separados)
 }
 
 // ===== BETFAIR PARSER =====
