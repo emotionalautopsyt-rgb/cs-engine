@@ -3995,6 +3995,12 @@ REGRAS ABSOLUTAS:
               engineFinal.protection.push('0-0');
               console.log('[ENFORCEMENT] 0-0 restaurado — motor incluiu intencionalmente (jogo fechado)');
             }
+            // Se 2-2 foi removido pela IA mas motor incluiu como compensação da regra
+            // "pular 1 gol" (cluster ficaria abaixo do mínimo sem ele) — restaurar sempre
+            if(motorTinhaDoisDois && !engineFinal.protection.includes('2-2') && !engineFinal.mainScores.includes('2-2')) {
+              engineFinal.protection.push('2-2');
+              console.log('[ENFORCEMENT] 2-2 restaurado — motor incluiu como compensação obrigatória');
+            }
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
             if(totalAtual < minimoScores) {
               const faltamScores = minimoScores - totalAtual;
