@@ -2911,6 +2911,22 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
   }
 
+  // ── 0-0 COMO PROTEÇÃO EXTRA ─────────────────────────────
+  // Quando over > 2.30 E btts > 2.20 → mercado acredita fortemente
+  // em jogo fechado / poucos gols. 0-0 pode ter probabilidade real maior
+  // que 0-1 no Plano B. Verificar e adicionar se fizer sentido.
+  if(over > 2.30 && btts > 2.20) {
+    var odd00 = csOdds['0-0'] || 0;
+    var odd01pb = oddScoreMotor('0-1');
+    var prob00 = odd00 > 0 ? 100/odd00 : 0;
+    var prob01pb = odd01pb > 0 ? 100/odd01pb : 0;
+    if(prob00 >= 4.0 && !protection.includes('0-0') && !mainScores.includes('0-0')) {
+      // Sempre adicionar 0-0 como proteção extra — jogo muito fechado
+      // Não remove 0-1, ambos coexistem no Plano B
+      protection.push('0-0');
+    }
+  }
+
   // ── ÂNCORA (PLACAR PROJETADO) ─────────────────────────────
   // Regra: sempre vitória do favorito
   // BTTS < 1.85 → adversário marca → âncora com gol adversário (2-1)
