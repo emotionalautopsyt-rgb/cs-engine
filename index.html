@@ -2976,6 +2976,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // Lê a odd real do 1-0 que o usuário colou na Betfair
   var odd10 = oddScoreMotor('1-0'); // usa odd real do favorito (pré-inversão)
 
+  var pulou1Gol = false; // marca se a regra "pular 1 gol" disparou — usado depois para limpar o protection
   if(profileId === 'GOLEADA') {
     // No perfil GOLEADA: 1-0 entra como "ponte fraca" SE a odd justificar
     // E SE não houver sinal mais forte de que 2-0 é muito mais provável
@@ -2990,6 +2991,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       console.log('[REGRA PULAR 1 GOL — GOLEADA] 1-0 ('+prob10gol.toFixed(1)+'%) < 2-0 ('+
         prob20gol.toFixed(1)+'%) — cluster não inclui 1-0, mantém foco em 2+ gols');
       // Não inclui 1-0 — cluster já inicia em 2-0/3-0 (estrutura padrão do GOLEADA)
+      pulou1Gol = true;
     } else if(odd10 >= 6.0) {
       mainScores.push('1-0'); // entra como ponte fraca no final
     }
@@ -3013,6 +3015,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       // Pula o 1-0 — cluster inicia no 2-0, igual ao padrão do Arsenal x Leeds (terminou 0-3)
       mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
       if(!mainScores.includes('3-0')) mainScores.push('3-0');
+      pulou1Gol = true;
       console.log('[REGRA PULAR 1 GOL] 1-0 ('+prob10.toFixed(1)+'%) < 2-0 ('+prob20.toFixed(1)+
         '%) com fav forte+over baixo — cluster pula para volume de gols, 3-0 adicionado');
     } else {
@@ -3447,6 +3450,18 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(odd10 > 9.0) tipo10 = 'caminho_leverage';
 
   // ── Inverter scores se favorito é visitante ─────────────
+  // Se a regra "pular 1 gol" disparou, "favorito vence por 1" não deve aparecer
+  // em LUGAR NENHUM do cluster — nem mainScores (já tratado acima) nem protection
+  // (onde '0-1' = "favorito vence por 1" na representação pré-inversão padrão)
+  if(pulou1Gol && protection.includes('0-1')) {
+    protection = protection.filter(function(s){ return s !== '0-1'; });
+    console.log('[REGRA PULAR 1 GOL] 0-1 também removido do Plano B — "favorito vence por 1" não deve aparecer em nenhum plano');
+  }
+  // Garantir total mínimo de 5 scores (3 Plano A + 2 Plano B) após qualquer remoção
+  if(pulou1Gol && (mainScores.length + protection.length) < 5) {
+    if(!protection.includes('2-2') && !mainScores.includes('2-2')) protection.push('2-2');
+  }
+
   if(favEhVisitante) {
     mainScores = invArr(mainScores);
     protection = invArr(protection);
