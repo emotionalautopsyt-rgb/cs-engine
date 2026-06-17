@@ -4122,8 +4122,11 @@ REGRAS ABSOLUTAS:
     const overOddVC = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
     const bttsOddVC = parseFloat(document.getElementById('pk-btts')?.value) || 2.0;
 
-    // IND 1 — xG: calculado com 4 campos E não é Copa
-    const ind1 = (xGscore && !isCopa) ? 1 : isCopa ? 0 : (xGscore ? 0.5 : 0);
+    // IND 1 — xG: não existe para Copa do Mundo (seleções, sem histórico de confronto
+    // suficiente). Isso é uma LIMITAÇÃO ESTRUTURAL do método, não um defeito do jogo —
+    // não deve penalizar a validação cruzada. Em Copa, redistribui o peso do xG
+    // proporcionalmente entre os outros 4 indicadores (neutro, não penaliza nem favorece).
+    const ind1 = isCopa ? null : (xGscore ? 1 : 0);
     // IND 2 — DNA: tem histórico disponível (não bloquear por copa — copa tem DNA)
     const hasDNA = /últimos\s+\d+\s+jogos|H2H|história.*jogos|\d+\/\d+\s+jogos/i.test(reply);
     const ind2 = hasDNA ? 1 : /campeonato.*[1-3]\s+rodadas|dados.*ausentes/i.test(reply) ? 0 : 0.5;
@@ -4135,7 +4138,9 @@ REGRAS ABSOLUTAS:
     const hasCSodds = Object.keys(S.csOdds).length >= 3;
     const anchorOdd = xGscore ? (S.csOdds[xGscore] || 0) : 0;
     const ind5 = hasCSodds && (!anchorOdd || anchorOdd <= 20) ? 1 : hasCSodds ? 0.5 : 0;
-    const crossScore = ind1 + ind2 + ind3 + ind4 + ind5;
+    // Em Copa, xG não existe — normaliza a escala para os 4 indicadores restantes,
+    // mantendo a mesma proporção (score de 0 a 5) sem penalizar pela ausência estrutural
+    const crossScore = isCopa ? (ind2+ind3+ind4+ind5) * (5/4) : (ind1+ind2+ind3+ind4+ind5);
     const crossTotal = 5;
 
     // Confidence level
@@ -4292,17 +4297,11 @@ REGRAS ABSOLUTAS:
         '<div style="font-family:Barlow Condensed,sans-serif;font-size:64px;font-weight:900;letter-spacing:10px;color:#fff;line-height:1;text-shadow:0 0 30px rgba(124,92,252,.7),0 0 60px rgba(0,212,255,.3);margin-bottom:14px;">'+ancoraProjt+'</div>'+
         '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;color:rgba(180,200,255,.8);letter-spacing:2px;text-transform:uppercase;">Score Âncora — Maior Probabilidade</div>'+
       '</div>';
-    // Validation cross-check banner
-    contextWarnings += '<div style="background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;">'+
-      '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:900;color:'+confidence.color+';letter-spacing:1px;margin-bottom:8px;">'+confidence.icon+' VALIDAÇÃO: '+crossScore.toFixed(1)+'/5 — CONFIANÇA '+confidence.level+'</div>'+
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
-        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind1?'var(--grn)':'var(--red)')+';">xG '+(ind1?'✅':'❌')+'</span>'+
-        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind2?'var(--grn)':'var(--red)')+';">DNA '+(ind2?'✅':'❌')+'</span>'+
-        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind3===1?'var(--grn)':ind3===0.5?'var(--ylw)':'var(--red)')+';">Over '+(ind3===1?'✅':ind3===0.5?'⚠️':'❌')+'</span>'+
-        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind4===1?'var(--grn)':ind4===0.5?'var(--ylw)':'var(--red)')+';">BTTS '+(ind4===1?'✅':ind4===0.5?'⚠️':'❌')+'</span>'+
-        '<span style="font-family:Space Mono,monospace;font-size:9px;color:'+(ind5?'var(--grn)':'var(--red)')+';">CS '+(ind5?'✅':'❌')+'</span>'+
-      '</div>'+
-    '</div>';
+    // Card "VALIDAÇÃO X/5" removido — duplicava o card oficial unificado
+    // já exibido pelo checkPackball() antes da análise. Mantemos o cálculo de
+    // crossScore/ind1-5 só para salvar no histórico (genioApproval), sem renderizar
+    // um segundo card visual com critérios diferentes.
+
     if(cluster && cluster._premiumDNA) contextWarnings += `<div class="ab ab-b" style="border-color:rgba(0,212,255,.25);margin-bottom:8px;padding:8px 12px;"><div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--acc);">🧠 ${cluster._premiumDNA.perfil} — caos ${cluster._premiumDNA.chaos}/10 | controle ${cluster._premiumDNA.control}/10</div></div>`;
     if(isCopa) contextWarnings += `<div class="ab ab-y" style="border-color:rgba(255,184,48,.3);margin-bottom:8px;padding:8px 12px;">
       <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--ylw);">🏆 COPA DETECTADA — contexto sensível. O Gênio registra o status operacional, mas não reduz stake automaticamente.</div>
