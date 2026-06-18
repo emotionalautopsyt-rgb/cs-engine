@@ -1682,6 +1682,25 @@ function confirmarEncerrar(id) {
     var placarNoCluster = placarFinal && clusterSalvo.some(function(c){
       return (c.score||c) === placarFinal;
     });
+
+    // Se o placar não bateu literalmente, verificar se bate no card de GOLEADA
+    // (any_other_home = favorito casa vence por 4+, any_other_away = visitante vence por 4+)
+    if(!placarNoCluster && placarFinal) {
+      var partes = placarFinal.split('-').map(Number);
+      if(partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1])) {
+        var golsCasa = partes[0], golsFora = partes[1];
+        var totalGols = golsCasa + golsFora;
+        var temAnyHome = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_home'; });
+        var temAnyAway = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_away'; });
+        // Goleada casa (4+ gols diferença, casa vencendo) bateu any_other_home
+        if(temAnyHome && golsCasa > golsFora && golsCasa >= 4) placarNoCluster = true;
+        // Goleada visitante (4+ gols diferença, visitante vencendo) bateu any_other_away
+        if(temAnyAway && golsFora > golsCasa && golsFora >= 4) placarNoCluster = true;
+        // Também conta se a diferença é 4+ gols independente do total
+        if(temAnyHome && (golsCasa - golsFora) >= 4) placarNoCluster = true;
+        if(temAnyAway && (golsFora - golsCasa) >= 4) placarNoCluster = true;
+      }
+    }
     var placarNaAncora = placarFinal && g.savedAncora && g.savedAncora === placarFinal;
 
     // Detectar se é Copa do Mundo pelo nome do jogo ou comp (já considerando o fallback)
@@ -6455,6 +6474,16 @@ function confirmarEditarPlacar(ts) {
   // Recalcular placarNoCluster e placarNaAncora com o novo placar
   var cluster = (r.cluster||[]).map(function(c){ return c.score||c; });
   r.placarNoCluster = cluster.indexOf(novoPlacar) >= 0;
+
+  // Verificar se bate no card de GOLEADA (any_other_home/away)
+  if(!r.placarNoCluster && novoPlacar) {
+    var pts = novoPlacar.split('-').map(Number);
+    if(pts.length===2 && !isNaN(pts[0]) && !isNaN(pts[1])) {
+      var gc=pts[0], gf=pts[1];
+      if(cluster.indexOf('any_other_home')>=0 && gc>gf && (gc-gf)>=4) r.placarNoCluster=true;
+      if(cluster.indexOf('any_other_away')>=0 && gf>gc && (gf-gc)>=4) r.placarNoCluster=true;
+    }
+  }
   r.placarNaAncora = r.ancora === novoPlacar;
 
   save();
