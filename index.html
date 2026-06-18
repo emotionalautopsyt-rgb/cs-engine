@@ -6347,8 +6347,12 @@ function renderCopa() {
           emoji = v>0 ? '🟩' : '🟥';
         }
 
-        var title=r.j+(sc?' — '+sc:'')+(v!==0?' ('+fmt(v)+')':'')+(dentroFaixaNeutra?' [neutro: dentro de 10% da stake]':'');
-        return '<div title="'+title+'" style="font-size:22px;cursor:default;">'+emoji+'</div>';
+        var sinal = v>0?'+':'';
+        var valorFmt = sinal+'R$'+Math.abs(v).toFixed(0);
+        var placarInfo = sc ? sc : '—';
+        var clusterInfo = noCluster ? '✅ no cluster' : (sc ? '❌ fora do cluster' : '');
+        var title = r.j+' | '+placarInfo+' | '+valorFmt+(clusterInfo?' | '+clusterInfo:'')+(dentroFaixaNeutra?' | neutro':'')+(r.d?' | '+r.d:'');
+        return '<div title="'+title+'" style="font-size:22px;cursor:default;" data-tip="'+title+'">'+emoji+'</div>';
       }).join('');
     }
   }
