@@ -6324,6 +6324,15 @@ function renderCopa() {
         var stake=Number(r.s||S.stake||300);
         var cluster=r.cluster&&r.cluster.length?r.cluster.map(function(c){return c.score||c;}):[]; 
         var noCluster=sc&&cluster.length>0&&cluster.indexOf(sc)>=0;
+        // Verificar se placar bate no card de GOLEADA (any_other_home/away)
+        if(!noCluster && sc) {
+          var pts=sc.split('-').map(Number);
+          if(pts.length===2&&!isNaN(pts[0])&&!isNaN(pts[1])){
+            var gc=pts[0],gf=pts[1];
+            if(cluster.indexOf('any_other_home')>=0&&gc>gf&&(gc-gf)>=4) noCluster=true;
+            if(cluster.indexOf('any_other_away')>=0&&gf>gc&&(gf-gc)>=4) noCluster=true;
+          }
+        }
         // Faixa neutra: resultado dentro de ±10% da stake = variação normal de cobertura,
         // não reflete erro/acerto real do robô na escolha do placar
         var faixaNeutra = stake * 0.10;
