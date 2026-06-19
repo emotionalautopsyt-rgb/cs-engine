@@ -4825,7 +4825,7 @@ function calcStakes(cluster, stake, analysisText) {
       cluster.push({score:expansionScore, odd:expansionOdd, tipo:'expansao',
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
-        _covers:(favAwayExpansion ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+')});
+        _covers:(favAwayExpansion ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+')});
     }
 
     if(prof === 'goleada') {
@@ -5047,9 +5047,9 @@ function renderCluster(cluster, stake) {
     const specialMarket = (() => {
       const sc = s.score.toLowerCase();
       if(sc === 'any_other_home' || sc === 'qualquer_casa' || sc === 'goleada_extra')
-        return {label:'🏠 GOLEADA', covers:'4-0/4-1/5-0+', color:'var(--acc)'};
+        return {label:'🏠 GOLEADA CASA', covers:'4-1 / 4-2 / 4-3 / 5-0+', color:'var(--acc)'};
       if(sc === 'any_other_away' || sc === 'qualquer_visitante')
-        return {label:'✈️ GOLEADA VISITANTE', covers:'0-4/0-5+', color:'var(--ylw)'};
+        return {label:'✈️ GOLEADA VISITANTE', covers:'0-4 / 1-4 / 2-4 / 0-5+', color:'var(--ylw)'};
       if(sc === 'any_other_draw' || sc === 'empate_raro')
         return {label:'➖ EMPATE RARO', covers:'3-3/4-4+', color:'var(--txt3)'};
       return null;
@@ -6828,7 +6828,7 @@ function injetarScoresNarrativa(texto, cluster) {
         : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
 
       const correctLabel = favSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
-      const correctCovers = favSide === 'away' ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+';
+      const correctCovers = favSide === 'away' ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+';
 
       cluster.forEach(s=>{
         if(!s || !s.score) return;
@@ -7342,7 +7342,7 @@ function injetarScoresNarrativa(texto, cluster) {
             s.prob = calcProbSafe(s.odd);
             s.oddPG = s.odd ? +(s.odd/2).toFixed(2) : 0;
             s._label = correctSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
-            s._covers = correctSide === 'away' ? '0-4/1-4/0-5+' : '4-0/4-1/5-0+';
+            s._covers = correctSide === 'away' ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+';
           }
         });
       }
