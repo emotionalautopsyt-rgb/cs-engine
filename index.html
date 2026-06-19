@@ -5979,8 +5979,12 @@ function renderPerf() {
     });
 
     var vals=pts.map(function(p){return p.v;});
-    var minV=Math.min(0,Math.min.apply(null,vals));
-    var maxV=Math.max(0,Math.max.apply(null,vals));
+    var rawMin=Math.min.apply(null,vals);
+    var rawMax=Math.max.apply(null,vals);
+    var rawRng=Math.max(1,rawMax-rawMin);
+    var pad=rawRng*0.20; // 20% de respiro em cima e embaixo
+    var minV=rawMin-pad;
+    var maxV=rawMax+pad;
     var rng=Math.max(1,maxV-minV);
 
     // Dimensões — igual à imagem de referência
@@ -6282,8 +6286,12 @@ function renderCopa() {
       return{i:i,v:cum,d:r.d||'',status:r.status||'historico',val:Number(r.v||0),j:r.j||''};
     });
     var vals=pts.map(function(p){return p.v;});
-    var minV=Math.min(0,Math.min.apply(null,vals));
-    var maxV=Math.max(0,Math.max.apply(null,vals));
+    var rawMin=Math.min.apply(null,vals);
+    var rawMax=Math.max.apply(null,vals);
+    var rawRng=Math.max(1,rawMax-rawMin);
+    var pad=rawRng*0.20;
+    var minV=rawMin-pad;
+    var maxV=rawMax+pad;
     var rng=Math.max(1,maxV-minV);
     var W=560,H=250,pL=52,pR=16,pT=40,pB=36;
     var cW=W-pL-pR,cH=H-pT-pB;
