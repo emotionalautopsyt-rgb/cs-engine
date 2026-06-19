@@ -4817,9 +4817,10 @@ function calcStakes(cluster, stake, analysisText) {
     // Isso é sinal direto e objetivo — não depende de inferir pelo over.
     const probAnyOther = expansionOdd > 0 ? 100/expansionOdd : 0;
     const piorProbCluster = cluster.length > 0
-      ? Math.min.apply(null, cluster.map(function(s){ return s.prob || 100; }))
+      ? Math.min.apply(null, cluster.map(function(s){ return (s.prob && s.prob > 0) ? s.prob : 100; }))
       : 100;
-    const anyOtherDominante = probAnyOther > 0 && probAnyOther > piorProbCluster;
+    const margemMinimaExp = 2.0; // pp — evita falsos positivos por diferenças insignificantes
+    const anyOtherDominante = probAnyOther > 0 && piorProbCluster < 100 && (probAnyOther - piorProbCluster) >= margemMinimaExp;
 
     if(!hasAnyOtherFav && expansionOdd > 0 &&
        (anyOtherDominante || (overForGol < 1.60 && goleadaH2H && prof === 'goleada'))) {
