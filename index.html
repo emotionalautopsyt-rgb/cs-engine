@@ -1040,7 +1040,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div class="card-title" style="margin:0;color:#ffd700;">📈 Evolução da Banca — Copa 2026</div>
       </div>
-      <div id="copa-chart" style="min-height:220px;"></div>
+      <div id="copa-chart" style="min-height:250px;"></div>
     </div>
 
     <!-- MAPA DE ACERTOS -->
@@ -6285,7 +6285,7 @@ function renderCopa() {
     var minV=Math.min(0,Math.min.apply(null,vals));
     var maxV=Math.max(0,Math.max.apply(null,vals));
     var rng=Math.max(1,maxV-minV);
-    var W=560,H=220,pL=52,pR=16,pT=20,pB=36;
+    var W=560,H=250,pL=52,pR=16,pT=40,pB=36;
     var cW=W-pL-pR,cH=H-pT-pB;
     var coords=pts.map(function(p,i){
       var x=pL+(pts.length===1?cW/2:(i/(pts.length-1))*cW);
@@ -6341,7 +6341,7 @@ function renderCopa() {
     var tagW=80,tagX=(lastCoord.x-tagW/2).toFixed(1);
     var valTag='<rect x="'+tagX+'" y="'+(lastCoord.y-24).toFixed(1)+'" width="'+tagW+'" height="16" rx="4" fill="'+lastTagColor+'" stroke="'+lastTagBorder+'" stroke-width="1"/>'+
       '<text x="'+lastCoord.x.toFixed(1)+'" y="'+(lastCoord.y-13).toFixed(1)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="'+lastTextColor+'" font-weight="700">'+lastLabel+'</text>';
-    chart.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:220px;background:#070d16;border-radius:12px;">'+
+    chart.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:250px;background:#070d16;border-radius:12px;">'+
       '<defs>'+
         '<linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
           '<stop offset="0%" stop-color="'+gc+'" stop-opacity="0.35"/>'+
