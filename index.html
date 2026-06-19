@@ -6317,7 +6317,15 @@ function renderCopa() {
       '<path d="'+lPath+'" fill="none" stroke="'+gc+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#cg)" />'+
       coords.map(function(c,i){
         var r=i===coords.length-1?5:3;
-        return '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+r+'" fill="#ffffff" stroke="'+gc+'" stroke-width="1.5"'+(i===coords.length-1?' filter="url(#cg)"':'')+'/>';
+        var pVal=Number(h[i]?.v||0);
+        var tipVal=(pVal>=0?'+':'')+'R$ '+Math.abs(pVal).toFixed(2);
+        var tipCum=(c.v>=0?'+':'')+'R$ '+Math.abs(c.v).toFixed(2);
+        var tipJogo=(h[i]?.j||'');
+        return '<g style="cursor:pointer;">'+
+          '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+(r+6)+'" fill="transparent"/>'+
+          '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+r+'" fill="#ffffff" stroke="'+gc+'" stroke-width="1.5"'+(i===coords.length-1?' filter="url(#cg)"':'')+'/>';+
+          '<title>'+c.d+'\n'+tipJogo+'\nJogo: '+tipVal+'\nSaldo acumulado: '+tipCum+'</title>'+
+        '</g>';
       }).join('')+
       coords.filter(function(_,i){return i===0||i===coords.length-1;}).map(function(c){
         return '<text x="'+c.x+'" y="'+(H-8)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.5)">'+c.d.slice(5)+'</text>';
