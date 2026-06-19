@@ -4272,9 +4272,11 @@ REGRAS ABSOLUTAS:
         const jaTemExp = cluster.some(function(s){ return s.score === expScore; });
         const probExp = expOdd > 0 ? 100/expOdd : 0;
         const piorProbCluster = cluster.length > 0
-          ? Math.min.apply(null, cluster.map(function(s){ return s.prob || 100; }))
+          ? Math.min.apply(null, cluster.map(function(s){ return (s.prob && s.prob > 0) ? s.prob : 100; }))
           : 100;
-        const expDominante = probExp > 0 && probExp > piorProbCluster;
+        // Só dispara se any_other tem probabilidade real E significativamente maior que o pior score
+        // com probabilidade real (não scores sem odd = prob 0)
+        const expDominante = probExp > 0 && piorProbCluster < 100 && probExp > piorProbCluster;
         if(!jaTemExp && expOdd > 0 && expDominante) {
           console.log('[ALERTA GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+
             '% implícita — MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd');
