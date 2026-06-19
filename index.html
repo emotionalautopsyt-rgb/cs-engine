@@ -4256,7 +4256,10 @@ REGRAS ABSOLUTAS:
       });
       // Marcar caminho e ancora
       if(cluster.length > 0) {
-        // Primeiro score do Plano A = caminho
+        // Primeiro score do Plano A = caminho — garantir que só existe UM caminho
+        // Primeiro resetar qualquer caminho existente para destino
+        cluster.forEach(s => { if(s.tipo === 'caminho') s.tipo = 'destino'; });
+        // Depois marcar só o primeiro do Plano A como caminho
         const primeiroA = cluster.find(s => engineFinal.mainScores[0] === s.score);
         if(primeiroA) primeiroA.tipo = 'caminho';
         // Âncora = placar projetado
