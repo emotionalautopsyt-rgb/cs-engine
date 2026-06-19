@@ -6264,7 +6264,7 @@ function renderCopa() {
     splitEl.style.display = 'none';
   }
 
-  // ── GRÁFICO COPA ──
+  // ── GRÁFICO COPA — igual ao gráfico de Performance ──
   (function(){
     var chart = document.getElementById('copa-chart');
     if(!chart) return;
@@ -6279,7 +6279,7 @@ function renderCopa() {
     var cum=0;
     var pts=h.map(function(r,i){
       cum+=Number(r.v||0);
-      return{i:i,v:cum,d:r.d||'',status:r.status||'historico'};
+      return{i:i,v:cum,d:r.d||'',status:r.status||'historico',val:Number(r.v||0),j:r.j||''};
     });
     var vals=pts.map(function(p){return p.v;});
     var minV=Math.min(0,Math.min.apply(null,vals));
@@ -6290,20 +6290,57 @@ function renderCopa() {
     var coords=pts.map(function(p,i){
       var x=pL+(pts.length===1?cW/2:(i/(pts.length-1))*cW);
       var y=pT+cH-((p.v-minV)/rng)*cH;
-      return{x:x.toFixed(1),y:y.toFixed(1),v:p.v,d:p.d,status:p.status};
+      return{x:x,y:y,v:p.v,d:p.d,status:p.status};
     });
-    var zY=(pT+cH-((0-minV)/rng)*cH).toFixed(1);
-    var lPath=coords.map(function(c,i){return(i===0?'M':'L')+c.x+' '+c.y;}).join(' ');
-    var aPath=lPath+' L'+coords[coords.length-1].x+' '+zY+' L'+coords[0].x+' '+zY+' Z';
+    var zY=pT+cH-((0-minV)/rng)*cH;
+    // Path suave com curvas bezier
+    var lPath='M'+coords[0].x.toFixed(1)+' '+coords[0].y.toFixed(1);
+    for(var ci=1;ci<coords.length;ci++){
+      var prev=coords[ci-1],curr=coords[ci];
+      var cpx=(prev.x+curr.x)/2;
+      lPath+=' C'+cpx.toFixed(1)+' '+prev.y.toFixed(1)+' '+cpx.toFixed(1)+' '+curr.y.toFixed(1)+' '+curr.x.toFixed(1)+' '+curr.y.toFixed(1);
+    }
+    var aPath=lPath+' L'+coords[coords.length-1].x.toFixed(1)+' '+zY.toFixed(1)+' L'+coords[0].x.toFixed(1)+' '+zY.toFixed(1)+' Z';
     var grid='';
     for(var g=0;g<=4;g++){
-      var gy=(pT+(g/4)*cH).toFixed(1);
+      var gy=pT+(g/4)*cH;
       var gv=maxV-(g/4)*rng;
-      grid+='<line x1="'+pL+'" y1="'+gy+'" x2="'+(W-pR)+'" y2="'+gy+'" stroke="rgba(255,215,0,0.1)" stroke-width="1" stroke-dasharray="4,3"/>';
-      grid+='<text x="'+(pL-5)+'" y="'+(parseFloat(gy)+3)+'" text-anchor="end" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.4)">'+(gv>=0?'+':'')+'R$'+Math.abs(gv).toFixed(0)+'</text>';
+      grid+='<line x1="'+pL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-pR)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(255,215,0,0.1)" stroke-width="1" stroke-dasharray="4,3"/>';
+      grid+='<text x="'+(pL-5)+'" y="'+(gy+3).toFixed(1)+'" text-anchor="end" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.4)">'+(gv>=0?'+':'')+'R$'+Math.abs(gv).toFixed(0)+'</text>';
     }
     var gc=saldo>=0?'#00c96e':'#ff4444';
     var gid='cpg'+Date.now();
+    // Bolinhas com tooltip — igual ao gráfico de Performance
+    var dots='';
+    var showDot=coords.length<=30;
+    var skipDot=Math.max(1,Math.floor(coords.length/25));
+    coords.forEach(function(c,i){
+      var isLast=i===coords.length-1;
+      if(isLast||showDot||i%skipDot===0){
+        var r=isLast?6:4;
+        var dotFill=isLast?gc:'#ffffff';
+        var pVal=pts[i].val;
+        var pCum=pts[i].v;
+        var tipDate=pts[i].d||'';
+        var tipJogo=pts[i].j||'';
+        var tipValLabel=(pVal>=0?'+':'')+'R$ '+pVal.toFixed(2);
+        var tipCumLabel=(pCum>=0?'+':'')+'R$ '+pCum.toFixed(2);
+        dots+='<g class="chart-pt" style="cursor:pointer;">'+
+          '<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+(r+6)+'" fill="transparent"/>'+
+          '<circle cx="'+c.x.toFixed(1)+'" cy="'+c.y.toFixed(1)+'" r="'+r+'" fill="'+dotFill+'" stroke="'+gc+'" stroke-width="'+(isLast?2:1.5)+'"'+(isLast?' filter="url(#cg)"':'')+'/>'+'<title>'+tipDate+'\n'+tipJogo+'\nJogo: '+tipValLabel+'\nSaldo acumulado: '+tipCumLabel+'</title>'+
+        '</g>';
+      }
+    });
+    // Valor final em destaque
+    var lastCoord=coords[coords.length-1];
+    var lastVal=lastCoord.v;
+    var lastLabel=(lastVal>=0?'+':'-')+'R$ '+Math.abs(lastVal).toFixed(2);
+    var lastTagColor=lastVal>=0?'rgba(0,201,110,0.15)':'rgba(255,68,68,0.15)';
+    var lastTagBorder=lastVal>=0?'rgba(0,201,110,0.4)':'rgba(255,68,68,0.4)';
+    var lastTextColor=lastVal>=0?'#00c96e':'#ff4444';
+    var tagW=80,tagX=(lastCoord.x-tagW/2).toFixed(1);
+    var valTag='<rect x="'+tagX+'" y="'+(lastCoord.y-24).toFixed(1)+'" width="'+tagW+'" height="16" rx="4" fill="'+lastTagColor+'" stroke="'+lastTagBorder+'" stroke-width="1"/>'+
+      '<text x="'+lastCoord.x.toFixed(1)+'" y="'+(lastCoord.y-13).toFixed(1)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="'+lastTextColor+'" font-weight="700">'+lastLabel+'</text>';
     chart.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:220px;background:#070d16;border-radius:12px;">'+
       '<defs>'+
         '<linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
@@ -6315,21 +6352,8 @@ function renderCopa() {
       grid+
       '<path d="'+aPath+'" fill="url(#'+gid+')" />'+
       '<path d="'+lPath+'" fill="none" stroke="'+gc+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#cg)" />'+
-      coords.map(function(c,i){
-        var r=i===coords.length-1?5:3;
-        var pVal=Number(h[i]?.v||0);
-        var tipVal=(pVal>=0?'+':'')+'R$ '+Math.abs(pVal).toFixed(2);
-        var tipCum=(c.v>=0?'+':'')+'R$ '+Math.abs(c.v).toFixed(2);
-        var tipJogo=(h[i]?.j||'');
-        return '<g style="cursor:pointer;">'+
-          '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+(r+6)+'" fill="transparent"/>'+
-          '<circle cx="'+c.x+'" cy="'+c.y+'" r="'+r+'" fill="#ffffff" stroke="'+gc+'" stroke-width="1.5"'+(i===coords.length-1?' filter="url(#cg)"':'')+'/>';+
-          '<title>'+c.d+'\n'+tipJogo+'\nJogo: '+tipVal+'\nSaldo acumulado: '+tipCum+'</title>'+
-        '</g>';
-      }).join('')+
-      coords.filter(function(_,i){return i===0||i===coords.length-1;}).map(function(c){
-        return '<text x="'+c.x+'" y="'+(H-8)+'" text-anchor="middle" font-family="Space Mono,monospace" font-size="7" fill="rgba(255,215,0,0.5)">'+c.d.slice(5)+'</text>';
-      }).join('')+
+      dots+
+      valTag+
     '</svg>';
   })();
 
