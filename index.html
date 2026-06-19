@@ -3642,10 +3642,15 @@ async function analisarJogo() {
   // Odds: visitante tem odds menores que casa × 0.80 (era 0.75 — muito restritivo)
   const favPorOdds = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.80);
   // Liquidez: visitante tem mais dinheiro real que casa × 1.30
-  const favPorLiq  = (liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.30);
+  // MAS: só usa liquidez como critério definitivo se a odd do usuário (fav) também
+  // estiver fora da faixa de favorito normal (>2.35) — caso contrário, um único
+  // score com liquidez alta distorceria o resultado (ex: 1-2 com R$2.75k enganando)
+  const favPorLiq = (liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.30)
+    && fav > 2.35; // só inverte por liquidez se o próprio fav confirmar que não é favorito claro
   // Combinado: odds + liquidez juntos (threshold mais suave)
   const favPorCombinado = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85 &&
-                           liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.10);
+                           liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.10)
+    && fav > 2.00; // só inverte combinado se o fav já está na zona de dúvida
 
   // Camada 3: texto da análise
   const textoLower = texto.toLowerCase();
@@ -4275,8 +4280,10 @@ REGRAS ABSOLUTAS:
           ? Math.min.apply(null, cluster.map(function(s){ return (s.prob && s.prob > 0) ? s.prob : 100; }))
           : 100;
         // Só dispara se any_other tem probabilidade real E significativamente maior que o pior score
-        // com probabilidade real (não scores sem odd = prob 0)
-        const expDominante = probExp > 0 && piorProbCluster < 100 && probExp > piorProbCluster;
+        // com probabilidade real (não scores sem odd = prob 0).
+        // Margem mínima de 2pp para evitar falsos positivos por diferenças insignificantes
+        const margemMinima = 2.0; // pp
+        const expDominante = probExp > 0 && piorProbCluster < 100 && (probExp - piorProbCluster) >= margemMinima;
         if(!jaTemExp && expOdd > 0 && expDominante) {
           console.log('[ALERTA GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+
             '% implícita — MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd');
