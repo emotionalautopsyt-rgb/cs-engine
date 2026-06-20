@@ -2204,14 +2204,30 @@ function checkPackball() {
     return pontos[pontos.length-1][1];
   }
 
-  // Critério 1 — Favorito (30%): ideal 1.40-1.80, degrada suavemente até 2.35+
-  var pFav = escalaSuave(fav, [[1.40,10],[1.80,10],[2.00,6],[2.35,3],[2.80,1]]);
-  // Critério 2 — Over 2.5 (25%): ideal <=1.80, degrada até 2.10+
-  var pOver = escalaSuave(over, [[1.50,10],[1.80,10],[2.10,6],[2.50,2]]);
-  // Critério 3 — BTTS (25%): ideal <=1.85, degrada até 2.10+
-  var pBtts = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,6],[2.50,2]]);
-  pFav = Math.round(pFav*10)/10; pOver = Math.round(pOver*10)/10; pBtts = Math.round(pBtts*10)/10;
-  // Critério 4 — Liquidez CS (10%) — pode não estar disponível ainda nesse momento
+  // ── ÍNDICE RECALIBRADO — Fav é o critério dominante ──
+  // Over e BTTS só penalizam quando o fav já está fraco (>1.85)
+  // Quando o fav é forte (≤1.80), over/btts altos NÃO geram cautela —
+  // o favorito pode vencer 1-0 ou 2-0 independente do BTTS/over
+
+  // Critério 1 — Favorito (40%): peso aumentado — é o sinal principal
+  var pFav = escalaSuave(fav, [[1.30,10],[1.80,10],[2.00,7],[2.20,5],[2.35,3],[2.80,1]]);
+
+  // Critério 2 — Over 2.5 (20%): penaliza menos, e só reduz significativamente
+  // quando o fav também está fraco (>1.85). Se fav é forte, over alto é tolerável.
+  var pOverBase = escalaSuave(over, [[1.50,10],[1.80,10],[2.10,7],[2.30,5],[2.60,2]]);
+  // Bônus: se fav forte (≤1.80), over alto perde peso (não penaliza tanto)
+  var pOver = fav <= 1.80 ? Math.max(pOverBase, 7) : pOverBase;
+
+  // Critério 3 — BTTS (20%): mesma lógica — se fav é forte,
+  // BTTS alto só diz que a zebra PODE marcar, não que o jogo será caótico
+  var pBttsBase = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,7],[2.30,5],[2.60,2]]);
+  var pBtts = fav <= 1.80 ? Math.max(pBttsBase, 7) : pBttsBase;
+
+  pFav = Math.round(pFav*10)/10;
+  pOver = Math.round(pOver*10)/10;
+  pBtts = Math.round(pBtts*10)/10;
+
+  // Critério 4 — Liquidez CS (10%)
   var liqTotal = 0;
   if(S.csOddsLiq) {
     ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3'].forEach(function(s){ liqTotal += S.csOddsLiq[s]||0; });
@@ -2220,7 +2236,7 @@ function checkPackball() {
   // Critério 5 — Contexto (10%)
   var pContexto = _isCompOficial ? 10 : 5;
 
-  var scoreIdx = Math.round(pFav*0.30 + pOver*0.25 + pBtts*0.25 + pLiq*0.10 + pContexto*0.10);
+  var scoreIdx = Math.round(pFav*0.40 + pOver*0.20 + pBtts*0.20 + pLiq*0.10 + pContexto*0.10);
 
   var nivel, cor, icone, corBg, corBorder, desc;
   if(contextoBloqueio) {
