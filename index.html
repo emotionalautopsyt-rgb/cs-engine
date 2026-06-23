@@ -3023,7 +3023,9 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // Mesma regra "pular o 1 gol" aplicada também ao perfil GOLEADA —
     // é justamente aqui que o padrão Arsenal/Iraque-Noruega se encaixa,
     // já que fav muito forte cai naturalmente em GOLEADA, não em outros perfis
-    if(prob20gol > 0 && prob10gol > 0 && prob20gol > prob10gol * 1.15) {
+    if(prob20gol > 0 && prob20gol > (prob10gol > 0 ? prob10gol * 1.15 : 8.0)) {
+      // Pula se 2-0 é claramente mais provável que 1-0
+      // Ou se 2-0 tem >8% de probabilidade e 1-0 não tem odd colada
       console.log('[REGRA PULAR 1 GOL — GOLEADA] 1-0 ('+prob10gol.toFixed(1)+'%) < 2-0 ('+
         prob20gol.toFixed(1)+'%) — cluster não inclui 1-0, mantém foco em 2+ gols');
       // Não inclui 1-0 — cluster já inicia em 2-0/3-0 (estrutura padrão do GOLEADA)
@@ -4299,16 +4301,32 @@ REGRAS ABSOLUTAS:
           ? Math.min.apply(null, cluster.map(function(s){ return (s.prob && s.prob > 0) ? s.prob : 100; }))
           : 100;
         // Só dispara se any_other tem probabilidade real E significativamente maior que o pior score
-        // com probabilidade real (não scores sem odd = prob 0).
-        // Margem mínima de 2pp para evitar falsos positivos por diferenças insignificantes
-        const margemMinima = 2.0; // pp
+        const margemMinima = 2.0; // pp mínimo para disparar qualquer coisa
         const expDominante = probExp > 0 && piorProbCluster < 100 && (probExp - piorProbCluster) >= margemMinima;
+
         if(!jaTemExp && expOdd > 0 && expDominante) {
-          console.log('[ALERTA GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+
-            '% implícita — MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd');
-          cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
-            tipo:'expansao', stake:0, lucro:0, oddPG:0,
-            _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
+          // Decidir se entra como DESTINO NORMAL ou como ALERTA/EXPANSÃO
+          // Critério: se probExp >= prob da âncora (score mais provável do cluster)
+          // ou se probExp >= 15%, entra como destino normal no Dutch
+          const probAncora = cluster.length > 0
+            ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
+            : 0;
+          const entrarComoDestino = probExp >= probAncora || probExp >= 15.0;
+
+          console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% | âncora: '+
+            probAncora.toFixed(1)+'% | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
+
+          if(entrarComoDestino) {
+            // Entra como score normal do cluster — participa do Dutch
+            cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
+              tipo:'destino', stake:0, lucro:0, oddPG:0,
+              _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
+          } else {
+            // Entra como card de alerta — NÃO participa do Dutch (stake:0)
+            cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
+              tipo:'expansao', stake:0, lucro:0, oddPG:0,
+              _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
+          }
         }
       } catch(eGol) { console.warn('Alerta goleada falhou:', eGol.message); }
     } else {
@@ -4840,9 +4858,17 @@ function calcStakes(cluster, stake, analysisText) {
 
     if(!hasAnyOtherFav && expansionOdd > 0 &&
        (anyOtherDominante || (overForGol < 1.60 && goleadaH2H && prof === 'goleada'))) {
-      console.log('[ALERTA GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+
-        '% implícita — '+(anyOtherDominante ? 'MAIOR que o menor score do cluster ('+piorProbCluster.toFixed(1)+'%), gatilho direto pela odd' : 'via H2H/over'));
-      cluster.push({score:expansionScore, odd:expansionOdd, tipo:'expansao',
+      // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
+      const probAncoraCl = cluster.length > 0
+        ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
+        : 0;
+      const entrarComoDestinoExp = probAnyOther >= probAncoraCl || probAnyOther >= 15.0;
+
+      console.log('[GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+'% | âncora: '+
+        probAncoraCl.toFixed(1)+'% | modo: '+(entrarComoDestinoExp ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
+
+      cluster.push({score:expansionScore, odd:expansionOdd,
+        tipo:(entrarComoDestinoExp ? 'destino' : 'expansao'),
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
         _covers:(favAwayExpansion ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+')});
