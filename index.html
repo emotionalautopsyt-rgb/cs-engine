@@ -4321,6 +4321,8 @@ REGRAS ABSOLUTAS:
             cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
               tipo:'destino', stake:0, lucro:0, oddPG:0,
               _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
+            // Recalcular stakes incluindo o any_other no Dutch
+            calcStakes(cluster, stake, texto);
           } else {
             // Entra como card de alerta — NÃO participa do Dutch (stake:0)
             cluster.push({score:expScore, odd:expOdd, prob:parseFloat(probExp.toFixed(1)),
@@ -4725,6 +4727,7 @@ function calcStakes(cluster, stake, analysisText) {
     const isCasa = parseInt(cp[0]) > parseInt(cp[1]);
     cluster.forEach(s => {
       if(s.tipo === 'caminho' || s.tipo === 'expansao') return;
+      if(s.score && s.score.startsWith('any_other')) return; // não reclassificar any_other
       const [h,a] = s.score.split('-').map(Number);
       if(h === a)              s.tipo = 'planb';
       else if(isCasa ? h>a : a>h) s.tipo = 'destino';
@@ -4739,6 +4742,7 @@ function calcStakes(cluster, stake, analysisText) {
     const isFavCasa2 = parseInt(cp2[0]) > parseInt(cp2[1]);
     cluster.forEach(s => {
       if(s.tipo === 'caminho' || s.tipo === 'expansao') return;
+      if(s.score && s.score.startsWith('any_other')) return; // não reclassificar any_other
       const [h,a] = s.score.split('-').map(Number);
       if(h === a)                         s.tipo = 'planb';
       else if(isFavCasa2 ? h>a : a>h)    s.tipo = 'destino';
@@ -4755,7 +4759,8 @@ function calcStakes(cluster, stake, analysisText) {
   }
 
   // ── STEP 2.5: 1-0 VALUE RULE — regra conservadora ───────────────────
-  // 1-0 SEMPRE entra no cluster. Só remove em goleada clara e confirmada.
+  // 1-0 só permanece quando faz sentido como "caminho" real
+  // Remove quando: perfil GOLEADA + 2-0 é claramente mais provável que 1-0
   const score10 = cluster.find(s => s.score === '1-0' && s.tipo === 'caminho');
   const score01 = cluster.find(s => s.score === '0-1' && s.tipo === 'caminho');
   const caminhoScore = score10 || score01;
@@ -4764,22 +4769,23 @@ function calcStakes(cluster, stake, analysisText) {
   if(caminhoScore && caminhoScore.odd > 9.0) {
     caminhoScore._highLeverage = true;
   }
-  // 1-0 só é removido quando perfil GOLEADA explícita no texto da análise
-  // Condição muito restrita — exige TODOS: fav < 1.40, over < 1.65, palavra GOLEADA
+  // Remove 1-0/0-1 quando 2-0/0-2 é significativamente mais provável
+  // (regra "pular 1 gol" — não é só em goleada extrema)
   if(caminhoScore) {
-    const textCtx = (analysisText||'').toUpperCase();
     const favOdd  = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
     const overOdd = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
-    const isGoleadaExplicita = /GOLEADA/i.test(textCtx) && favOdd < 1.40 && overOdd < 1.65;
-    if(isGoleadaExplicita) {
-      const removed10Score = caminhoScore.score;
+    const score20 = cluster.find(s => s.score === '2-0' || s.score === '0-2');
+    const prob10cs = caminhoScore.prob || 0;
+    const prob20cs = score20 ? (score20.prob || 0) : 0;
+    // Condição ampliada: fav forte + over baixo + 2-0 claramente mais provável
+    const deveRemover = (favOdd <= 1.70 && overOdd <= 1.75 && prob20cs > prob10cs * 1.15)
+      || (/GOLEADA/i.test((analysisText||'')) && favOdd < 1.40 && overOdd < 1.65);
+    if(deveRemover) {
       cluster.splice(cluster.indexOf(caminhoScore), 1);
       const nextDest = cluster.find(s => s.tipo === 'destino' &&
         (s.score==='2-0'||s.score==='0-2'||s.score==='3-0'));
       if(nextDest) { nextDest.tipo = 'caminho'; nextDest._operacional = true; }
-      cluster._removed10 = removed10Score;
     }
-    // Caso contrário: 1-0 fica sempre, sem weakBridge
   }
 
   // ── STEP 3: DUTCH vs PIRÂMIDE — decisão automática ───────────────────
