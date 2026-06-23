@@ -955,6 +955,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div id="cluster-scores" class="score-grid"></div>
         <div class="dv"></div>
         <div id="cluster-summary"></div>
+        <div id="cluster-expansao-ia" style="display:none;"></div>
         <div id="finance-box"></div>
         <div class="dv"></div>
         <div class="g2" style="gap:8px;margin-top:4px;">
@@ -2827,15 +2828,24 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     {"score":"3-1","tipo":"destino"},
     {"score":"1-1","tipo":"planb"},
     {"score":"0-1","tipo":"planb"}
+  ],
+  "expansao": [
+    {"score":"3-2","motivo":"Jogo pode ficar caótico — ambos sofrem gols tardios"},
+    {"score":"0-0","motivo":"Contexto de classificação garantida pode travar o jogo"}
   ]
-ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
-- favorito em casa: h>a = caminho/destino | h<=a = planb
-- favorito fora: a>h = caminho/destino | a<=h = planb
-2-1 em casa = favorito vence = DESTINO (nunca planb)
-1-1 = empate = PLANB sempre
-0-1 quando favorito é casa = adversário vence = PLANB
 }
 ##JSON_END##
+
+CAMPO "expansao" (OPCIONAL — só inclua quando identificar cenário específico relevante):
+- Máximo 2 scores
+- Cada score com "motivo" curto (1 frase)
+- Só inclua quando o cruzamento de dados (DNA, H2H, contexto, btts, over) sugerir
+  um cenário que merece atenção mas não cabe no cluster principal
+- Exemplos válidos: jogo pode ficar caótico, zebra pode aparecer inesperadamente,
+  classificação em jogo pode travar ou abrir o script
+- Se não houver cenário específico relevante, omita completamente o campo "expansao"
+
+ATENÇÃO: "tipo" é determinado MATEMATICAMENTE:
 
 IMPORTANTE: Use EXATAMENTE ##JSON_START## e ##JSON_END## como delimitadores. Não use marcadores alternativos. Não use outros formatos.
 
@@ -4098,6 +4108,15 @@ REGRAS ABSOLUTAS:
           }
         }
       }
+      // Processar campo "expansao" — scores de alerta sugeridos pela IA
+      if(voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
+        S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
+          return e.score && e.motivo && /^\d-\d$/.test(e.score);
+        });
+        console.log('[EXPANSÃO IA] Scores de alerta sugeridos:', S._expansaoIA);
+      } else {
+        S._expansaoIA = [];
+      }
     } catch(eV) {
       // Falha silenciosa — usa cluster original do motor
       console.warn('Validação contextual falhou, usando cluster do motor:', eV.message);
@@ -4517,9 +4536,13 @@ function extractCluster(text, stake) {
           prob:parseFloat((100/S.csOdds['1-1']).toFixed(1))});
       }
 
-      // Sort: caminho → h2hOverride destinos → other destinos → planb
+      // Sort: caminho → h2hOverride destinos → other destinos → planb → any_other
       const ord = {caminho:0,destino:1,planb:2,expansao:3};
       cluster.sort((a,b) => {
+        const aIsAny = a.score && a.score.startsWith('any_other');
+        const bIsAny = b.score && b.score.startsWith('any_other');
+        if(aIsAny && !bIsAny) return 1;
+        if(!aIsAny && bIsAny) return -1;
         const oa=ord[a.tipo]??1, ob=ord[b.tipo]??1;
         if(oa!==ob) return oa-ob;
         if(a._h2hOverride && !b._h2hOverride) return -1;
@@ -5015,8 +5038,14 @@ function calcStakes(cluster, stake, analysisText) {
   }
 
   // ── STEP 6: Sort ─────────────────────────────────────────────────
+  // any_other (goleada) sempre por último, mesmo quando tipo='destino'
   const ord = {caminho:0, destino:1, planb:2, expansao:3};
   cluster.sort((a,b) => {
+    // any_other sempre fica depois de todos os scores específicos
+    const aIsAny = a.score && a.score.startsWith('any_other');
+    const bIsAny = b.score && b.score.startsWith('any_other');
+    if(aIsAny && !bIsAny) return 1;
+    if(!aIsAny && bIsAny) return -1;
     const oa=ord[a.tipo]??1, ob=ord[b.tipo]??1;
     return oa !== ob ? oa - ob : b.prob - a.prob;
   });
@@ -5228,6 +5257,29 @@ function renderCluster(cluster, stake) {
       '</div>';
 
     summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + probBlock;
+
+    // ── CARDS DE EXPANSÃO DA IA (scores de alerta sugeridos pelo Gênio) ──
+    const expansaoIA = S._expansaoIA || [];
+    const expansaoEl = document.getElementById('cluster-expansao-ia');
+    if(expansaoEl) {
+      if(expansaoIA.length > 0) {
+        expansaoEl.innerHTML = expansaoIA.map(function(e){
+          const oddReal = S.csOdds && S.csOdds[e.score] ? S.csOdds[e.score] : null;
+          const probReal = oddReal ? (100/oddReal).toFixed(1)+'%' : '';
+          return '<div style="background:rgba(255,184,0,.06);border:1px solid rgba(255,184,0,.25);border-radius:10px;padding:10px 12px;margin-top:8px;display:flex;align-items:center;gap:10px;">'+
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:20px;font-weight:900;color:var(--ylw);min-width:40px;">'+e.score+'</div>'+
+            '<div>'+
+              '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--ylw);letter-spacing:1px;">⚠️ ALERTA DO GÊNIO'+(probReal?' | @'+oddReal+' = '+probReal:'')+'</div>'+
+              '<div style="font-family:Barlow Condensed,sans-serif;font-size:12px;color:var(--txt2);margin-top:2px;">'+e.motivo+'</div>'+
+            '</div>'+
+          '</div>';
+        }).join('');
+        expansaoEl.style.display = 'block';
+      } else {
+        expansaoEl.innerHTML = '';
+        expansaoEl.style.display = 'none';
+      }
+    }
   }
 
   renderFinanceBox();
