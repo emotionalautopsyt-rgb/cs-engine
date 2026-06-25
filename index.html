@@ -6482,8 +6482,16 @@ function renderCopa() {
           var pts=sc.split('-').map(Number);
           if(pts.length===2&&!isNaN(pts[0])&&!isNaN(pts[1])){
             var gc=pts[0],gf=pts[1];
-            if(cluster.indexOf('any_other_home')>=0&&gc>gf&&(gc-gf)>=4) noCluster=true;
-            if(cluster.indexOf('any_other_away')>=0&&gf>gc&&(gf-gc)>=4) noCluster=true;
+            // any_other cobre qualquer vitória não listada individualmente no cluster
+            // Não precisa de 4 gols de diferença — basta não estar como score específico
+            if(cluster.indexOf('any_other_home')>=0 && gc>gf) {
+              var scoreListed = cluster.some(function(s){ return s===placar; });
+              if(!scoreListed) noCluster=true;
+            }
+            if(cluster.indexOf('any_other_away')>=0 && gf>gc) {
+              var scoreListedA = cluster.some(function(s){ return s===placar; });
+              if(!scoreListedA) noCluster=true;
+            }
           }
         }
         // Faixa neutra: resultado dentro de ±10% da stake = variação normal de cobertura,
@@ -6646,8 +6654,14 @@ function confirmarEditarPlacar(ts) {
     var pts = novoPlacar.split('-').map(Number);
     if(pts.length===2 && !isNaN(pts[0]) && !isNaN(pts[1])) {
       var gc=pts[0], gf=pts[1];
-      if(cluster.indexOf('any_other_home')>=0 && gc>gf && (gc-gf)>=4) r.placarNoCluster=true;
-      if(cluster.indexOf('any_other_away')>=0 && gf>gc && (gf-gc)>=4) r.placarNoCluster=true;
+      if(cluster.indexOf('any_other_home')>=0 && gc>gf) {
+        var scListed = cluster.some(function(s){ return s===r.sc; });
+        if(!scListed) r.placarNoCluster=true;
+      }
+      if(cluster.indexOf('any_other_away')>=0 && gf>gc) {
+        var scListedA = cluster.some(function(s){ return s===r.sc; });
+        if(!scListedA) r.placarNoCluster=true;
+      }
     }
   }
   r.placarNaAncora = r.ancora === novoPlacar;
