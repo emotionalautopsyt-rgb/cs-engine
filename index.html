@@ -6483,13 +6483,12 @@ function renderCopa() {
           if(pts.length===2&&!isNaN(pts[0])&&!isNaN(pts[1])){
             var gc=pts[0],gf=pts[1];
             // any_other cobre qualquer vitória não listada individualmente no cluster
-            // Não precisa de 4 gols de diferença — basta não estar como score específico
             if(cluster.indexOf('any_other_home')>=0 && gc>gf) {
-              var scoreListed = cluster.some(function(s){ return s===placar; });
+              var scoreListed = cluster.some(function(s){ return s===sc; });
               if(!scoreListed) noCluster=true;
             }
             if(cluster.indexOf('any_other_away')>=0 && gf>gc) {
-              var scoreListedA = cluster.some(function(s){ return s===placar; });
+              var scoreListedA = cluster.some(function(s){ return s===sc; });
               if(!scoreListedA) noCluster=true;
             }
           }
