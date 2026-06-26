@@ -3626,6 +3626,9 @@ async function analisarJogo() {
   const btts = parseFloat(document.getElementById('pk-btts')?.value) || 0;
   const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
 
+  // Garantir que Poisson está calculado com os valores atuais
+  calcPoisson();
+
   // Packball check — auto-reduce stake if one criterion outside range
   const favOk  = fav>=1.25&&fav<=3.20;
   const bttsOk = btts>=1.65&&btts<=2.25;
