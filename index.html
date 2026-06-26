@@ -4244,13 +4244,13 @@ REGRAS ABSOLUTAS:
         }
       }
       // Processar campo "volume_precoce" — padrão histórico de explosão precoce
-      S._volumePrecoce = voto.volume_precoce === true;
+      S._volumePrecoce = voto && voto.volume_precoce === true;
       if(S._volumePrecoce) {
         console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
       }
 
       // Processar campo "expansao" — scores de alerta sugeridos pela IA
-      if(voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
+      if(voto && voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
         S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
           return e.score && e.motivo && /^\d-\d$/.test(e.score);
         });
@@ -5257,6 +5257,13 @@ function calcStakes(cluster, stake, analysisText) {
         if(dests.length > 1) candidato = dests.sort(function(a,b){ return a.prob-b.prob; })[0];
       }
       if(!candidato) break;
+      // Não remover 1-2 ou 2-2 em SUPER_EQUILIBRADO — são essenciais para btts forte
+      var perfilAtual = S.currentGame && S.currentGame.profileId;
+      if(perfilAtual === 'SUPER_EQUILIBRADO' &&
+         candidato && (candidato.score === '1-2' || candidato.score === '2-2')) {
+        console.log('[MIN RETORNO] Protegendo '+candidato.score+' em SUPER_EQUILIBRADO — essencial para btts');
+        break;
+      }
       // Mover para expansão em vez de remover — mantém visível como alerta
       candidato.tipo = 'expansao';
       candidato.stake = 0;
