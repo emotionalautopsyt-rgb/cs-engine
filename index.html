@@ -3308,7 +3308,49 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     ancora = '1-0';
   }
 
-  // ── GARANTIR ÂNCORA NO PLANO A ──────────────────────────
+  // ── DESEMPATE DE ÂNCORA POR BTTS/OVER ──────────────────────
+  // Quando dois scores têm diferença de probabilidade ≤ 1.5pp,
+  // o btts e o over desempatam — se btts < 2.00, o score com
+  // ambos marcando é preferido como âncora
+  (function desempatarAncora() {
+    if(!ancora) return;
+    var probAncora = oddScoreMotor(ancora) > 0 ? 100/oddScoreMotor(ancora) : 0;
+    if(probAncora <= 0) return;
+
+    // Buscar scores com probabilidade próxima da âncora (≤ 1.5pp de diferença)
+    var todosScores = mainScores.concat(protection);
+    var candidatos = todosScores.filter(function(s) {
+      if(s === ancora) return false;
+      var o = oddScoreMotor(s);
+      if(o <= 0) return false;
+      var p = 100/o;
+      return Math.abs(p - probAncora) <= 1.5;
+    });
+
+    if(candidatos.length === 0) return;
+
+    // btts forte (< 2.00) = mercado espera ambos marcarem
+    var bttsFavoraAmbos = btts < 2.00;
+    if(!bttsFavoraAmbos) return;
+
+    // Verificar se âncora atual tem só um time marcando
+    // e existe candidato com ambos marcando
+    function ambosGols(sc) {
+      var pts = sc.split('-').map(Number);
+      return pts.length === 2 && pts[0] > 0 && pts[1] > 0;
+    }
+    var ancoraTemAmbos = ambosGols(ancora);
+    if(ancoraTemAmbos) return; // âncora já tem ambos marcando
+
+    // Procurar candidato com ambos marcando
+    var candidatoAmbos = candidatos.find(function(s) { return ambosGols(s); });
+    if(!candidatoAmbos) return;
+
+    console.log('[DESEMPATE ÂNCORA] '+ancora+' ('+probAncora.toFixed(1)+'%) vs '+
+      candidatoAmbos+' ('+( 100/oddScoreMotor(candidatoAmbos)).toFixed(1)+'%) — btts@'+
+      btts+' < 2.00 → âncora muda para '+candidatoAmbos);
+    ancora = candidatoAmbos;
+  })();
   // A âncora deve estar no Plano A — é o placar projetado principal
   // Se por algum motivo ficou no Plano B, mover para o Plano A
   if(ancora && !mainScores.includes(ancora) && protection.includes(ancora)) {
