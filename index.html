@@ -4948,6 +4948,9 @@ function calcStakes(cluster, stake, analysisText) {
       ? (S.csOdds['any_other_away'] || S.csOdds['QUALQUER OUTRA VITÓRIA DE VISITANTE'] || 0)
       : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
     const hasAnyOtherFav = cluster.some(s => s.score === expansionScore);
+    if(hasAnyOtherFav) {
+      console.log('[GOLEADA] '+expansionScore+' já existe no cluster — pulando segundo push');
+    }
     const goleadaH2H = /H2H.*[4-9]-\d|[4-9]-\d.*H2H|4\+\s*gols|DNA.*3[.,][5-9]|3[.,][5-9].*gols/i.test(text);
 
     // ── GATILHO DIRETO PELA ODD REAL — mais confiável que over/H2H ──
@@ -5119,6 +5122,21 @@ function calcStakes(cluster, stake, analysisText) {
   }
 
   // ── STEP 5.5: Verificação de retorno mínimo ────────────────────────
+  // Primeiro remover qualquer duplicata de any_other que possa ter escapado
+  (function deduplicateAnyOther() {
+    var seen = {};
+    for(var i = cluster.length - 1; i >= 0; i--) {
+      var s = cluster[i];
+      if(s.score && s.score.startsWith('any_other')) {
+        if(seen[s.score]) {
+          cluster.splice(i, 1);
+          console.log('[DEDUP] Removendo any_other duplicado:', s.score);
+        } else {
+          seen[s.score] = true;
+        }
+      }
+    }
+  })();
   // Se o lucro Dutch ficou abaixo de 30% da stake, remover scores menos
   // relevantes (any_other com odd baixa, planb com prob baixa) até atingir
   // retorno mínimo ou chegar em 4 scores
