@@ -5037,6 +5037,59 @@ function calcStakes(cluster, stake, analysisText) {
     });
   }
 
+  // ── STEP 5.5: Verificação de retorno mínimo ────────────────────────
+  // Se o lucro Dutch ficou abaixo de 30% da stake, remover scores menos
+  // relevantes (any_other com odd baixa, planb com prob baixa) até atingir
+  // retorno mínimo ou chegar em 4 scores
+  (function enforceMinReturn() {
+    var minRetorno = 0.30; // 30% mínimo de retorno sobre a stake
+    var ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+    if(ativos.length === 0) return;
+    var lucroAtual = ativos[0].lucro;
+    if(lucroAtual / stake >= minRetorno) return; // já está bom
+    // Tentar remover scores em ordem de prioridade de remoção:
+    // 1. any_other com odd baixa (< 8.0)
+    // 2. planb com prob mais baixa
+    // 3. destino com prob mais baixa
+    var tentativas = 0;
+    while(lucroAtual / stake < minRetorno && ativos.length > 4 && tentativas < 5) {
+      tentativas++;
+      // Encontrar candidato a remoção
+      var candidato = null;
+      // Prioridade 1: any_other com odd < 8
+      candidato = cluster.find(function(s){
+        return s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao';
+      });
+      // Prioridade 2: planb com menor prob
+      if(!candidato) {
+        var planbs = cluster.filter(function(s){ return s.tipo === 'planb' && s.odd > 0; });
+        if(planbs.length > 1) candidato = planbs.sort(function(a,b){ return a.prob-b.prob; })[0];
+      }
+      // Prioridade 3: destino com menor prob (exceto âncora)
+      if(!candidato) {
+        var dests = cluster.filter(function(s){ return s.tipo === 'destino' && s.odd > 0; });
+        if(dests.length > 1) candidato = dests.sort(function(a,b){ return a.prob-b.prob; })[0];
+      }
+      if(!candidato) break;
+      // Mover para expansão em vez de remover — mantém visível como alerta
+      candidato.tipo = 'expansao';
+      candidato.stake = 0;
+      candidato.lucro = 0;
+      console.log('[MIN RETORNO] Movendo '+candidato.score+' para expansão — retorno insuficiente');
+      // Recalcular Dutch sem esse score
+      var novosAtivos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+      if(novosAtivos.length === 0) break;
+      var si = novosAtivos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      novosAtivos.forEach(function(s){
+        s.stake = parseFloat(((1/s.odd) / si * stake).toFixed(2));
+        s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+        s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+      });
+      ativos = novosAtivos;
+      lucroAtual = ativos[0].lucro;
+    }
+  })();
+
   // ── STEP 6: Sort ─────────────────────────────────────────────────
   // any_other (goleada) sempre por último, mesmo quando tipo='destino'
   const ord = {caminho:0, destino:1, planb:2, expansao:3};
