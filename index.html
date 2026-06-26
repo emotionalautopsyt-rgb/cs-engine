@@ -3122,7 +3122,26 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // é exatamente o cenário onde o mercado precifica volume de gols do favorito
     var cenarioVolumeGols = fav <= 1.70 && over <= 1.75;
 
-    if(cenarioVolumeGols && prob20 > 0 && prob20 > prob10 * 1.15) {
+    // EXCEÇÃO: se o score de 1 gol está entre os top 5 mais prováveis do mercado CS,
+    // não pula — o mercado está dizendo que esse placar é relevante mesmo com volume alto
+    var scoreUmGol = favEhVisitante ? '0-1' : '1-0';
+    var allCSProbs = [];
+    if(S.csOdds) {
+      Object.keys(S.csOdds).forEach(function(s) {
+        var o = S.csOdds[s];
+        if(o > 0 && /^\d-\d$/.test(s)) allCSProbs.push({score:s, prob:100/o});
+      });
+      allCSProbs.sort(function(a,b){ return b.prob-a.prob; });
+    }
+    var rankScoreUmGol = allCSProbs.findIndex(function(x){ return x.score === scoreUmGol; });
+    // Só protege contra o pulo se score de 1 gol está nos TOP 2 mais prováveis
+    // Se está em 3º ou abaixo, a regra de probabilidade prevalece
+    var scoreUmGolNoTop5 = rankScoreUmGol >= 0 && rankScoreUmGol < 2;
+    if(scoreUmGolNoTop5) {
+      console.log('[REGRA PULAR 1 GOL] '+scoreUmGol+' está em '+(rankScoreUmGol+1)+'º lugar no mercado (top 2) — não pula');
+    }
+
+    if(cenarioVolumeGols && !scoreUmGolNoTop5 && prob20 > 0 && prob20 > prob10 * 1.30) {
       // 2-0 tem probabilidade real e significativamente maior que 1-0 (>15%)
       // Pula o 1-0 — cluster inicia no 2-0, igual ao padrão do Arsenal x Leeds (terminou 0-3)
       mainScores = mainScores.filter(function(s){ return s !== '1-0'; });
