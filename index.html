@@ -882,7 +882,7 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div class="g3">
           <div><label>Odd Favorito</label><input id="pk-fav" type="text" inputmode="decimal" step="0.01" placeholder="1.75" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
           <div><label>BTTS Sim</label><input id="pk-btts" type="text" inputmode="decimal" step="0.01" placeholder="1.90" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
-          <div><label>Over 2.5</label><input id="pk-over" type="text" inputmode="decimal" step="0.01" placeholder="1.95" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
+          <div><label>Over 2.5</label><input id="pk-over" type="text" inputmode="decimal" step="0.01" placeholder="1.95" oninput="this.value=this.value.replace(',','.');checkPackball();calcPoisson()"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
 
           </div>
@@ -2142,6 +2142,61 @@ function updatePkStatusFromApproval() {
   el.innerHTML = renderIndiceConfianca(ap) + renderGenioApprovalBox(ap);
 }
 
+// ===== CÁLCULO POISSON — estima over 3.5/4.5/5.5 internamente =====
+function calcPoisson() {
+  var overOdd = parseFloat(document.getElementById('pk-over')?.value);
+  var bttsOdd = parseFloat(document.getElementById('pk-btts')?.value) || 0;
+  if(!overOdd || overOdd <= 1.0) { S._poisson = null; return; }
+
+  var p25 = 1/overOdd;
+
+  function poissonProb(lam, k) {
+    var p=1; for(var i=1;i<=k;i++) p*=lam/i;
+    return p*Math.exp(-lam);
+  }
+  function probOver(lam, n) {
+    var acc=0; for(var k=0;k<=n;k++) acc+=poissonProb(lam,k);
+    return 1-acc;
+  }
+
+  // Estimar lambda via bissecção
+  var lo=0.5, hi=8.0;
+  for(var i=0;i<60;i++){
+    var mid=(lo+hi)/2;
+    if(probOver(mid,2)>p25) hi=mid; else lo=mid;
+  }
+  var lam=(lo+hi)/2;
+
+  var p35=probOver(lam,3);
+  var p45=probOver(lam,4);
+  var p55=probOver(lam,5);
+
+  // Perfil de goleada baseado em over + btts
+  var perfilGoleada;
+  if(overOdd<=1.70 && bttsOdd>=2.20) {
+    perfilGoleada = 'LIMPA'; // favorito domina sozinho
+  } else if(overOdd<=1.70 && bttsOdd>0 && bttsOdd<2.20) {
+    perfilGoleada = 'SUJA'; // volume alto mas ambos marcam
+  } else if(overOdd<=1.85) {
+    perfilGoleada = 'MEDIA'; // volume médio
+  } else {
+    perfilGoleada = 'BAIXA'; // volume baixo
+  }
+
+  // Salvar internamente para uso pelo motor
+  S._poisson = {
+    lambda: parseFloat(lam.toFixed(2)),
+    p35: parseFloat((p35*100).toFixed(1)),
+    p45: parseFloat((p45*100).toFixed(1)),
+    p55: parseFloat((p55*100).toFixed(1)),
+    odd35: parseFloat((1/p35).toFixed(1)),
+    odd45: parseFloat((1/p45).toFixed(1)),
+    odd55: parseFloat((1/p55).toFixed(1)),
+    perfilGoleada: perfilGoleada
+  };
+
+  console.log('[POISSON] λ='+lam.toFixed(1)+' | over3.5='+( p35*100).toFixed(0)+'% | over4.5='+(p45*100).toFixed(0)+'% | perfil='+perfilGoleada);
+}
 
 function checkPackball() {
   const fav = parseFloat(document.getElementById('pk-fav')?.value);
@@ -2832,9 +2887,18 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
   "expansao": [
     {"score":"3-2","motivo":"Jogo pode ficar caótico — ambos sofrem gols tardios"},
     {"score":"0-0","motivo":"Contexto de classificação garantida pode travar o jogo"}
-  ]
+  ],
+  "volume_precoce": false
 }
 ##JSON_END##
+
+CAMPO "volume_precoce" (OPCIONAL — padrão false):
+- Retorne true SOMENTE se o favorito tem padrão histórico claro de marcar
+  2+ gols nos primeiros 30 minutos em pelo menos 3 dos últimos 10 jogos
+- Verifique nos dados de "Momento dos gols" (0-15 e 16-30): se a soma de gols
+  marcados nesses dois períodos for ≥ 6 em 10 jogos, volume_precoce = true
+- Quando true, força a goleada como DESTINO no Dutch independente do over
+- Na dúvida, mantenha false — é melhor errar para o lado conservador
 
 CAMPO "expansao" (OPCIONAL — só inclua quando identificar cenário específico relevante):
 - Máximo 2 scores
@@ -4108,6 +4172,12 @@ REGRAS ABSOLUTAS:
           }
         }
       }
+      // Processar campo "volume_precoce" — padrão histórico de explosão precoce
+      S._volumePrecoce = voto.volume_precoce === true;
+      if(S._volumePrecoce) {
+        console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
+      }
+
       // Processar campo "expansao" — scores de alerta sugeridos pela IA
       if(voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
         S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
@@ -4330,11 +4400,11 @@ REGRAS ABSOLUTAS:
           const probAncora = cluster.length > 0
             ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
             : 0;
-          // Goleada só entra como DESTINO quando over confirma volume alto
-          // Se over > 1.70, o mercado não está convicto de 3+ gols — expansão apenas
-          const overAtual = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
-          const overConfirmaVolume = overAtual <= 1.70;
-          const entrarComoDestino = overConfirmaVolume && (probExp >= probAncora || probExp >= 15.0);
+          // Usar perfil Poisson calculado internamente
+          const poisson = S._poisson || {};
+          const perfilGoleada = poisson.perfilGoleada || 'BAIXA';
+          const entrarComoDestino = (perfilGoleada === 'LIMPA' || (perfilGoleada === 'SUJA' && volumePrecoce)) &&
+            (probExp >= probAncora || probExp >= 15.0);
 
           console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% | âncora: '+
             probAncora.toFixed(1)+'% | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
@@ -4895,9 +4965,11 @@ function calcStakes(cluster, stake, analysisText) {
       const probAncoraCl = cluster.length > 0
         ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
         : 0;
-      const overAtualExp = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
-      const overConfirmaVolumeExp = overAtualExp <= 1.70;
-      const entrarComoDestinoExp = overConfirmaVolumeExp && (probAnyOther >= probAncoraCl || probAnyOther >= 15.0);
+      const poissonExp = S._poisson || {};
+      const perfilGoleadaExp = poissonExp.perfilGoleada || 'BAIXA';
+      const volumePrecoceExp = S._volumePrecoce === true;
+      const entrarComoDestinoExp = (perfilGoleadaExp === 'LIMPA' || (perfilGoleadaExp === 'SUJA' && volumePrecoceExp)) &&
+        (probAnyOther >= probAncoraCl || probAnyOther >= 15.0);
 
       console.log('[GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+'% | âncora: '+
         probAncoraCl.toFixed(1)+'% | modo: '+(entrarComoDestinoExp ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
