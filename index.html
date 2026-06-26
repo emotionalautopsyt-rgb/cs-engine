@@ -5041,6 +5041,11 @@ function calcStakes(cluster, stake, analysisText) {
 
     if(!hasAnyOtherFav && expansionOdd > 0 &&
        (anyOtherDominante || (overForGol < 1.60 && goleadaH2H && prof === 'goleada'))) {
+      // Threshold mínimo: goleada só aparece (mesmo como expansão) se prob >= 8%
+      // Abaixo disso é irrelevante e confunde mais do que ajuda
+      if(probAnyOther < 8.0) {
+        console.log('[GOLEADA] '+expansionScore+' prob '+probAnyOther.toFixed(1)+'% < 8% mínimo — ignorada');
+      } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
         ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
@@ -5059,6 +5064,7 @@ function calcStakes(cluster, stake, analysisText) {
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
         _covers:(favAwayExpansion ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+')});
+      } // fecha else do threshold 8%
     }
 
     if(prof === 'goleada') {
