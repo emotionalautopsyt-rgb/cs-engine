@@ -4190,6 +4190,13 @@ REGRAS ABSOLUTAS:
               engineFinal.protection.push('1-2');
               console.log('[ENFORCEMENT] 1-2 restaurado em SUPER_EQUILIBRADO — motor incluiu com btts forte');
             }
+            // Restaurar 2-2 em SUPER_EQUILIBRADO quando IA não mandou
+            const motorTinha22 = engine.protection.includes('2-2') || engine.mainScores.includes('2-2');
+            if(engine.profileId === 'SUPER_EQUILIBRADO' && motorTinha22 &&
+               !engineFinal.protection.includes('2-2') && !engineFinal.mainScores.includes('2-2')) {
+              engineFinal.protection.push('2-2');
+              console.log('[ENFORCEMENT] 2-2 restaurado em SUPER_EQUILIBRADO — motor incluiu com btts forte');
+            }
             const totalAtual = engineFinal.mainScores.length + engineFinal.protection.length;
             if(totalAtual < minimoScores) {
               const faltamScores = minimoScores - totalAtual;
