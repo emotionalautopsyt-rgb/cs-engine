@@ -4330,7 +4330,11 @@ REGRAS ABSOLUTAS:
           const probAncora = cluster.length > 0
             ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
             : 0;
-          const entrarComoDestino = probExp >= probAncora || probExp >= 15.0;
+          // Goleada só entra como DESTINO quando over confirma volume alto
+          // Se over > 1.70, o mercado não está convicto de 3+ gols — expansão apenas
+          const overAtual = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+          const overConfirmaVolume = overAtual <= 1.70;
+          const entrarComoDestino = overConfirmaVolume && (probExp >= probAncora || probExp >= 15.0);
 
           console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% | âncora: '+
             probAncora.toFixed(1)+'% | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
@@ -4891,7 +4895,9 @@ function calcStakes(cluster, stake, analysisText) {
       const probAncoraCl = cluster.length > 0
         ? Math.max.apply(null, cluster.map(function(s){ return s.prob || 0; }))
         : 0;
-      const entrarComoDestinoExp = probAnyOther >= probAncoraCl || probAnyOther >= 15.0;
+      const overAtualExp = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+      const overConfirmaVolumeExp = overAtualExp <= 1.70;
+      const entrarComoDestinoExp = overConfirmaVolumeExp && (probAnyOther >= probAncoraCl || probAnyOther >= 15.0);
 
       console.log('[GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+'% | âncora: '+
         probAncoraCl.toFixed(1)+'% | modo: '+(entrarComoDestinoExp ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
