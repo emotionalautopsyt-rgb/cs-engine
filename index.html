@@ -4063,6 +4063,7 @@ REGRAS ABSOLUTAS:
     // ── FASE 1: Validação contextual (Consenso Duplo) ─────────
     // Chamada rápida — só JSON, sem narrativa
     let engineFinal = { ...engine }; // começa com o cluster do motor
+    S._currentProfileId = engine.profileId || '';
 
     // Deduplicação preventiva — garantir sem scores duplicados
     engine.mainScores = engine.mainScores.filter(function(s,i,a){ return a.indexOf(s)===i; });
@@ -4241,22 +4242,23 @@ REGRAS ABSOLUTAS:
               }
             }
           }
-        }
-      }
-      // Processar campo "volume_precoce" — padrão histórico de explosão precoce
-      S._volumePrecoce = voto && voto.volume_precoce === true;
-      if(S._volumePrecoce) {
-        console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
-      }
 
-      // Processar campo "expansao" — scores de alerta sugeridos pela IA
-      if(voto && voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
-        S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
-          return e.score && e.motivo && /^\d-\d$/.test(e.score);
-        });
-        console.log('[EXPANSÃO IA] Scores de alerta sugeridos:', S._expansaoIA);
-      } else {
-        S._expansaoIA = [];
+          // Processar campo "volume_precoce" — dentro do if(jsonMatch) onde voto existe
+          S._volumePrecoce = voto.volume_precoce === true;
+          if(S._volumePrecoce) {
+            console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
+          }
+
+          // Processar campo "expansao" — scores de alerta sugeridos pela IA
+          if(voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
+            S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
+              return e.score && e.motivo && /^\d-\d$/.test(e.score);
+            });
+            console.log('[EXPANSÃO IA] Scores de alerta sugeridos:', S._expansaoIA);
+          } else {
+            S._expansaoIA = [];
+          }
+        }
       }
     } catch(eV) {
       // Falha silenciosa — usa cluster original do motor
@@ -5258,7 +5260,7 @@ function calcStakes(cluster, stake, analysisText) {
       }
       if(!candidato) break;
       // Não remover 1-2 ou 2-2 em SUPER_EQUILIBRADO — são essenciais para btts forte
-      var perfilAtual = S.currentGame && S.currentGame.profileId;
+      var perfilAtual = S._currentProfileId || '';
       if(perfilAtual === 'SUPER_EQUILIBRADO' &&
          candidato && (candidato.score === '1-2' || candidato.score === '2-2')) {
         console.log('[MIN RETORNO] Protegendo '+candidato.score+' em SUPER_EQUILIBRADO — essencial para btts');
