@@ -4522,6 +4522,19 @@ REGRAS ABSOLUTAS:
       if(S.currentGame && engineFinal && engineFinal.ancora) {
         S.currentGame.lastAncora = engineFinal.ancora;
       }
+
+      // Deduplicar any_other antes de renderizar — garantia final
+      (function(){
+        var seen = {};
+        for(var i = cluster.length-1; i>=0; i--) {
+          var s = cluster[i];
+          if(s.score && s.score.startsWith('any_other')) {
+            if(seen[s.score]) { cluster.splice(i,1); }
+            else { seen[s.score]=true; }
+          }
+        }
+      })();
+
       renderCluster(cluster, stake);
       notify('🧠 ANÁLISE DO GÊNIO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
