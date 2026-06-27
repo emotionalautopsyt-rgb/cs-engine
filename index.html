@@ -5237,53 +5237,140 @@ function calcStakes(cluster, stake, analysisText) {
   // relevantes (any_other com odd baixa, planb com prob baixa) até atingir
   // retorno mínimo ou chegar em 4 scores
   (function enforceMinReturn() {
-    var minRetorno = 0.30; // 30% mínimo de retorno sobre a stake
     var ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
     if(ativos.length === 0) return;
-    var lucroAtual = ativos[0].lucro;
-    if(lucroAtual / stake >= minRetorno) return; // já está bom
-    // Tentar remover scores em ordem de prioridade de remoção:
-    // 1. any_other com odd baixa (< 8.0)
-    // 2. planb com prob mais baixa
-    // 3. destino com prob mais baixa
-    var tentativas = 0;
-    while(lucroAtual / stake < minRetorno && ativos.length > 4 && tentativas < 5) {
-      tentativas++;
-      // Encontrar candidato a remoção
-      var candidato = null;
-      // Prioridade 1: any_other com odd < 8
-      candidato = cluster.find(function(s){
-        return s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao';
-      });
-      // Prioridade 2: planb com menor prob
-      if(!candidato) {
-        var planbs = cluster.filter(function(s){ return s.tipo === 'planb' && s.odd > 0; });
-        if(planbs.length > 1) candidato = planbs.sort(function(a,b){ return a.prob-b.prob; })[0];
+
+    // ── REGRA 1: Máximo de scores por faixa de favorito ──────────────
+    var favAtual = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
+    var maxScores;
+    if(favAtual <= 1.60) maxScores = 5;
+    else if(favAtual <= 1.85) maxScores = 6;
+    else if(favAtual <= 2.20) maxScores = 6;
+    else maxScores = 7;
+
+    // ── REGRA 2: Filtro de probabilidade mínima com exceção de liquidez ──
+    // Scores com prob < 7% só ficam se liquidez > R$8.000
+    var bttsAtual = parseFloat(document.getElementById('pk-btts')?.value) || 2.0;
+    var perfilAtual = S._currentProfileId || '';
+    cluster.forEach(function(s) {
+      if(s.tipo === 'expansao') return;
+      if(!s.score || s.score.startsWith('any_other')) return;
+      var prob = s.odd > 0 ? 100/s.odd : 0;
+      if(prob < 7.0) {
+        var liq = (S.csOddsLiq && S.csOddsLiq[s.score]) ? S.csOddsLiq[s.score] : 0;
+        if(liq < 8000) {
+          // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2)
+          var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
+          var ehEssencial = perfilAtual === 'SUPER_EQUILIBRADO' &&
+            (s.score === '1-2' || s.score === '2-2');
+          if(!ehAncora && !ehEssencial) {
+            s.tipo = 'expansao';
+            s.stake = 0; s.lucro = 0;
+            console.log('[PROB MIN] '+s.score+' prob='+prob.toFixed(1)+'% liq=R$'+liq+' → expansão');
+          }
+        }
       }
-      // Prioridade 3: destino com menor prob (exceto âncora)
+    });
+
+    // Recalcular após filtro de probabilidade
+    ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+    if(ativos.length > 0) {
+      var si = ativos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      ativos.forEach(function(s){
+        s.stake = parseFloat(((1/s.odd) / si * stake).toFixed(2));
+        s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+        s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+      });
+    }
+
+    // ── REGRA 3: Cortar até maxScores ────────────────────────────────
+    ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+    var tentativasMax = 0;
+    while(ativos.length > maxScores && tentativasMax < 6) {
+      tentativasMax++;
+      // Ordem de remoção: planb menor prob → destino menor prob → caminho menor prob
+      var candidato = null;
+      var planbs = ativos.filter(function(s){ return s.tipo === 'planb'; });
+      if(planbs.length > 1) {
+        planbs.sort(function(a,b){ return a.prob-b.prob; });
+        candidato = planbs[0];
+      }
       if(!candidato) {
-        var dests = cluster.filter(function(s){ return s.tipo === 'destino' && s.odd > 0; });
-        if(dests.length > 1) candidato = dests.sort(function(a,b){ return a.prob-b.prob; })[0];
+        var dests = ativos.filter(function(s){ return s.tipo === 'destino'; });
+        if(dests.length > 1) {
+          dests.sort(function(a,b){ return a.prob-b.prob; });
+          candidato = dests[0];
+        }
       }
       if(!candidato) break;
-      // Não remover 1-2 ou 2-2 em SUPER_EQUILIBRADO — são essenciais para btts forte
-      var perfilAtual = S._currentProfileId || '';
-      if(perfilAtual === 'SUPER_EQUILIBRADO' &&
-         candidato && (candidato.score === '1-2' || candidato.score === '2-2')) {
-        console.log('[MIN RETORNO] Protegendo '+candidato.score+' em SUPER_EQUILIBRADO — essencial para btts');
-        break;
-      }
-      // Mover para expansão em vez de remover — mantém visível como alerta
+      // Proteger âncora e essenciais
+      var ehAncora = candidato.score === (S.currentGame && S.currentGame.lastAncora);
+      var ehEssencial = perfilAtual === 'SUPER_EQUILIBRADO' &&
+        (candidato.score === '1-2' || candidato.score === '2-2');
+      if(ehAncora || ehEssencial) break;
+
       candidato.tipo = 'expansao';
-      candidato.stake = 0;
-      candidato.lucro = 0;
-      console.log('[MIN RETORNO] Movendo '+candidato.score+' para expansão — retorno insuficiente');
-      // Recalcular Dutch sem esse score
+      candidato.stake = 0; candidato.lucro = 0;
+      console.log('[MAX SCORES] '+candidato.score+' → expansão (máx='+maxScores+')');
+
+      ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+      if(ativos.length > 0) {
+        var si2 = ativos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+        ativos.forEach(function(s){
+          s.stake = parseFloat(((1/s.odd) / si2 * stake).toFixed(2));
+          s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+          s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+        });
+      }
+    }
+
+    // ── REGRA 4: Retorno mínimo dinâmico ─────────────────────────────
+    ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
+    if(ativos.length === 0) return;
+    var lucroAtual = ativos[0].lucro;
+
+    // Threshold dinâmico por número de scores
+    var minRetornoDin;
+    if(ativos.length <= 4) minRetornoDin = 0.60;
+    else if(ativos.length === 5) minRetornoDin = 0.45;
+    else if(ativos.length === 6) minRetornoDin = 0.35;
+    else minRetornoDin = 0.30;
+
+    var tentativas = 0;
+    while(lucroAtual / stake < minRetornoDin && ativos.length > 4 && tentativas < 5) {
+      tentativas++;
+      var candidato2 = null;
+      // Prioridade 1: any_other com odd baixa
+      candidato2 = cluster.find(function(s){
+        return s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao';
+      });
+      // Prioridade 2: planb menor prob
+      if(!candidato2) {
+        var planbs2 = cluster.filter(function(s){ return s.tipo === 'planb' && s.odd > 0; });
+        if(planbs2.length > 1) candidato2 = planbs2.sort(function(a,b){ return a.prob-b.prob; })[0];
+      }
+      // Prioridade 3: destino menor prob
+      if(!candidato2) {
+        var dests2 = cluster.filter(function(s){ return s.tipo === 'destino' && s.odd > 0; });
+        if(dests2.length > 1) candidato2 = dests2.sort(function(a,b){ return a.prob-b.prob; })[0];
+      }
+      if(!candidato2) break;
+
+      var ehAncora2 = candidato2.score === (S.currentGame && S.currentGame.lastAncora);
+      var ehEssencial2 = perfilAtual === 'SUPER_EQUILIBRADO' &&
+        (candidato2.score === '1-2' || candidato2.score === '2-2');
+      if(ehAncora2 || ehEssencial2) break;
+
+      candidato2.tipo = 'expansao';
+      candidato2.stake = 0; candidato2.lucro = 0;
+      console.log('[MIN RETORNO DIN] '+candidato2.score+' → expansão (min='+
+        (minRetornoDin*100).toFixed(0)+'%)');
+
       var novosAtivos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
       if(novosAtivos.length === 0) break;
-      var si = novosAtivos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      var si3 = novosAtivos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
       novosAtivos.forEach(function(s){
-        s.stake = parseFloat(((1/s.odd) / si * stake).toFixed(2));
+        s.stake = parseFloat(((1/s.odd) / si3 * stake).toFixed(2));
         s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
         s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
       });
