@@ -5258,7 +5258,9 @@ function calcStakes(cluster, stake, analysisText) {
       var prob = s.odd > 0 ? 100/s.odd : 0;
       if(prob < 7.0) {
         var liq = (S.csOddsLiq && S.csOddsLiq[s.score]) ? S.csOddsLiq[s.score] : 0;
-        if(liq < 8000) {
+        // Proteger 2-2 quando btts indica ambos marcam com frequência
+        var eh22ComBtts = s.score === '2-2' && bttsAtual <= 1.80;
+        if(liq < 8000 && !eh22ComBtts) {
           // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2)
           var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
           var ehEssencial = perfilAtual === 'SUPER_EQUILIBRADO' &&
@@ -5268,7 +5270,7 @@ function calcStakes(cluster, stake, analysisText) {
             s.stake = 0; s.lucro = 0;
             console.log('[PROB MIN] '+s.score+' prob='+prob.toFixed(1)+'% liq=R$'+liq+' → expansão');
           }
-        }
+        } // fecha if liq < 8000
       }
     });
 
