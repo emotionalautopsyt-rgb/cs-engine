@@ -3097,8 +3097,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // Mesma regra "pular o 1 gol" aplicada também ao perfil GOLEADA —
     // é justamente aqui que o padrão Arsenal/Iraque-Noruega se encaixa,
     // já que fav muito forte cai naturalmente em GOLEADA, não em outros perfis
-    if(prob20gol > 0 && prob20gol > (prob10gol > 0 ? prob10gol * 1.15 : 8.0)) {
-      // Pula se 2-0 é claramente mais provável que 1-0
+    if(prob20gol > 0 && prob20gol > (prob10gol > 0 ? prob10gol * 1.30 : 8.0)) {
+      // Pula se 2-0 é 30%+ mais provável que 1-0 — consistente com os outros perfis
       // Ou se 2-0 tem >8% de probabilidade e 1-0 não tem odd colada
       console.log('[REGRA PULAR 1 GOL — GOLEADA] 1-0 ('+prob10gol.toFixed(1)+'%) < 2-0 ('+
         prob20gol.toFixed(1)+'%) — cluster não inclui 1-0, mantém foco em 2+ gols');
@@ -4251,13 +4251,13 @@ REGRAS ABSOLUTAS:
           }
 
           // Processar campo "volume_precoce" — dentro do if(jsonMatch) onde voto existe
-          S._volumePrecoce = voto.volume_precoce === true;
+          S._volumePrecoce = !!(voto && voto.volume_precoce === true);
           if(S._volumePrecoce) {
             console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
           }
 
           // Processar campo "expansao" — scores de alerta sugeridos pela IA
-          if(voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
+          if(voto && voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
             S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
               return e.score && e.motivo && /^\d-\d$/.test(e.score);
             });
@@ -7849,12 +7849,17 @@ function injetarScoresNarrativa(texto, cluster) {
       }
 
       // 6) Cap inteligente: preservar árvore saudável
-      // REGRA REVISADA: jogo controlado com expansão dupla (3-0 + 3-1) pode ter 6
-      // Só limita a 5 se não houver ambos 3-0 e 3-1 com valor real
-      var tem30 = cluster.some(function(s){ return s.score==='3-0'||(ctx.favEhVisitante&&s.score==='0-3'); });
-      var tem31 = cluster.some(function(s){ return s.score==='3-1'||(ctx.favEhVisitante&&s.score==='1-3'); });
-      var expansaoDupla = tem30 && tem31;
-      const maxScores = highChaos ? 7 : (controlled && !expansaoDupla ? 5 : 6);
+      // Usa a mesma lógica do enforceMinReturn — por faixa de fav
+      // highChaos pode ter 7, controlados têm menos
+      var favAtualCap = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
+      var maxScoresCap;
+      if(highChaos) maxScoresCap = 7;
+      else if(favAtualCap <= 1.60) maxScoresCap = 5;
+      else if(favAtualCap <= 1.85) maxScoresCap = 6;
+      else if(favAtualCap <= 2.20) maxScoresCap = 6;
+      else maxScoresCap = 7;
+      // Expansão dupla (3-0 + 3-1) não justifica score extra aqui — enforceMinReturn cuida
+      const maxScores = maxScoresCap;
       cluster = capCluster(cluster, maxScores, favSide, highChaos ? 'high' : semiChaos ? 'semi' : 'normal');
 
       cluster._premiumDNA = {
