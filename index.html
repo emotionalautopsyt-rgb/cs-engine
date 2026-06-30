@@ -2002,12 +2002,12 @@ function avaliarAprovacaoGenio(ctx) {
 
   // Montar mensagem contextual de não aprovado
   var motivoPrincipal = '';
-  if(amistoso) motivoPrincipal = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
-  else if(rotacao) motivoPrincipal = 'Possível escalação alternativa ou desfalques reduz a leitura do Gênio.';
-  else if(semObjetivo) motivoPrincipal = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
-  else if(csPouco) motivoPrincipal = 'Cole as odds CS da Betfair para o Gênio fazer uma leitura completa.';
-  else if(rangeFails >= 2) motivoPrincipal = 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
-  else motivoPrincipal = 'Perfil fora da zona ideal — a árvore pode ter menor precisão.';
+  if(amistoso) motivoPrincipal = 'Amistosos têm alta variância — atenção redobrada na leitura contextual.';
+  else if(rotacao) motivoPrincipal = 'Possível escalação alternativa ou desfalques — informação adicional para sua leitura.';
+  else if(semObjetivo) motivoPrincipal = 'Jogo sem motivação aparente registrada no texto — considere isso na leitura ao vivo.';
+  else if(csPouco) motivoPrincipal = 'Cole as odds CS da Betfair para uma leitura mais completa do motor.';
+  else if(rangeFails >= 2) motivoPrincipal = 'As odds estão fora do range mais comum nos jogos já registrados.';
+  else motivoPrincipal = 'Perfil estatístico atípico — over, btts ou fav fora do range mais frequente.';
 
   // ── ÍNDICE DE CONFIANÇA DE ENTRADA ──────────────────────
   // Critério 1: Favorito (30 pontos máx)
@@ -2050,33 +2050,33 @@ function avaliarAprovacaoGenio(ctx) {
 
   var recomendacao, corIndice, iconIndice;
   if(indiceEntrada >= 75) {
-    recomendacao = 'ENTRE — zona ideal';
+    recomendacao = 'Perfil dentro do range mais comum';
     corIndice = 'var(--grn)';
-    iconIndice = '🟢';
+    iconIndice = '📊';
   } else if(indiceEntrada >= 55) {
-    recomendacao = 'ENTRE COM STAKE REDUZIDA';
+    recomendacao = 'Perfil parcialmente dentro do range comum';
     corIndice = 'var(--ylw)';
-    iconIndice = '🟡';
+    iconIndice = '📊';
   } else if(indiceEntrada >= 35) {
-    recomendacao = 'CAUTELA — stake mínima';
+    recomendacao = 'Perfil atípico — odds fora do range frequente';
     corIndice = '#ff8c00';
-    iconIndice = '🟠';
+    iconIndice = '📊';
   } else {
-    recomendacao = 'EVITE — fora do perfil';
+    recomendacao = 'Perfil bem atípico — odds raras no histórico';
     corIndice = 'var(--red)';
-    iconIndice = '🔴';
+    iconIndice = '📊';
   }
 
   return {
     aprovado,
     status: aprovado ? 'aprovado' : 'nao_aprovado',
-    label: aprovado ? '🟢 GÊNIO APROVOU O JOGO' : '🔴 FORA DA ZONA DO GÊNIO',
+    label: aprovado ? '📊 PERFIL PADRÃO' : '📊 PERFIL ATÍPICO',
     resumo: aprovado
-      ? 'Edge identificado. Árvore gerada com alta confiança operacional.'
+      ? 'Odds dentro do range estatístico mais comum analisado pelo motor.'
       : motivoPrincipal,
     submensagem: aprovado
       ? ''
-      : 'Você ainda pode analisar e operar — o resultado será registrado separadamente para comparação.',
+      : 'Informativo — não significa que o jogo deve ou não ser operado. As odds CS já refletem a probabilidade real do mercado.',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
     fav, btts, over,
     // Índice de Confiança de Entrada
@@ -2117,7 +2117,7 @@ function renderGenioApprovalBox(ap, favOverride) {
   const efAprovado = ap.aprovado || (favOverride && favOverride <= 1.65);
   const cor = efAprovado ? 'var(--grn)' : 'var(--ylw)';
   const bg  = efAprovado ? 'rgba(0,201,110,.07)' : 'rgba(255,184,0,.06)';
-  const labelFinal = efAprovado ? '🟢 GÊNIO APROVOU O JOGO' : '⚠️ ALERTA DO GÊNIO';
+  const labelFinal = efAprovado ? '📊 PERFIL PADRÃO' : '📊 PERFIL ATÍPICO';
   const itens = (ap.motivos || []).map(function(m){ return '<div style="margin-top:3px;opacity:.8;">• '+m+'</div>'; }).join('');
   const sub = ap.submensagem
     ? '<div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;">'+ap.submensagem+'</div>'
@@ -2296,25 +2296,25 @@ function checkPackball() {
 
   var nivel, cor, icone, corBg, corBorder, desc;
   if(contextoBloqueio) {
-    nivel='FORA DA ZONA DO GÊNIO'; cor='var(--red)'; icone='🔴';
+    nivel='PERFIL ATÍPICO'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
     desc = motivoContexto;
   } else if(scoreIdx >= 8) {
-    nivel='GÊNIO APROVOU O JOGO'; cor='var(--grn)'; icone='🟢';
+    nivel='PERFIL PADRÃO'; cor='var(--grn)'; icone='📊';
     corBg='rgba(0,201,110,.07)'; corBorder='rgba(0,201,110,.3)';
-    desc = 'Edge identificado. Árvore liberada com alta confiança operacional.';
+    desc = 'Odds dentro do range estatístico mais comum analisado pelo motor.';
   } else if(scoreIdx >= 6) {
-    nivel='GÊNIO PEDE CAUTELA'; cor='var(--ylw)'; icone='🟡';
+    nivel='PERFIL PARCIALMENTE PADRÃO'; cor='var(--ylw)'; icone='📊';
     corBg='rgba(255,184,0,.06)'; corBorder='rgba(255,184,0,.3)';
-    desc = 'Jogo operável, mas fora da zona ideal. Considere stake reduzida.';
+    desc = 'Algumas odds fora do range mais frequente — informativo, não prescritivo.';
   } else if(scoreIdx >= 4) {
-    nivel='GÊNIO RECOMENDA STAKE MÍNIMA'; cor='#ff9800'; icone='🟠';
+    nivel='PERFIL ATÍPICO'; cor='#ff9800'; icone='📊';
     corBg='rgba(255,152,0,.06)'; corBorder='rgba(255,152,0,.3)';
-    desc = 'Risco elevado — odds bem fora da zona de maior edge histórico.';
+    desc = 'Odds bem fora do range mais comum nos jogos já registrados.';
   } else {
-    nivel='ALERTA DO GÊNIO'; cor='var(--red)'; icone='🔴';
+    nivel='PERFIL BEM ATÍPICO'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
-    desc = 'As odds estão fora da zona onde o Gênio tem maior edge histórico.';
+    desc = 'As odds estão fora do range mais frequente — as odds CS já refletem a probabilidade real.';
   }
 
   el.innerHTML = '<div class="ab" style="border-left-color:'+cor+';background:'+corBg+';padding:12px 14px;border:1px solid '+corBorder+';border-radius:8px;">'+
