@@ -5058,9 +5058,11 @@ function calcStakes(cluster, stake, analysisText) {
     if(!hasAnyOtherFav && expansionOdd > 0 &&
        (anyOtherDominante || (overForGol < 1.60 && goleadaH2H && prof === 'goleada'))) {
       // Threshold mínimo: goleada só aparece (mesmo como expansão) se prob >= 8%
-      // Abaixo disso é irrelevante e confunde mais do que ajuda
-      if(probAnyOther < 8.0) {
-        console.log('[GOLEADA] '+expansionScore+' prob '+probAnyOther.toFixed(1)+'% < 8% mínimo — ignorada');
+      // E se over não está extremamente alto (jogo under) — over > 2.80 = jogo under, goleada não faz sentido
+      const overAtualGol = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+      const jogoUnder = overAtualGol > 2.80;
+      if(probAnyOther < 8.0 || jogoUnder) {
+        console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+(jogoUnder?' (jogo under)':''));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
