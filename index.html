@@ -5389,8 +5389,10 @@ function calcStakes(cluster, stake, analysisText) {
       if(!candidato2) break;
 
       var ehAncora2 = candidato2.score === (S.currentGame && S.currentGame.lastAncora);
+      // Não remover scores essenciais em SUPER_EQUILIBRADO
       var ehEssencial2 = perfilAtual === 'SUPER_EQUILIBRADO' &&
-        (candidato2.score === '1-2' || candidato2.score === '2-2');
+        (candidato2.score === '1-2' || candidato2.score === '2-2' ||
+         candidato2.score === '0-1' || candidato2.score === '0-0');
       if(ehAncora2 || ehEssencial2) break;
 
       candidato2.tipo = 'expansao';
