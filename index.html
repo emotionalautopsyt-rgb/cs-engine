@@ -4627,8 +4627,15 @@ REGRAS ABSOLUTAS:
         for(var i = cluster.length-1; i>=0; i--) {
           var s = cluster[i];
           if(s.score && s.score.startsWith('any_other')) {
-            if(seen[s.score]) { cluster.splice(i,1); }
+            if(seen[s.score]) { cluster.splice(i,1); continue; }
             else { seen[s.score]=true; }
+            // Filtro definitivo: over alto = jogo under, goleada não aparece
+            var overFinal = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+            var probFinal = s.odd > 0 ? 100/s.odd : 0;
+            if(overFinal > 2.80 || probFinal < 8.0) {
+              console.log('[GOLEADA FINAL] removida — over='+overFinal+' prob='+probFinal.toFixed(1)+'%');
+              cluster.splice(i,1);
+            }
           }
         }
       })();
