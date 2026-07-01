@@ -4488,7 +4488,13 @@ REGRAS ABSOLUTAS:
         const expDominante = probExp > 0 && piorProbCluster < 100 && (probExp - piorProbCluster) >= margemMinima;
 
         if(!jaTemExp && expOdd > 0 && expDominante) {
-          // Decidir se entra como DESTINO NORMAL ou como ALERTA/EXPANSÃO
+          // Filtro over: jogo under (over > 2.80) não deve ter card de goleada
+          // Filtro prob: probabilidade mínima de 8% para aparecer
+          const overAtualExp2 = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+          const jogoUnderExp2 = overAtualExp2 > 2.80;
+          if(probExp < 8.0 || jogoUnderExp2) {
+            console.log('[GOLEADA] '+expScore+' bloqueada — prob='+probExp.toFixed(1)+'% over='+overAtualExp2+(jogoUnderExp2?' (under)':''));
+          } else {
           // Critério: se probExp >= prob da âncora (score mais provável do cluster)
           // ou se probExp >= 15%, entra como destino normal no Dutch
           const probAncora = cluster.length > 0
@@ -4516,6 +4522,7 @@ REGRAS ABSOLUTAS:
               tipo:'expansao', stake:0, lucro:0, oddPG:0,
               _label:(favAwayExp ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'), liq:0});
           }
+          } // fecha else do filtro under/prob
         }
       } catch(eGol) { console.warn('Alerta goleada falhou:', eGol.message); }
     } else {
