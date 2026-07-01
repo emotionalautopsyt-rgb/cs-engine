@@ -2992,7 +2992,15 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
-  else if(fav <= 2.35)                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
+  else if(fav <= 2.35) {
+    // Se over muito alto (≥3.0), o jogo é equilibrado demais para ALTO_RISCO
+    // — redirecionamos para SUPER_EQUILIBRADO que gera 0-1/1-1 adequadamente
+    if(over >= 3.0) {
+      profileId='SUPER_EQUILIBRADO'; profileLabel='Jogo equilibrado com baixo volume esperado';
+    } else {
+      profileId='ALTO_RISCO'; profileLabel='Favorito instável — proteções reforçadas';
+    }
+  }
   else if(fav <= 3.20)                 { profileId='SUPER_EQUILIBRADO';     profileLabel='Jogo sem favorito claro — equilíbrio real'; }
   else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
 
@@ -3210,7 +3218,12 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // 0-1 já está no Plano A — não duplicar
     // btts forte → 2-2 como equilíbrio ofensivo
     // btts fraco → 1-2 como destino visitante vence marcando 2
-    protection = btts <= 2.10 ? ['1-2','2-2'] : ['2-2','1-2'];
+    // Se over muito alto (≥3.0) → 0-0 tem peso real, deve entrar
+    if(over >= 3.0) {
+      protection = ['0-0','2-2'];
+    } else {
+      protection = btts <= 2.10 ? ['1-2','2-2'] : ['2-2','1-2'];
+    }
 
   } else {
     // PDF confirma: 0-1 / 1-1 / 1-2 → mas máx 5 scores total
