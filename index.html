@@ -3218,9 +3218,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // 0-1 já está no Plano A — não duplicar
     // btts forte → 2-2 como equilíbrio ofensivo
     // btts fraco → 1-2 como destino visitante vence marcando 2
-    // Se over muito alto (≥3.0) → 0-0 tem peso real, deve entrar
+    // Se over muito alto (≥3.0) → 0-0 tem peso real + 2-0 como destino limpo
+    // 2-2 NÃO entra com over alto — jogo under não tem caos de gols
     if(over >= 3.0) {
-      protection = ['0-0','2-2'];
+      protection = ['0-0','2-0'];
     } else {
       protection = btts <= 2.10 ? ['1-2','2-2'] : ['2-2','1-2'];
     }
