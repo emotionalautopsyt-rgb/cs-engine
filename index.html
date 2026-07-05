@@ -2294,27 +2294,47 @@ function checkPackball() {
 
   var scoreIdx = Math.round(pFav*0.40 + pOver*0.20 + pBtts*0.20 + pLiq*0.10 + pContexto*0.10);
 
+  // Ler odds reais para mensagem contextual
+  var overVal = parseFloat(document.getElementById('pk-over')?.value) || 0;
+  var bttsVal = parseFloat(document.getElementById('pk-btts')?.value) || 0;
+  var favVal  = parseFloat(document.getElementById('pk-fav')?.value)  || 0;
+
+  // Gerar mensagem contextual baseada no perfil real do jogo
+  function msgContextual() {
+    if(overVal >= 2.40)                        return '🔒 Jogo fechado — mercado espera baixo volume de gols';
+    if(overVal <= 1.75 && bttsVal >= 2.20)     return '⚡ Favorito deve dominar — zebra provavelmente não marca';
+    if(bttsVal <= 1.80 && overVal <= 1.85)     return '🔥 Jogo aberto — mercado espera gols dos dois lados';
+    if(favVal  >= 2.00 && overVal >= 2.00)     return '⚖️ Equilíbrio real — mercado sem favorito claro';
+    if(overVal >= 2.10 && bttsVal >= 2.10)     return '🔒 Jogo de resultado controlado — baixo volume esperado';
+    if(overVal >= 1.90 && bttsVal <= 1.90)     return '🎯 Jogo de resultado — ambos marcam mas baixo volume';
+    return '';
+  }
+
   var nivel, cor, icone, corBg, corBorder, desc;
   if(contextoBloqueio) {
-    nivel='PERFIL ATÍPICO'; cor='var(--txt2)'; icone='📊';
+    nivel='📊 INFORMATIVO'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
     desc = motivoContexto;
   } else if(scoreIdx >= 8) {
-    nivel='PERFIL PADRÃO'; cor='var(--grn)'; icone='📊';
+    var msgCtx = msgContextual();
+    nivel= msgCtx || '📊 Perfil dentro do range comum'; cor='var(--grn)'; icone='📊';
     corBg='rgba(0,201,110,.07)'; corBorder='rgba(0,201,110,.3)';
-    desc = 'Odds dentro do range estatístico mais comum analisado pelo motor.';
+    desc = 'As odds CS já refletem a probabilidade real do mercado.';
   } else if(scoreIdx >= 6) {
-    nivel='PERFIL PARCIALMENTE PADRÃO'; cor='var(--ylw)'; icone='📊';
+    var msgCtx = msgContextual();
+    nivel= msgCtx || '📊 Perfil parcialmente dentro do range'; cor='var(--ylw)'; icone='📊';
     corBg='rgba(255,184,0,.06)'; corBorder='rgba(255,184,0,.3)';
-    desc = 'Algumas odds fora do range mais frequente — informativo, não prescritivo.';
+    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
   } else if(scoreIdx >= 4) {
-    nivel='PERFIL ATÍPICO'; cor='#ff9800'; icone='📊';
+    var msgCtx = msgContextual();
+    nivel= msgCtx || '📊 Odds fora do range mais frequente'; cor='#ff9800'; icone='📊';
     corBg='rgba(255,152,0,.06)'; corBorder='rgba(255,152,0,.3)';
-    desc = 'Odds bem fora do range mais comum nos jogos já registrados.';
+    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
   } else {
-    nivel='PERFIL BEM ATÍPICO'; cor='var(--txt2)'; icone='📊';
+    var msgCtx = msgContextual();
+    nivel= msgCtx || '📊 Perfil bem fora do range comum'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
-    desc = 'As odds estão fora do range mais frequente — as odds CS já refletem a probabilidade real.';
+    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
   }
 
   el.innerHTML = '<div class="ab" style="border-left-color:'+cor+';background:'+corBg+';padding:12px 14px;border:1px solid '+corBorder+';border-radius:8px;">'+
@@ -2993,9 +3013,8 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
   else if(fav <= 2.35) {
-    // Se over muito alto (≥3.0), o jogo é equilibrado demais para ALTO_RISCO
-    // — redirecionamos para SUPER_EQUILIBRADO que gera 0-1/1-1 adequadamente
-    if(over >= 3.0) {
+    // Se over alto (≥2.50), o jogo é equilibrado demais para ALTO_RISCO
+    if(over >= 2.50) {
       profileId='SUPER_EQUILIBRADO'; profileLabel='Jogo equilibrado com baixo volume esperado';
     } else {
       profileId='ALTO_RISCO'; profileLabel='Favorito instável — proteções reforçadas';
@@ -3218,9 +3237,9 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // 0-1 já está no Plano A — não duplicar
     // btts forte → 2-2 como equilíbrio ofensivo
     // btts fraco → 1-2 como destino visitante vence marcando 2
-    // Se over muito alto (≥3.0) → 0-0 tem peso real + 2-0 como destino limpo
+    // Se over alto (≥2.50) → 0-0 tem peso real + 2-0 como destino limpo
     // 2-2 NÃO entra com over alto — jogo under não tem caos de gols
-    if(over >= 3.0) {
+    if(over >= 2.50) {
       protection = ['0-0','2-0'];
     } else {
       protection = btts <= 2.10 ? ['1-2','2-2'] : ['2-2','1-2'];
