@@ -5277,6 +5277,8 @@ function calcStakes(cluster, stake, analysisText) {
     else if(favAtual <= 1.85) maxScores = 6;
     else if(favAtual <= 2.20) maxScores = 6;
     else maxScores = 7;
+    // ABERTO_BTTS tem 3-1 + 2-2 essenciais no cluster — permite 7
+    if(perfilAtual === 'ABERTO_BTTS') maxScores = 7;
 
     // ── REGRA 2: Filtro de probabilidade mínima com exceção de liquidez ──
     // Scores com prob < 7% só ficam se liquidez > R$8.000
