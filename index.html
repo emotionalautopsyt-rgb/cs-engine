@@ -3013,9 +3013,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
   else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
   else if(fav <= 2.35) {
-    // Se over alto (≥2.50), o jogo é equilibrado demais para ALTO_RISCO
-    if(over >= 2.50) {
-      profileId='SUPER_EQUILIBRADO'; profileLabel='Jogo equilibrado com baixo volume esperado';
+    // Se over alto (≥2.50) OU btts baixo (≤1.80) → SUPER_EQUILIBRADO
+    // Jogo equilibrado com ambos marcando — não é ALTO_RISCO
+    if(over >= 2.50 || btts <= 1.80) {
+      profileId='SUPER_EQUILIBRADO'; profileLabel='Jogo equilibrado — ambos podem marcar';
     } else {
       profileId='ALTO_RISCO'; profileLabel='Favorito instável — proteções reforçadas';
     }
