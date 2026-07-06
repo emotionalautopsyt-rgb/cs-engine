@@ -5316,7 +5316,7 @@ function calcStakes(cluster, stake, analysisText) {
           // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2 ou ABERTO_BTTS 3-1/2-2)
           var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
           var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
-            (s.score === '1-2' || s.score === '2-2')) ||
+            (s.score === '1-2' || s.score === '2-2' || s.score === '1-0')) ||
             (perfilAtual === 'ABERTO_BTTS' &&
             (s.score === '3-1' || s.score === '2-2'));
           if(!ehAncora && !ehEssencial) {
@@ -5362,7 +5362,7 @@ function calcStakes(cluster, stake, analysisText) {
       // Proteger âncora e essenciais
       var ehAncora = candidato.score === (S.currentGame && S.currentGame.lastAncora);
       var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
-        (candidato.score === '1-2' || candidato.score === '2-2')) ||
+        (candidato.score === '1-2' || candidato.score === '2-2' || candidato.score === '1-0')) ||
         (perfilAtual === 'ABERTO_BTTS' &&
         (candidato.score === '3-1' || candidato.score === '2-2'));
       if(ehAncora || ehEssencial) break;
@@ -5418,7 +5418,8 @@ function calcStakes(cluster, stake, analysisText) {
       // Não remover scores essenciais em SUPER_EQUILIBRADO
       var ehEssencial2 = (perfilAtual === 'SUPER_EQUILIBRADO' &&
         (candidato2.score === '1-2' || candidato2.score === '2-2' ||
-         candidato2.score === '0-1' || candidato2.score === '0-0')) ||
+         candidato2.score === '0-1' || candidato2.score === '0-0' ||
+         candidato2.score === '1-0')) ||
         (perfilAtual === 'ABERTO_BTTS' &&
         (candidato2.score === '3-1' || candidato2.score === '2-2'));
       if(ehAncora2 || ehEssencial2) break;
