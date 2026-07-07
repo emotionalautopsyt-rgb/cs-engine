@@ -3067,12 +3067,23 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
 
   } else if(profileId === 'OFENSIVO') {
-    // OFENSIVO: 1-0 / 2-0 / 2-1 + expansão inteligente
-    mainScores = ['1-0','2-0','2-1'].concat(expansao);
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 (btts alto) ou 3-0 (btts desconfiado)
+    // btts < 2.20 = ambos marcam → 3-1 entra (zebra aparece uma vez)
+    // btts >= 2.20 = só favorito marca → 3-0 ganha força (mais no GOLEADA)
+    if(btts < 2.20) {
+      mainScores = ['1-0','2-0','2-1','3-1'].concat(expansao);
+    } else {
+      mainScores = ['1-0','2-0','2-1'].concat(expansao);
+    }
 
   } else if(profileId === 'EQUILIBRADO_OFENSIVO') {
-    // EQUIL_OFENSIVO: 1-0 / 2-0 / 2-1 + expansão inteligente
-    mainScores = ['1-0','2-0','2-1'].concat(expansao);
+    // PDF: 1-0 / 2-0 / 2-1 / 3-1 — favorito ainda dominante mas mais equilíbrio
+    // btts < 2.10 = 3-1 entra (adversário aparece)
+    if(btts < 2.10) {
+      mainScores = ['1-0','2-0','2-1','3-1'].concat(expansao);
+    } else {
+      mainScores = ['1-0','2-0','2-1'].concat(expansao);
+    }
 
   } else if(profileId === 'EQUILIBRADO') {
     // PDF: 1-0 / 2-0 / 2-1 — cluster compacto
