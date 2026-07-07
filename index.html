@@ -5323,7 +5323,12 @@ function calcStakes(cluster, stake, analysisText) {
         var liq = (S.csOddsLiq && S.csOddsLiq[s.score]) ? S.csOddsLiq[s.score] : 0;
         // Proteger 2-2 quando btts indica ambos marcam com frequência
         var eh22ComBtts = s.score === '2-2' && bttsAtual <= 1.80;
-        if(liq < 8000 && !eh22ComBtts) {
+        // Jogos de volume alto (btts ≤ 1.60): scores de 5+ gols têm valor real
+        // λ=3.4+ significa over3.5=43% — 3-1, 3-2, 2-3 são consequência natural
+        var ehVolumeAlto = bttsAtual <= 1.70 &&
+          (s.score === '3-1' || s.score === '1-3' ||
+           s.score === '3-2' || s.score === '2-3');
+        if(liq < 8000 && !eh22ComBtts && !ehVolumeAlto) {
           // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2 ou ABERTO_BTTS 3-1/2-2)
           var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
           var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
