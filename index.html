@@ -4672,6 +4672,22 @@ REGRAS ABSOLUTAS:
         }
       })();
 
+      // Sincronizar narrativa com cluster final — corrige divergência entre
+      // o que a IA escreveu e os scores reais que o motor calculou
+      if(window.syncNarrativaClusterFinal && S.currentGame) {
+        var elTexto = document.getElementById('an-texto');
+        if(elTexto && elTexto.value) {
+          var textoSincronizado = window.syncNarrativaClusterFinal(elTexto.value, cluster);
+          if(textoSincronizado && textoSincronizado !== elTexto.value) {
+            elTexto.value = textoSincronizado;
+            // Atualizar também o texto renderizado se existir
+            var elAnalise = document.getElementById('analise-render');
+            if(elAnalise) elAnalise.innerHTML = textoSincronizado.replace(/\n/g,'<br>');
+            console.log('[SYNC NARRATIVA] Plano B sincronizado com cluster final');
+          }
+        }
+      }
+
       renderCluster(cluster, stake);
       notify('🧠 ANÁLISE DO GÊNIO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
