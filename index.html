@@ -3114,8 +3114,9 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   } else if(profileId === 'SUPER_EQUILIBRADO') {
     // Jogo sem favorito claro — cluster centrado no equilíbrio
     // 2-1 sempre entra — é a vitória mínima do favorito com ambos marcando
-    // Tem liquidez real na maioria dos jogos equilibrados
+    // Quando btts ≤ 1.70 (volume alto), 3-1 entra — favorito pode marcar 3
     mainScores = ['1-1','1-0','0-1','2-1'];
+    if(btts <= 1.70) mainScores.push('3-1');
   } else {
     // ALTO_RISCO: máx 3 scores Plano A (total 5 com PB)
     mainScores = ['1-0','2-0','2-1'];
