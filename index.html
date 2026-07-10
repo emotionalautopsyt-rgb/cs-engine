@@ -2093,9 +2093,7 @@ function avaliarAprovacaoGenio(ctx) {
     resumo: aprovado
       ? 'Odds dentro do range estatístico mais comum analisado pelo motor.'
       : motivoPrincipal,
-    submensagem: aprovado
-      ? ''
-      : 'Informativo — não significa que o jogo deve ou não ser operado. As odds CS já refletem a probabilidade real do mercado.',
+    submensagem: '',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
     fav, btts, over,
     // Índice de Confiança de Entrada
@@ -2330,6 +2328,16 @@ function checkPackball() {
   }
 
   var nivel, cor, icone, corBg, corBorder, desc;
+  // Descrição contextual baseada no perfil real do jogo
+  function descContextual() {
+    if(overVal >= 2.40) return 'Mercado não acredita em muitos gols — cluster tende a ser mais compacto.';
+    if(overVal <= 1.75 && bttsVal >= 2.20) return 'Favorito deve dominar — zebra provavelmente não aparece no placar.';
+    if(bttsVal <= 1.80 && overVal <= 1.85) return 'Ambos marcam com alta probabilidade — volume de gols esperado.';
+    if(favVal >= 2.00 && overVal >= 2.00) return 'Nenhum lado tem vantagem clara — múltiplos caminhos possíveis.';
+    if(overVal >= 2.10 && bttsVal >= 2.10) return 'Jogo de resultado controlado — baixo volume esperado.';
+    return 'Favorito moderado — zebra ainda é ameaça real no placar.';
+  }
+
   if(contextoBloqueio) {
     nivel='📊 INFORMATIVO'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
@@ -2338,22 +2346,22 @@ function checkPackball() {
     var msgCtx = msgContextual();
     nivel= msgCtx || '📊 Perfil dentro do range comum'; cor='var(--grn)'; icone='📊';
     corBg='rgba(0,201,110,.07)'; corBorder='rgba(0,201,110,.3)';
-    desc = 'As odds CS já refletem a probabilidade real do mercado.';
+    desc = descContextual();
   } else if(scoreIdx >= 6) {
     var msgCtx = msgContextual();
     nivel= msgCtx || '📊 Perfil parcialmente dentro do range'; cor='var(--ylw)'; icone='📊';
     corBg='rgba(255,184,0,.06)'; corBorder='rgba(255,184,0,.3)';
-    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
+    desc = descContextual();
   } else if(scoreIdx >= 4) {
     var msgCtx = msgContextual();
     nivel= msgCtx || '📊 Odds fora do range mais frequente'; cor='#ff9800'; icone='📊';
     corBg='rgba(255,152,0,.06)'; corBorder='rgba(255,152,0,.3)';
-    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
+    desc = descContextual();
   } else {
     var msgCtx = msgContextual();
     nivel= msgCtx || '📊 Perfil bem fora do range comum'; cor='var(--txt2)'; icone='📊';
     corBg='rgba(255,77,106,.07)'; corBorder='rgba(255,77,106,.3)';
-    desc = 'Informativo — as odds CS já refletem a probabilidade real do mercado.';
+    desc = descContextual();
   }
 
   el.innerHTML = '<div class="ab" style="border-left-color:'+cor+';background:'+corBg+';padding:12px 14px;border:1px solid '+corBorder+';border-radius:8px;">'+
