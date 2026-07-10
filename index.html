@@ -738,7 +738,16 @@ input:focus,select:focus,textarea:focus{
       <label>Campeonato</label>
       <select id="nj-comp">
         <option value="">Selecionar campeonato</option>
-        <option value="Copa do Mundo 2026" selected>🌍 Copa do Mundo 2026</option>
+        <option value="Copa do Mundo 2026">🌍 Copa do Mundo 2026</option>
+        <option value="Champions League">⭐ Champions League</option>
+        <option value="Premier League">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</option>
+        <option value="Bundesliga">🇩🇪 Bundesliga</option>
+        <option value="La Liga">🇪🇸 La Liga</option>
+        <option value="Serie A">🇮🇹 Serie A</option>
+        <option value="Ligue 1">🇫🇷 Ligue 1</option>
+        <option value="Brasileirao Serie A">🇧🇷 Brasileirão Série A</option>
+        <option value="Brasileirao Serie B">🇧🇷 Brasileirão Série B</option>
+        <option value="Europa League">🟠 Europa League</option>
         <option value="Outros Campeonatos">📌 Outros Campeonatos</option>
       </select>
     </div>
@@ -783,7 +792,7 @@ input:focus,select:focus,textarea:focus{
 <div class="tabs">
   <button class="tab act" onclick="showTab('prelive',this)" id="tab-prelive">⚡ Pré-Live</button>
   <button class="tab" onclick="showTab('perf',this)" id="tab-perf">📈 Performance</button>
-  <button class="tab" onclick="showTab('copa',this)" id="tab-copa" style="color:#ffd700;border-bottom-color:transparent;">🌍 Copa 2026</button>
+  <button class="tab" onclick="showTab('copa',this)" id="tab-copa">🏆 Competições</button>
   <button class="tab" onclick="showTab('hist',this)" id="tab-hist">📅 Histórico</button>
 </div>
 
@@ -857,7 +866,7 @@ input:focus,select:focus,textarea:focus{
             <label>📋 Análise completa — Academia das Apostas</label>
             <button onclick="insertTemplate()" style="background:rgba(0,212,255,.1);border:1px solid var(--acc);border-radius:6px;padding:3px 10px;color:var(--acc);font-size:9px;cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:1px;">📋 TEMPLATE</button>
           </div>
-          <textarea id="an-texto" style="min-height:280px;"
+          <textarea id="an-texto" style="min-height:280px;" oninput="autosaveForm()"
             placeholder="Cole aqui TUDO da Academia das Apostas:
 
 • Análise completa do jogo (texto da preview)
@@ -880,9 +889,9 @@ e garantir que o DNA seja lido corretamente."></textarea>
           <div class="ab-text">O Gênio opera qualquer liga se as odds de mercado tiverem edge real. A liga não importa — o jogo específico importa. Preencha as 3 odds abaixo para ver a avaliação do Gênio.</div>
         </div>
         <div class="g3">
-          <div><label>Odd Favorito</label><input id="pk-fav" type="text" inputmode="decimal" step="0.01" placeholder="1.75" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
-          <div><label>BTTS Sim</label><input id="pk-btts" type="text" inputmode="decimal" step="0.01" placeholder="1.90" oninput="this.value=this.value.replace(',','.');checkPackball()"></div>
-          <div><label>Over 2.5</label><input id="pk-over" type="text" inputmode="decimal" step="0.01" placeholder="1.95" oninput="this.value=this.value.replace(',','.');checkPackball();calcPoisson()"></div>
+          <div><label>Odd Favorito</label><input id="pk-fav" type="text" inputmode="decimal" step="0.01" placeholder="1.75" oninput="this.value=this.value.replace(',','.');checkPackball();autosaveForm()"></div>
+          <div><label>BTTS Sim</label><input id="pk-btts" type="text" inputmode="decimal" step="0.01" placeholder="1.90" oninput="this.value=this.value.replace(',','.');checkPackball();autosaveForm()"></div>
+          <div><label>Over 2.5</label><input id="pk-over" type="text" inputmode="decimal" step="0.01" placeholder="1.95" oninput="this.value=this.value.replace(',','.');checkPackball();calcPoisson();autosaveForm()"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
 
           </div>
@@ -1087,6 +1096,16 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <button class="btn btn-gh btn-sm" onclick="renderHistPanel()">↻ ATUALIZAR</button>
       </div>
     </div>
+
+    <!-- Busca no histórico -->
+    <div style="margin-bottom:12px;position:relative;">
+      <input id="hist-search" type="text" placeholder="🔍 Buscar jogo no histórico..." 
+        oninput="filtrarHist(this.value)"
+        style="width:100%;box-sizing:border-box;background:#0a1520;border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--txt);font-family:Space Mono,monospace;font-size:10px;outline:none;">
+    </div>
+
+    <!-- Badge de pendentes -->
+    <div id="hist-pendentes" style="margin-bottom:12px;display:none;"></div>
 
     <div id="hist-overview" class="g4" style="margin-bottom:14px;"></div>
     <div id="hist-months"></div>
@@ -1304,7 +1323,7 @@ function showTab(t, el) {
     if(p) p.classList.add('act');
     if(el) el.classList.add('act');
     if(t === 'perf') renderPerf();
-    if(t === 'hist') renderHistPanel();
+    if(t === 'hist') { renderHistPanel(); renderPendentes(); updateHistBadge(); }
     if(t === 'copa') renderCopa();
   } catch(e) {}
 }
@@ -3725,6 +3744,8 @@ async function analisarJogo() {
   var btnAn = document.getElementById('btn-analisar');
   if(btnAn) { btnAn.style.opacity='0.6'; btnAn.style.animation='none'; btnAn.innerHTML='⏳ ANALISANDO...'; }
   if(!navigator.onLine) { notify('SEM INTERNET', '', 'var(--red)'); return; }
+  // Limpar autosave ao iniciar análise — evita restaurar dado desatualizado
+  try { localStorage.removeItem('cs_autosave'); } catch(e) {}
 
   const textoRaw = document.getElementById('an-texto')?.value?.trim() || '';
   // Limitar a 3000 chars para evitar timeout na API
@@ -6393,7 +6414,7 @@ function renderHistPanel() {
               const valColor = val>0?'var(--grn)':val<0?'var(--red)':'var(--txt3)';
               const score = r.sc ? ' • Score '+r.sc : '';
               const comp = r.c ? r.c+' • ' : '';
-              return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:10px 11px;border-bottom:1px solid rgba(255,255,255,.035);">'+
+              return '<div data-jogo="'+(r.j||'')+'" data-comp="'+(r.c||'')+'" data-sc="'+(r.sc||'')+'" style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:10px 11px;border-bottom:1px solid rgba(255,255,255,.035);">'+
                 '<div style="min-width:0;">'+
                   '<div style="font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(r.j||'Jogo')+'</div>'+ 
                   '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-top:2px;">'+comp+'stake R$ '+(r.s||0)+score+'</div>'+ 
@@ -7152,6 +7173,97 @@ function limparHist() {
   if(window.confirm ? window.confirm('Limpar histórico?') : true) { S.hist=[]; save(); renderPerf(); updHdr(); notify('LIMPO','','var(--ylw)'); }
 }
 
+// ── BUSCA NO HISTÓRICO ──────────────────────────────────────
+function filtrarHist(termo) {
+  var meses = document.querySelectorAll('#hist-months > div');
+  if(!termo || termo.trim() === '') {
+    meses.forEach(function(m){ m.style.display=''; });
+    return;
+  }
+  var t = termo.toLowerCase().trim();
+  meses.forEach(function(mes) {
+    var jogos = mes.querySelectorAll('[data-jogo]');
+    var alguemVisible = false;
+    jogos.forEach(function(j) {
+      var nome = (j.getAttribute('data-jogo')||'').toLowerCase();
+      var comp = (j.getAttribute('data-comp')||'').toLowerCase();
+      var sc = (j.getAttribute('data-sc')||'').toLowerCase();
+      if(nome.includes(t) || comp.includes(t) || sc.includes(t)) {
+        j.style.display=''; alguemVisible=true;
+      } else {
+        j.style.display='none';
+      }
+    });
+    mes.style.display = alguemVisible ? '' : 'none';
+  });
+}
+
+// ── BADGE DE JOGOS PENDENTES ────────────────────────────────
+function renderPendentes() {
+  var el = document.getElementById('hist-pendentes');
+  if(!el) return;
+  var pendentes = (S.hist||[]).filter(function(j){ return !j.v || j.v === 0; });
+  if(!pendentes.length) { el.style.display='none'; return; }
+  el.style.display='block';
+  el.innerHTML = '<div style="background:rgba(255,184,0,.08);border:1px solid rgba(255,184,0,.3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">'
+    + '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--ylw);">⏳ '+pendentes.length+' jogo(s) pendente(s) de resultado</div>'
+    + '<div style="display:flex;gap:8px;">'
+    + pendentes.slice(0,3).map(function(j){
+        return '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt2);background:#0a1520;padding:2px 6px;border-radius:4px;">'+(j.j||'').split(' ').slice(0,2).join(' ')+'</span>';
+      }).join('')
+    + (pendentes.length>3 ? '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">+'+( pendentes.length-3)+'</span>' : '')
+    + '</div></div>';
+}
+
+// ── BADGE NO TAB DE HISTÓRICO ───────────────────────────────
+function updateHistBadge() {
+  var tab = document.getElementById('tab-hist');
+  if(!tab) return;
+  var pendentes = (S.hist||[]).filter(function(j){ return !j.v || j.v === 0; });
+  if(pendentes.length > 0) {
+    tab.innerHTML = '📅 Histórico <span style="background:var(--ylw);color:#000;font-size:8px;font-weight:900;padding:1px 5px;border-radius:10px;margin-left:4px;">'+pendentes.length+'</span>';
+  } else {
+    tab.innerHTML = '📅 Histórico';
+  }
+}
+
+// ── AUTOSAVE DO FORMULÁRIO ──────────────────────────────────
+var _autosaveTimer = null;
+function autosaveForm() {
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(function(){
+    try {
+      var formData = {
+        texto: (document.getElementById('an-texto')||{}).value || '',
+        fav:   (document.getElementById('pk-fav')||{}).value || '',
+        over:  (document.getElementById('pk-over')||{}).value || '',
+        btts:  (document.getElementById('pk-btts')||{}).value || '',
+        cs:    (document.getElementById('cs-input')||document.getElementById('cs-odds')||{}).value || '',
+      };
+      localStorage.setItem('cs_autosave', JSON.stringify(formData));
+    } catch(e) {}
+  }, 1500);
+}
+
+function restoreAutosave() {
+  try {
+    var saved = localStorage.getItem('cs_autosave');
+    if(!saved) return;
+    var d = JSON.parse(saved);
+    if(d.texto && d.texto.length > 20) {
+      if(document.getElementById('an-texto')) document.getElementById('an-texto').value = d.texto;
+      if(d.fav && document.getElementById('pk-fav')) document.getElementById('pk-fav').value = d.fav;
+      if(d.over && document.getElementById('pk-over')) document.getElementById('pk-over').value = d.over;
+      if(d.btts && document.getElementById('pk-btts')) document.getElementById('pk-btts').value = d.btts;
+      if(d.cs) {
+        var csEl = document.getElementById('cs-input') || document.getElementById('cs-odds');
+        if(csEl) csEl.value = d.cs;
+      }
+      notify('↩️ RASCUNHO RESTAURADO','Seus dados foram recuperados','var(--acc)');
+    }
+  } catch(e) {}
+}
+
 // ===== INIT =====
 // ===== SIDEBAR EVENT DELEGATION =====
 document.addEventListener('click', function(e) {
@@ -7283,6 +7395,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Render sidebar — lado direito fica com tela do cérebro
     renderSidebar();
+    // Restaurar rascunho do formulário se existir
+    setTimeout(restoreAutosave, 500);
+    // Badge de pendentes no tab histórico
+    updateHistBadge();
 
     // Garantir que o lado direito mostra o cérebro ao abrir
     // Usar setTimeout para rodar DEPOIS de todos os outros listeners
