@@ -8127,15 +8127,57 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
     try{
       if(!textoOriginal || !cluster) return textoOriginal;
 
-      const built = buildNarrativeFromCluster(cluster);
+      // Scores ativos no cluster (não expansão)
+      var scoresAtivos = cluster
+        .filter(function(s){ return s.tipo !== 'expansao' && s.odd > 0 && s.score && !s.score.startsWith('any_other'); })
+        .map(function(s){ return s.score; });
 
-      const planoAText = built.planoA.join(', ');
-      const planoBText = built.planB.text;
+      if(!scoresAtivos.length) return textoOriginal;
 
-      return textoOriginal.replace(
-        /Minha seleção inclui o Plano A[\s\S]*?junto com o Plano B[\s\S]*?\)\./m,
-        `Minha seleção inclui o Plano A\n(placares do favorito como ${planoAText})\njunto com o Plano B\n(proteção via ${planoBText}).`
+      var texto = textoOriginal;
+
+      // 1. Atualizar linha "minha fórmula de placares será: X Y Z"
+      texto = texto.replace(
+        /(minha fórmula de placares para este jogo será:\s*)([\d\-\s]+(?:any_other_\w+)?)/gi,
+        function(match, prefix) {
+          var todos = scoresAtivos.concat(
+            cluster.filter(function(s){ return s.score && s.score.startsWith('any_other') && s.tipo !== 'expansao'; })
+                   .map(function(s){ return s.score; })
+          );
+          return prefix + todos.join(' ');
+        }
       );
+
+      // 2. Atualizar "Minha seleção inclui o Plano A ... junto com o Plano B ..."
+      var planoA = cluster.filter(function(s){
+        return s.tipo === 'destino' || s.tipo === 'caminho';
+      }).map(function(s){ return s.score; });
+      var planoB = cluster.filter(function(s){ return s.tipo === 'planb'; }).map(function(s){ return s.score; });
+      var ancora = cluster.find(function(s){ return s.tipo === 'ancora' || s.label === 'PLACAR PROJETADO'; });
+
+      if(planoA.length && planoB.length) {
+        texto = texto.replace(
+          /Minha seleção inclui[\s\S]*?(?=\n-|\n•|Risco de gol|$)/m,
+          function() {
+            var parteA = planoA.join(', ');
+            var parteB = planoB.join(', ');
+            var ancoraStr = ancora ? ancora.score : (scoresAtivos[0] || '');
+            return 'Minha seleção inclui o Plano A (placares do favorito como ' + parteA + ') junto com o Plano B (proteção via ' + parteB + '). O ' + ancoraStr + ' é o placar âncora — maior probabilidade segundo o mercado.\n';
+          }
+        );
+      }
+
+      // 3. Detectar scores mencionados no texto que NÃO estão no cluster
+      // e alertar no console (não remove automaticamente para não quebrar texto)
+      var todosScoresTexto = texto.match(/\b\d-\d\b/g) || [];
+      var scoresForaDoCluster = todosScoresTexto.filter(function(sc){
+        return !scoresAtivos.includes(sc) && sc !== '0-0'; // 0-0 pode aparecer em contexto
+      });
+      if(scoresForaDoCluster.length) {
+        console.log('[SYNC NARRATIVA] Scores no texto fora do cluster:', [...new Set(scoresForaDoCluster)]);
+      }
+
+      return texto;
 
     }catch(e){
       console.warn('syncNarrativaClusterFinal', e);
