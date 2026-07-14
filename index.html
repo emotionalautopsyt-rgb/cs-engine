@@ -1131,8 +1131,66 @@ const S = {
 };
 function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
 function saveGames() {
-  // Salva local imediatamente (rápido)
-  localStorage.setItem('cs_v6g', JSON.stringify(S.games));
+  try {
+    // Limitar tamanho antes de salvar — remover campos pesados de jogos antigos
+    // Manter apenas os últimos 30 jogos com texto completo, anteriores só com dados essenciais
+    var gamesParaSalvar = (S.games||[]).map(function(g, idx, arr) {
+      var isRecente = idx >= arr.length - 30;
+      if(isRecente) {
+        // Jogo recente: salvar tudo mas truncar texto longo
+        var copia = Object.assign({}, g);
+        if(copia.savedAnTexto && copia.savedAnTexto.length > 2000) {
+          copia.savedAnTexto = copia.savedAnTexto.substring(0, 2000);
+        }
+        // Não salvar o HTML renderizado — é regenerado ao reabrir
+        delete copia.savedResultadoHtml;
+        return copia;
+      } else {
+        // Jogo antigo: só dados essenciais
+        return {
+          ts: g.ts, nome: g.nome, comp: g.comp, stake: g.stake,
+          horario: g.horario, data: g.data, resultado: g.resultado,
+          placarFinal: g.placarFinal, lucro: g.lucro,
+          oddsMercado: g.oddsMercado, placarNoCluster: g.placarNoCluster,
+          cluster: g.cluster ? g.cluster.map(function(s){
+            return {score:s.score, odd:s.odd, tipo:s.tipo, stake:s.stake, lucro:s.lucro};
+          }) : []
+        };
+      }
+    });
+
+    var json = JSON.stringify(gamesParaSalvar);
+
+    // Se ainda for grande demais, remover mais campos
+    if(json.length > 4000000) {
+      gamesParaSalvar = gamesParaSalvar.map(function(g) {
+        delete g.savedAnTexto;
+        delete g.savedCsPaste;
+        delete g.savedResultadoHtml;
+        return g;
+      });
+      json = JSON.stringify(gamesParaSalvar);
+    }
+
+    localStorage.setItem('cs_v6g', json);
+  } catch(e) {
+    // Se ainda falhar, limpar o cache e tentar de novo
+    console.warn('[saveGames] Quota exceeded — limpando cache antigo');
+    try {
+      localStorage.removeItem('cs_v6g');
+      var minimal = JSON.stringify((S.games||[]).map(function(g){
+        return {
+          ts:g.ts, nome:g.nome, comp:g.comp, stake:g.stake,
+          horario:g.horario, data:g.data, resultado:g.resultado,
+          placarFinal:g.placarFinal, lucro:g.lucro,
+          oddsMercado:g.oddsMercado, placarNoCluster:g.placarNoCluster
+        };
+      }));
+      localStorage.setItem('cs_v6g', minimal);
+    } catch(e2) {
+      console.warn('[saveGames] Falha crítica ao salvar:', e2.message);
+    }
+  }
   // Salva no servidor em background (persistente entre dispositivos)
   saveGamesServer().catch(function(e){ console.warn('Servidor indisponível:', e.message); });
 }
