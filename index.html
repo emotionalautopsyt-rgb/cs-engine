@@ -5432,11 +5432,14 @@ function calcStakes(cluster, stake, analysisText) {
         var ehVolumeAlto = bttsAtual <= 1.70 &&
           (s.score === '3-1' || s.score === '1-3' ||
            s.score === '3-2' || s.score === '2-3');
-        // EQUIL_OFENSIVO com btts < 1.90 + over > 1.80: 3-1 tem valor real
-        // over3.5=30%+ significa 3 gols é cenário comum — 3-1 não deve ser removido
+        // EQUIL_OFENSIVO com btts < 1.90 + over >= 1.80: 3-1/1-3 têm valor real
         var eh31EquilOf = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
           (s.score === '3-1' || s.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
-        if(liq < 8000 && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf) {
+        // CONSERVADOR: 0-1 é Plano B natural quando btts < 2.10
+        // Zebra tem >48% de chance de marcar — não remover por prob limítrofe
+        var eh01Conserv = perfilAtual === 'CONSERVADOR' &&
+          (s.score === '0-1' || s.score === '1-0') && bttsAtual < 2.10;
+        if(liq < 8000 && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv) {
           // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2 ou ABERTO_BTTS 3-1/2-2)
           var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
           var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
@@ -5491,7 +5494,9 @@ function calcStakes(cluster, stake, analysisText) {
         (candidato.score === '3-1' || candidato.score === '2-2'));
       var eh31EquilOfCap = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
         (candidato.score === '3-1' || candidato.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
-      if(ehAncora || ehEssencial || eh31EquilOfCap) break;
+      var eh01ConservCap = perfilAtual === 'CONSERVADOR' &&
+        (candidato.score === '0-1' || candidato.score === '1-0') && bttsAtual < 2.10;
+      if(ehAncora || ehEssencial || eh31EquilOfCap || eh01ConservCap) break;
 
       candidato.tipo = 'expansao';
       candidato.stake = 0; candidato.lucro = 0;
@@ -5550,7 +5555,9 @@ function calcStakes(cluster, stake, analysisText) {
         (candidato2.score === '3-1' || candidato2.score === '2-2'));
       var eh31EquilOfMin = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
         (candidato2.score === '3-1' || candidato2.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
-      if(ehAncora2 || ehEssencial2 || eh31EquilOfMin) break;
+      var eh01ConservMin = perfilAtual === 'CONSERVADOR' &&
+        (candidato2.score === '0-1' || candidato2.score === '1-0') && bttsAtual < 2.10;
+      if(ehAncora2 || ehEssencial2 || eh31EquilOfMin || eh01ConservMin) break;
 
       candidato2.tipo = 'expansao';
       candidato2.stake = 0; candidato2.lucro = 0;
