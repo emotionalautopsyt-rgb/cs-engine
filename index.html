@@ -5435,7 +5435,7 @@ function calcStakes(cluster, stake, analysisText) {
         // EQUIL_OFENSIVO com btts < 1.90 + over > 1.80: 3-1 tem valor real
         // over3.5=30%+ significa 3 gols é cenário comum — 3-1 não deve ser removido
         var eh31EquilOf = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
-          s.score === '3-1' && bttsAtual < 1.90 && overAtual > 1.80;
+          (s.score === '3-1' || s.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
         if(liq < 8000 && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf) {
           // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2 ou ABERTO_BTTS 3-1/2-2)
           var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
@@ -5490,7 +5490,7 @@ function calcStakes(cluster, stake, analysisText) {
         (perfilAtual === 'ABERTO_BTTS' &&
         (candidato.score === '3-1' || candidato.score === '2-2'));
       var eh31EquilOfCap = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
-        candidato.score === '3-1' && bttsAtual < 1.90 && overAtual > 1.80;
+        (candidato.score === '3-1' || candidato.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
       if(ehAncora || ehEssencial || eh31EquilOfCap) break;
 
       candidato.tipo = 'expansao';
@@ -5549,7 +5549,7 @@ function calcStakes(cluster, stake, analysisText) {
         (perfilAtual === 'ABERTO_BTTS' &&
         (candidato2.score === '3-1' || candidato2.score === '2-2'));
       var eh31EquilOfMin = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
-        candidato2.score === '3-1' && bttsAtual < 1.90 && overAtual > 1.80;
+        (candidato2.score === '3-1' || candidato2.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
       if(ehAncora2 || ehEssencial2 || eh31EquilOfMin) break;
 
       candidato2.tipo = 'expansao';
