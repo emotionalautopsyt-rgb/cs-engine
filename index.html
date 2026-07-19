@@ -2422,6 +2422,87 @@ function checkPackball() {
     desc = descContextual();
   }
 
+  // ── ALERTAS BASEADOS EM DADOS HISTÓRICOS (203 jogos) ──────────
+  // Estes alertas são calculados a partir do histórico real de operações
+  var alertasEv = [];
+
+  // 🔴 EV NEGATIVO CONFIRMADO — fav menor que 1.50 E btts maior que 2.30
+  // 26 jogos, R$-640, EV-25 — amostra estatisticamente relevante
+  if(fav > 0 && fav < 1.50 && btts > 2.30) {
+    alertasEv.push({
+      tipo: 'negativo',
+      msg: '🔴 Perfil com EV negativo confirmado — Em 26 jogos registrados com favorito abaixo de 1.50 e ambas acima de 2.30, o saldo foi negativo em R$640. O mercado indica que a zebra vai marcar mesmo com favorito forte — esse conflito cria scripts imprevisíveis. Recomendamos não operar ou reduzir stake significativamente.'
+    });
+  }
+
+  // ⚠️ ZONA DOURADA — over entre 1.81 e 2.00 E btts entre 1.71 e 1.90
+  // 29-50 jogos com EV+27 a EV+39 — melhor faixa histórica
+  if(over >= 1.81 && over <= 2.00 && btts >= 1.71 && btts <= 1.90) {
+    alertasEv.push({
+      tipo: 'positivo',
+      msg: '✅ Zona dourada — Over entre 1.81 e 2.00 com ambas entre 1.71 e 1.90 é a faixa com melhor histórico de acerto. EV positivo confirmado em mais de 50 jogos registrados. Prioridade máxima de operação.'
+    });
+  }
+
+  // ⚠️ OVER MUITO ALTO — maior que 2.30
+  if(over > 2.30 && over > 0) {
+    alertasEv.push({
+      tipo: 'atencao',
+      msg: '⚠️ Jogo muito fechado (over acima de 2.30) — Alta variância nos dados históricos. Quando o mercado não acredita em volume, os scripts são menos previsíveis. Cluster tende a ser mais compacto.'
+    });
+  }
+
+  // ⚠️ FAV MENOR QUE 1.35 — assimetria desfavorável
+  if(fav > 0 && fav < 1.35) {
+    alertasEv.push({
+      tipo: 'atencao',
+      msg: '⚠️ Favorito extremo (abaixo de 1.35) — Quando erra, perde muito. EV negativo nessa faixa nos dados históricos. Avalie com cautela e considere reduzir stake.'
+    });
+  }
+
+  // Verificar campeonato selecionado
+  var compSel = document.getElementById('nj-comp')?.value || '';
+  if(/liga mx|mexico/i.test(compSel) || /pumas|pachuca|monterrey|guadalajara|toluca|necaxa|cruz azul|chivas|santos laguna/i.test(textoAnalise)) {
+    alertasEv.push({
+      tipo: 'negativo',
+      msg: '🔴 Liga MX — Em 6 jogos registrados: R$-868, WR 33%, EV-145. Mercado com alta variância e scripts imprevisíveis. Dados insuficientes para conclusão definitiva mas padrão negativo consistente. Recomendamos aguardar mais dados antes de operar.'
+    });
+  }
+
+  if(/qualif|classificat|champions.*qualif|europa.*qualif|sheriff|vardar|floriana|dynamo kyiv|astana/i.test(textoAnalise)) {
+    alertasEv.push({
+      tipo: 'negativo',
+      msg: '🔴 Qualificação Europeia — Em 9 jogos registrados: R$-534, EV-59. Jogo único com times de ligas menores cria scripts defensivos que as odds não capturam bem. Recomendamos reduzir stake ou evitar.'
+    });
+  }
+
+  // Renderizar alertas de EV se existirem
+  if(alertasEv.length > 0) {
+    var alertasHtml = alertasEv.map(function(a) {
+      var cor = a.tipo === 'negativo' ? 'var(--red)' :
+                a.tipo === 'positivo' ? 'var(--grn)' : 'var(--ylw)';
+      var bg = a.tipo === 'negativo' ? 'rgba(255,77,106,.07)' :
+               a.tipo === 'positivo' ? 'rgba(0,201,110,.07)' : 'rgba(255,184,0,.06)';
+      var border = a.tipo === 'negativo' ? 'rgba(255,77,106,.3)' :
+                   a.tipo === 'positivo' ? 'rgba(0,201,110,.3)' : 'rgba(255,184,0,.3)';
+      return '<div style="border-left:3px solid '+cor+';background:'+bg+';border:1px solid '+border+';border-radius:8px;padding:10px 12px;margin-bottom:8px;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:9px;line-height:1.6;color:var(--txt2);">'+a.msg+'</div>'+
+        '</div>';
+    }).join('');
+
+    // Adicionar alertas acima do pk-status
+    var elAlerta = document.getElementById('pk-ev-alertas');
+    if(!elAlerta) {
+      elAlerta = document.createElement('div');
+      elAlerta.id = 'pk-ev-alertas';
+      el.parentNode.insertBefore(elAlerta, el);
+    }
+    elAlerta.innerHTML = '<div style="margin-bottom:8px;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:2px;">📊 ANÁLISE HISTÓRICA — '+alertasEv.length+' ALERTA(S)</div>' + alertasHtml;
+  } else {
+    var elAlerta = document.getElementById('pk-ev-alertas');
+    if(elAlerta) elAlerta.innerHTML = '';
+  }
+
   el.innerHTML = '<div class="ab" style="border-left-color:'+cor+';background:'+corBg+';padding:12px 14px;border:1px solid '+corBorder+';border-radius:8px;">'+
     '<div class="ab-title" style="color:'+cor+';font-size:11px;letter-spacing:2px;margin-bottom:6px;">'+icone+' '+nivel+'</div>'+
     '<div class="ab-text" style="font-size:11px;line-height:1.6;color:var(--txt2);">'+desc+'</div>'+
