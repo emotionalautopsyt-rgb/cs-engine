@@ -5783,7 +5783,7 @@ function renderCluster(cluster, stake) {
     destino: {bg:'rgba(0,201,110,.10)', border:'var(--grn)', label:'DESTINO', badge:'bdg-g', bar:'var(--grn)'},
     planb:   {bg:'rgba(255,214,0,.10)', border:'var(--ylw)', label:'PLANO B', badge:'bdg-y', bar:'var(--ylw)'},
     expansao:{bg:'rgba(255,122,53,.10)', border:'var(--org)', label:'EXPANSÃO', badge:'bdg-o', bar:'var(--org)'},
-    expansao_especifica:{bg:'rgba(168,85,247,.07)', border:'rgba(168,85,247,.5)', label:'👁 ATENÇÃO AO VIVO', badge:'bdg-o', bar:'rgba(168,85,247,.5)'},
+    expansao_especifica:{bg:'rgba(0,210,150,.06)', border:'rgba(0,210,150,.45)', label:'👁 ATENÇÃO AO VIVO', badge:'bdg-o', bar:'rgba(0,210,150,.45)'},
   };
 
   // BIG SCORE CARDS — prominent buttons
@@ -5792,14 +5792,14 @@ function renderCluster(cluster, stake) {
     // Card especial para expansão específica
     if(s._expansaoEspecifica) {
       var oddPG = s.odd > 0 ? (s.odd * 0.5).toFixed(1) : '—';
-      return '<div style="background:rgba(168,85,247,.06);border:1px dashed rgba(168,85,247,.4);border-radius:10px;padding:10px 14px;position:relative;opacity:.9;">'+
-        '<div style="font-family:Space Mono,monospace;font-size:7px;color:rgba(168,85,247,.8);letter-spacing:2px;margin-bottom:5px;">👁 ATENÇÃO AO VIVO</div>'+
-        '<div style="font-size:22px;font-weight:900;color:rgba(168,85,247,.95);font-family:Space Mono,monospace;margin-bottom:3px;">'+s.score+'</div>'+
+      return '<div style="background:rgba(0,210,150,.05);border:1px dashed rgba(0,210,150,.4);border-radius:10px;padding:10px 14px;position:relative;opacity:.9;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:rgba(0,210,150,.8);letter-spacing:2px;margin-bottom:5px;">👁 ATENÇÃO AO VIVO</div>'+
+        '<div style="font-size:22px;font-weight:900;color:rgba(0,210,150,.95);font-family:Space Mono,monospace;margin-bottom:3px;">'+s.score+'</div>'+
         '<div style="font-size:8px;color:var(--txt3);font-family:Space Mono,monospace;line-height:1.6;">'+
           '@'+s.odd+' · '+s._prob+'% implícita<br>'+
           'Liq R$'+(s._liq>=1000?(s._liq/1000).toFixed(1)+'k':Math.round(s._liq))+'  ·  →@'+oddPG+' pós-gol'+
         '</div>'+
-        '<div style="font-size:7px;color:rgba(168,85,247,.6);font-family:Space Mono,monospace;margin-top:5px;border-top:1px solid rgba(168,85,247,.15);padding-top:5px;">Não entra no Dutch — monitorar ao vivo</div>'+
+        '<div style="font-size:7px;color:rgba(0,210,150,.55);font-family:Space Mono,monospace;margin-top:5px;border-top:1px solid rgba(0,210,150,.15);padding-top:5px;">Não entra no Dutch — monitorar ao vivo</div>'+
       '</div>';
     }
 
@@ -6981,8 +6981,19 @@ function renderPerf() {
     if(!h.length){
       campsEl.innerHTML='<div style="text-align:center;padding:14px;color:var(--txt3);font-size:10px;">Nenhuma competição registrada</div>';
     } else {
+      // Normalizar nomes de competição — evita duplicatas por acento/espaço
+      function normComp(c) {
+        if(!c || c.trim() === '' || c === 'Sem competição' || c === 'Sem competicao') return 'Outros Campeonatos';
+        var n = c.trim();
+        // Série A / B — unificar com e sem acento
+        n = n.replace(/Brasileir[aã]o\s+S[eé]rie\s+A/gi, 'Brasileirão Série A');
+        n = n.replace(/Brasileir[aã]o\s+S[eé]rie\s+B/gi, 'Brasileirão Série B');
+        n = n.replace(/S[eé]rie\s+A\b/gi, 'Brasileirão Série A');
+        n = n.replace(/S[eé]rie\s+B\b/gi, 'Brasileirão Série B');
+        return n;
+      }
       var byCamp={};
-      h.forEach(function(r){ var c=(r.c||'Sem competição').trim(); if(!byCamp[c]) byCamp[c]=[]; byCamp[c].push(r); });
+      h.forEach(function(r){ var c=normComp(r.c||''); if(!byCamp[c]) byCamp[c]=[]; byCamp[c].push(r); });
       var campArr=Object.keys(byCamp).map(function(c){
         var a=byCamp[c],s=calcSaldo(a),r=calcROI(a),w=calcWR(a);
         return{c:c,arr:a,s:s,r:r,w:w};
