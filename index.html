@@ -1482,7 +1482,7 @@ function renderSidebar() {
     sbDate.textContent = dn[now.getDay()]+' '+String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0');
   }
 
-  const allGames = (S.games || []).filter(function(g){ return g.status !== 'enc'; });
+  const allGames = (S.games || []).filter(function(g){ return g.status !== 'enc' && g.name && g.name.trim() !== '' && g.name !== 'undefined'; });
 
   // Separar por data — comparação normalizada
   const liveGames  = allGames.filter(function(g){ return g.data === today && g.status === 'live'; });
@@ -1581,7 +1581,7 @@ function sbGameCard(g) {
 
   // Cluster
   var cls = g.cluster && g.cluster.length
-    ? '<div class="sb-cluster">'+g.cluster.slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
+    ? '<div class="sb-cluster">'+g.cluster.filter(function(s){ return s.score && s.score !== 'undefined' && s.tipo !== 'expansao_especifica'; }).slice(0,4).map(function(s){return s.score;}).join(' · ')+'</div>'
     : '';
 
   var compLine = g.comp
@@ -5305,8 +5305,12 @@ function calcStakes(cluster, stake, analysisText) {
       // E se over não está extremamente alto (jogo under) — over > 2.80 = jogo under, goleada não faz sentido
       const overAtualGol = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
       const jogoUnder = overAtualGol > 2.80;
-      if(probAnyOther < 8.0 || jogoUnder) {
-        console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+(jogoUnder?' (jogo under)':''));
+      // Goleada só aparece como EXPANSÃO quando tem valor real:
+      // → prob >= 8% E (over <= 1.85 OU prob >= 12%)
+      // Evita card laranja em todo jogo sem volume real
+      const overJustificaGoleada = overAtualGol <= 1.90 || probAnyOther >= 12.0;
+      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada) {
+        console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+(jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto sem prob suficiente)':'')));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
@@ -5690,7 +5694,57 @@ function renderCluster(cluster, stake) {
 
   card.style.display = 'block';
 
-  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0));
+  // ── EXPANSÃO ESPECÍFICA — scores fora do cluster com valor ao vivo ──
+  // Regras: prob entre 5-12%, liquidez maior que R$800, coerente com script
+  // Aparecem como cards roxos "ATENÇÃO AO VIVO" — não entram no Dutch
+  if(S.csOdds && S.csOddsLiq) {
+    var scoresNoCluster = cluster.map(function(s){ return s.score; });
+    
+    // Detectar lado do favorito pela âncora ou primeiro destino
+    var favSideExp = 'home';
+    var primeiroDestino = cluster.find(function(s){ return s.tipo==='destino'||s.tipo==='caminho'; });
+    if(primeiroDestino && primeiroDestino.score) {
+      var pts = primeiroDestino.score.split('-');
+      if(pts.length===2 && parseInt(pts[1]) > parseInt(pts[0])) favSideExp = 'away';
+    }
+
+    // Candidatos: scores reais (não any_other), fora do cluster, prob 5-12%, liq >R$800
+    var candidatos = Object.keys(S.csOdds).filter(function(sc) {
+      if(scoresNoCluster.includes(sc)) return false;
+      if(sc.startsWith('any_other')) return false;
+      if(cluster.find(function(s){ return s._expansaoEspecifica && s.score===sc; })) return false;
+      var odd = S.csOdds[sc];
+      var liq = S.csOddsLiq[sc] || 0;
+      var prob = odd > 0 ? 100/odd : 0;
+      return prob >= 5.0 && prob <= 12.0 && liq >= 800;
+    }).filter(function(sc) {
+      // Só scores coerentes com script do favorito
+      var pts = sc.split('-');
+      if(pts.length !== 2) return false;
+      var h = parseInt(pts[0]), a = parseInt(pts[1]);
+      if(favSideExp === 'home') return h >= a; // favorito casa vence ou empata
+      return a >= h; // favorito visitante vence ou empata
+    }).sort(function(a,b){
+      return (100/S.csOdds[b]) - (100/S.csOdds[a]); // maior prob primeiro
+    }).slice(0, 2); // máximo 2 cards
+
+    // Adicionar ao cluster como expansao_especifica se não existirem
+    candidatos.forEach(function(sc) {
+      if(!cluster.find(function(s){ return s.score===sc; })) {
+        cluster.push({
+          score: sc,
+          odd: S.csOdds[sc],
+          tipo: 'expansao_especifica',
+          stake: 0, lucro: 0, oddPG: 0,
+          _expansaoEspecifica: true,
+          _prob: (100/S.csOdds[sc]).toFixed(1),
+          _liq: S.csOddsLiq[sc] || 0
+        });
+      }
+    });
+  }
+
+  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && s.tipo !== 'expansao_especifica'));
   const mxL = Math.max(...cluster.map(s=>s.lucro||0));
   const ts = cluster.reduce((a,s)=>a+(s.stake||0),0);
   const worstCase = -stake;
@@ -5729,10 +5783,26 @@ function renderCluster(cluster, stake) {
     destino: {bg:'rgba(0,201,110,.10)', border:'var(--grn)', label:'DESTINO', badge:'bdg-g', bar:'var(--grn)'},
     planb:   {bg:'rgba(255,214,0,.10)', border:'var(--ylw)', label:'PLANO B', badge:'bdg-y', bar:'var(--ylw)'},
     expansao:{bg:'rgba(255,122,53,.10)', border:'var(--org)', label:'EXPANSÃO', badge:'bdg-o', bar:'var(--org)'},
+    expansao_especifica:{bg:'rgba(168,85,247,.07)', border:'rgba(168,85,247,.5)', label:'👁 ATENÇÃO AO VIVO', badge:'bdg-o', bar:'rgba(168,85,247,.5)'},
   };
 
   // BIG SCORE CARDS — prominent buttons
   scoresEl.innerHTML = cluster.map((s,idx) => {
+
+    // Card especial para expansão específica
+    if(s._expansaoEspecifica) {
+      var oddPG = s.odd > 0 ? (s.odd * 0.5).toFixed(1) : '—';
+      return '<div style="background:rgba(168,85,247,.06);border:1px dashed rgba(168,85,247,.4);border-radius:10px;padding:10px 14px;position:relative;opacity:.9;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:rgba(168,85,247,.8);letter-spacing:2px;margin-bottom:5px;">👁 ATENÇÃO AO VIVO</div>'+
+        '<div style="font-size:22px;font-weight:900;color:rgba(168,85,247,.95);font-family:Space Mono,monospace;margin-bottom:3px;">'+s.score+'</div>'+
+        '<div style="font-size:8px;color:var(--txt3);font-family:Space Mono,monospace;line-height:1.6;">'+
+          '@'+s.odd+' · '+s._prob+'% implícita<br>'+
+          'Liq R$'+(s._liq>=1000?(s._liq/1000).toFixed(1)+'k':Math.round(s._liq))+'  ·  →@'+oddPG+' pós-gol'+
+        '</div>'+
+        '<div style="font-size:7px;color:rgba(168,85,247,.6);font-family:Space Mono,monospace;margin-top:5px;border-top:1px solid rgba(168,85,247,.15);padding-top:5px;">Não entra no Dutch — monitorar ao vivo</div>'+
+      '</div>';
+    }
+
     const col = colors[s.tipo] || colors.destino;
 
     // ⭐ Anchor = score from JSON "ancora" field
@@ -6042,10 +6112,9 @@ function detectGame(text) {
 if(!S.games) S.games = [];
 
 function addGameToBar(game) {
-  // Check if already exists
-  const exists = S.games.find(g => g.name === game.name);
+  if(!game || !game.name || game.name.trim() === '') return;
+  const exists = S.games.find(g => g.id === game.id || (g.name && g.name === game.name));
   if(exists) {
-    // Switch to it
     S.currentGame = exists;
     renderSidebar();
     return;
