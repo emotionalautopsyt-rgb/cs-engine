@@ -5548,13 +5548,6 @@ function calcStakes(cluster, stake, analysisText) {
       var scTemAmbos = scParts.length===2 && parseInt(scParts[0])>0 && parseInt(scParts[1])>0;
       var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15;
 
-      // ── AJUSTE: btts forte reduz threshold para scores com ambos ───
-      // btts < 1.85 = mercado acredita que ambos vão marcar (>54%)
-      // → 2-1, 2-2, 3-1, 1-1 têm valor real → threshold menor
-      if(scTemAmbos && bttsAtual < 1.85 && probMinDin > 5.0) {
-        probMinDin = 5.0;
-      }
-
       if(prob < probMinDin || !bttsPermiteAmbos) {
         // Proteções essenciais que nunca saem independente do threshold
         var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
