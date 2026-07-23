@@ -2426,53 +2426,74 @@ function checkPackball() {
   // Estes alertas são calculados a partir do histórico real de operações
   var alertasEv = [];
 
-  // 🔴 EV NEGATIVO CONFIRMADO — fav menor que 1.50 E btts maior que 2.30
-  // 26 jogos, R$-640, EV-25 — amostra estatisticamente relevante
+  // ════════════════════════════════════════════════════
+  // ALERTAS BASEADOS EM 230+ JOGOS REAIS (jul/2026)
+  // ════════════════════════════════════════════════════
+
+  // ✅ ZONA DOURADA — melhor combinação histórica
+  if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95 && fav >= 1.66 && fav <= 1.80) {
+    alertasEv.push({ tipo:'positivo',
+      msg:'✅ Zona dourada premium — fav 1.66-1.80 + over 1.75-2.10 + ambas 1.70-1.95 — EV+111 em 9 jogos com 78% WR. Melhor combinação histórica do método. Prioridade máxima.'
+    });
+  } else if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95 && fav >= 2.01 && fav <= 2.20) {
+    alertasEv.push({ tipo:'positivo',
+      msg:'✅ Perfil favorável — fav 2.01-2.20 + over 1.75-2.10 + ambas 1.70-1.95 — EV+34 em 27 jogos com 59% WR. Boa faixa histórica, operar normalmente.'
+    });
+  } else if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95) {
+    alertasEv.push({ tipo:'positivo',
+      msg:'✅ Odds na zona favorável — over 1.75-2.10 + ambas 1.70-1.95. EV positivo histórico nessa faixa. Avaliar a liga antes de entrar.'
+    });
+  }
+
+  // 🔴 EV NEGATIVO CONFIRMADO — fav menor que 1.50 + btts maior que 2.30
+  // 26 jogos, R$-640, EV-25
   if(fav > 0 && fav < 1.50 && btts > 2.30) {
-    alertasEv.push({
-      tipo: 'negativo',
-      msg: '🔴 Perfil com EV negativo confirmado — Em 26 jogos registrados com favorito abaixo de 1.50 e ambas acima de 2.30, o saldo foi negativo em R$640. O mercado indica que a zebra vai marcar mesmo com favorito forte — esse conflito cria scripts imprevisíveis. Recomendamos não operar ou reduzir stake significativamente.'
+    alertasEv.push({ tipo:'negativo',
+      msg:'🔴 EV negativo confirmado — favorito abaixo de 1.50 com ambas acima de 2.30. Em 26 jogos: R$-640. O mercado diz que a zebra vai marcar mesmo com favorito forte — conflito que cria scripts imprevisíveis. Não operar.'
     });
   }
 
-  // ⚠️ ZONA DOURADA — over entre 1.81 e 2.00 E btts entre 1.71 e 1.90
-  // 29-50 jogos com EV+27 a EV+39 — melhor faixa histórica
-  if(over >= 1.81 && over <= 2.00 && btts >= 1.71 && btts <= 1.90) {
-    alertasEv.push({
-      tipo: 'positivo',
-      msg: '✅ Zona dourada — Over entre 1.81 e 2.00 com ambas entre 1.71 e 1.90 é a faixa com melhor histórico de acerto. EV positivo confirmado em mais de 50 jogos registrados. Prioridade máxima de operação.'
+  // 🔴 FAV ACIMA DE 2.20 sem over baixo — EV quase zero
+  if(fav > 2.20 && over > 1.80 && btts > 1.85) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'⚠️ Equilíbrio extremo (fav acima de 2.20) — WR 45%, EV quase zero historicamente. Só operar se over abaixo de 1.80 e ambas abaixo de 1.85. Reduzir stake ou evitar.'
     });
   }
 
-  // ⚠️ OVER MUITO ALTO — maior que 2.30
+  // ⚠️ OVER ACIMA DE 2.30 — jogo fechado, alta variância
   if(over > 2.30 && over > 0) {
-    alertasEv.push({
-      tipo: 'atencao',
-      msg: '⚠️ Jogo muito fechado (over acima de 2.30) — Alta variância nos dados históricos. Quando o mercado não acredita em volume, os scripts são menos previsíveis. Cluster tende a ser mais compacto.'
+    alertasEv.push({ tipo:'atencao',
+      msg:'⚠️ Jogo muito fechado (over acima de 2.30) — alta variância histórica. Scripts menos previsíveis quando o mercado não acredita em volume. Cluster mais compacto, red quando sair placar inesperado.'
     });
   }
 
-  // ⚠️ FAV MENOR QUE 1.35 — assimetria desfavorável
-  if(fav > 0 && fav < 1.35) {
-    alertasEv.push({
-      tipo: 'atencao',
-      msg: '⚠️ Favorito extremo (abaixo de 1.35) — Quando erra, perde muito. EV negativo nessa faixa nos dados históricos. Avalie com cautela e considere reduzir stake.'
+  // ⚠️ FAV MENOR QUE 1.50 sem btts problemático — só atenção
+  if(fav > 0 && fav < 1.50 && btts <= 2.30) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'⚠️ Favorito forte (abaixo de 1.50) — EV ligeiramente negativo nessa faixa (-R$8/jogo). Funciona quando btts está abaixo de 2.10. Verifique a liga antes de entrar.'
     });
   }
 
-  // Verificar campeonato selecionado
+  // 🔴 LIGA MX — padrão negativo confirmado
   var compSel = document.getElementById('nj-comp')?.value || '';
-  if(/liga mx|mexico/i.test(compSel) || /pumas|pachuca|monterrey|guadalajara|toluca|necaxa|cruz azul|chivas|santos laguna/i.test(textoAnalise)) {
-    alertasEv.push({
-      tipo: 'negativo',
-      msg: '🔴 Liga MX — Em 6 jogos registrados: R$-868, WR 33%, EV-145. Mercado com alta variância e scripts imprevisíveis. Dados insuficientes para conclusão definitiva mas padrão negativo consistente. Recomendamos aguardar mais dados antes de operar.'
+  var textoLower = (textoAnalise||'').toLowerCase();
+  if(/liga mx/i.test(compSel) || /pumas|pachuca|monterrey|guadalajara|toluca|necaxa|cruz azul|chivas|santos laguna|atlas fc|tigres uanl|leon fc|juarez|mazatlan/i.test(textoLower)) {
+    alertasEv.push({ tipo:'negativo',
+      msg:'🔴 Liga MX — histórico de R$-1.868 em 12 jogos registrados, WR 25%, EV-155. Padrão negativo consistente ao longo de meses. Eliminar completamente da lista de operações.'
     });
   }
 
-  if(/qualif|classificat|champions.*qualif|europa.*qualif|sheriff|vardar|floriana|dynamo kyiv|astana/i.test(textoAnalise)) {
-    alertasEv.push({
-      tipo: 'negativo',
-      msg: '🔴 Qualificação Europeia — Em 9 jogos registrados: R$-534, EV-59. Jogo único com times de ligas menores cria scripts defensivos que as odds não capturam bem. Recomendamos reduzir stake ou evitar.'
+  // 🔴 QUALIFICAÇÕES EUROPEIAS — times desconhecidos
+  if(/qualif|classificat|sheriff|vardar|floriana|dynamo kyiv|astana|dinamo tirana|pancevo|goteborg vs levadia|derry vs|bohemians vs ballkani/i.test(textoLower)) {
+    alertasEv.push({ tipo:'negativo',
+      msg:'🔴 Qualificação Europeia — jogo único com times de ligas menores. Scripts defensivos que as odds não capturam. R$-534 em 9 jogos registrados. Reduzir stake para metade ou evitar.'
+    });
+  }
+
+  // 🔴 LIGAS PROBLEMÁTICAS — Bolívia, Sérvia, Albania, Kosovo
+  if(/blooming|tamayapo|bolivar|potosi|aurora vs|real oruro|vojvodina|beogard|radnick|partizan|crvena zvezda|skenderbeu|kukesi|flamurtari/i.test(textoLower)) {
+    alertasEv.push({ tipo:'negativo',
+      msg:'🔴 Liga com mercado ineficiente — Bolívia, Sérvia ou ligas de baixa liquidez CS. Odds podem estar na faixa certa mas o oddmaker tem menos informação. Alta variância, EV incerto. Reduzir stake ou evitar.'
     });
   }
 
