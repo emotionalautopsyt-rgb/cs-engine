@@ -5729,53 +5729,73 @@ function renderCluster(cluster, stake) {
 
   card.style.display = 'block';
 
-  // ── EXPANSÃO ESPECÍFICA — scores fora do cluster com valor ao vivo ──
-  // Regras: prob entre 5-12%, liquidez maior que R$800, coerente com script
-  // Aparecem como cards roxos "ATENÇÃO AO VIVO" — não entram no Dutch
-  if(S.csOdds && S.csOddsLiq) {
-    var scoresNoCluster = cluster.map(function(s){ return s.score; });
-    
-    // Detectar lado do favorito pela âncora ou primeiro destino
-    var favSideExp = 'home';
-    var primeiroDestino = cluster.find(function(s){ return s.tipo==='destino'||s.tipo==='caminho'; });
-    if(primeiroDestino && primeiroDestino.score) {
-      var pts = primeiroDestino.score.split('-');
-      if(pts.length===2 && parseInt(pts[1]) > parseInt(pts[0])) favSideExp = 'away';
-    }
+  // ── EXPANSÃO ESPECÍFICA — score real como extensão do script ──────
+  // Substitui a goleada genérica quando existe score específico mais relevante
+  // Não entra no Dutch — trader fica de olho ao vivo
+  // Remove cards de ATENÇÃO AO VIVO antigos
+  for(var ci = cluster.length-1; ci >= 0; ci--) {
+    if(cluster[ci]._expansaoEspecifica) cluster.splice(ci, 1);
+  }
 
-    // Candidatos: scores reais (não any_other), fora do cluster, prob 5-12%, liq >R$800
-    var candidatos = Object.keys(S.csOdds).filter(function(sc) {
-      if(scoresNoCluster.includes(sc)) return false;
+  if(S.csOdds) {
+    var overAtualExp = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+    var bttsAtualExp = parseFloat(document.getElementById('pk-btts')?.value) || 2.0;
+
+    // Threshold dinâmico — abaixo dele mas acima de 4% = candidato a EXPANSÃO específica
+    var thresholdExp;
+    if(overAtualExp <= 1.70)      thresholdExp = 5.0;
+    else if(overAtualExp <= 1.85) thresholdExp = 5.5;
+    else if(overAtualExp <= 2.00) thresholdExp = 6.0;
+    else if(overAtualExp <= 2.20) thresholdExp = 6.5;
+    else                          thresholdExp = 7.5;
+
+    // Scores no cluster ativo (não expansão)
+    var scoresAtivos = cluster
+      .filter(function(s){ return s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica' && s.score; })
+      .map(function(s){ return s.score; });
+
+    // Detectar lado do favorito e maior gols do favorito no cluster
+    var favSideExp = 'home';
+    var maxGolsFavExp = 0;
+    cluster.filter(function(s){ return s.score && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica'; })
+      .forEach(function(s) {
+        var pts = s.score.split('-');
+        if(pts.length !== 2) return;
+        var h = parseInt(pts[0]), a = parseInt(pts[1]);
+        if(h > a) { favSideExp = 'home'; maxGolsFavExp = Math.max(maxGolsFavExp, h); }
+        else if(a > h) { favSideExp = 'away'; maxGolsFavExp = Math.max(maxGolsFavExp, a); }
+      });
+
+    // Candidatos: extensão real do script
+    // - fora do cluster ativo
+    // - prob entre 4% e threshold (abaixo do threshold mas ainda relevante)
+    // - favorito marca MAIS que o máximo atual do cluster
+    var candidatosExp = Object.keys(S.csOdds).filter(function(sc) {
+      if(scoresAtivos.includes(sc)) return false;
       if(sc.startsWith('any_other')) return false;
-      if(cluster.find(function(s){ return s._expansaoEspecifica && s.score===sc; })) return false;
       var odd = S.csOdds[sc];
-      var liq = S.csOddsLiq[sc] || 0;
       var prob = odd > 0 ? 100/odd : 0;
-      return prob >= 5.0 && prob <= 12.0 && liq >= 800;
-    }).filter(function(sc) {
-      // Só scores coerentes com script do favorito
+      if(prob < 4.0 || prob >= thresholdExp) return false; // abaixo do threshold mas acima de 4%
       var pts = sc.split('-');
       if(pts.length !== 2) return false;
       var h = parseInt(pts[0]), a = parseInt(pts[1]);
-      if(favSideExp === 'home') return h >= a; // favorito casa vence ou empata
-      return a >= h; // favorito visitante vence ou empata
+      // Só extensão: favorito com MAIS gols que máximo do cluster
+      if(favSideExp === 'home') return h > maxGolsFavExp && h > a;
+      return a > maxGolsFavExp && a > h;
     }).sort(function(a,b){
-      return (100/S.csOdds[b]) - (100/S.csOdds[a]); // maior prob primeiro
-    }).slice(0, 2); // máximo 2 cards
+      return (100/S.csOdds[b]) - (100/S.csOdds[a]);
+    }).slice(0, 1); // máximo 1 card de expansão específica
 
-    // Adicionar ao cluster como expansao_especifica se não existirem
-    candidatos.forEach(function(sc) {
-      if(!cluster.find(function(s){ return s.score===sc; })) {
-        cluster.push({
-          score: sc,
-          odd: S.csOdds[sc],
-          tipo: 'expansao_especifica',
-          stake: 0, lucro: 0, oddPG: 0,
-          _expansaoEspecifica: true,
-          _prob: (100/S.csOdds[sc]).toFixed(1),
-          _liq: S.csOddsLiq[sc] || 0
-        });
-      }
+    // Adicionar como expansao_especifica
+    candidatosExp.forEach(function(sc) {
+      cluster.push({
+        score: sc,
+        odd: S.csOdds[sc],
+        tipo: 'expansao_especifica',
+        stake: 0, lucro: 0, oddPG: 0,
+        _expansaoEspecifica: true,
+        _prob: (100/S.csOdds[sc]).toFixed(1),
+      });
     });
   }
 
@@ -5818,23 +5838,22 @@ function renderCluster(cluster, stake) {
     destino: {bg:'rgba(0,201,110,.10)', border:'var(--grn)', label:'DESTINO', badge:'bdg-g', bar:'var(--grn)'},
     planb:   {bg:'rgba(255,214,0,.10)', border:'var(--ylw)', label:'PLANO B', badge:'bdg-y', bar:'var(--ylw)'},
     expansao:{bg:'rgba(255,122,53,.10)', border:'var(--org)', label:'EXPANSÃO', badge:'bdg-o', bar:'var(--org)'},
-    expansao_especifica:{bg:'rgba(0,210,150,.06)', border:'rgba(0,210,150,.45)', label:'👁 ATENÇÃO AO VIVO', badge:'bdg-o', bar:'rgba(0,210,150,.45)'},
+    expansao_especifica:{bg:'rgba(255,122,53,.07)', border:'rgba(255,122,53,.5)', label:'EXPANSÃO', badge:'bdg-o', bar:'var(--org)'},
   };
 
   // BIG SCORE CARDS — prominent buttons
   scoresEl.innerHTML = cluster.map((s,idx) => {
 
-    // Card especial para expansão específica
+    // Card de EXPANSÃO específica — score real fora do cluster
     if(s._expansaoEspecifica) {
-      var oddPG = s.odd > 0 ? (s.odd * 0.5).toFixed(1) : '—';
-      return '<div style="background:rgba(0,210,150,.05);border:1px dashed rgba(0,210,150,.4);border-radius:10px;padding:10px 14px;position:relative;opacity:.9;">'+
-        '<div style="font-family:Space Mono,monospace;font-size:7px;color:rgba(0,210,150,.8);letter-spacing:2px;margin-bottom:5px;">👁 ATENÇÃO AO VIVO</div>'+
-        '<div style="font-size:22px;font-weight:900;color:rgba(0,210,150,.95);font-family:Space Mono,monospace;margin-bottom:3px;">'+s.score+'</div>'+
+      var oddPGexp = s.odd > 0 ? (s.odd * 0.5).toFixed(1) : '—';
+      return '<div style="background:rgba(255,122,53,.07);border:1px dashed rgba(255,122,53,.5);border-radius:10px;padding:10px 14px;position:relative;">'+
+        '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--org);letter-spacing:2px;margin-bottom:5px;">EXPANSÃO</div>'+
+        '<div style="font-size:22px;font-weight:900;color:var(--org);font-family:Space Mono,monospace;margin-bottom:3px;">'+s.score+'</div>'+
         '<div style="font-size:8px;color:var(--txt3);font-family:Space Mono,monospace;line-height:1.6;">'+
-          '@'+s.odd+' · '+s._prob+'% implícita<br>'+
-          'Liq R$'+(s._liq>=1000?(s._liq/1000).toFixed(1)+'k':Math.round(s._liq))+'  ·  →@'+oddPG+' pós-gol'+
+          '@'+s.odd+' · '+s._prob+'% implícita · →@'+oddPGexp+' pós-gol'+
         '</div>'+
-        '<div style="font-size:7px;color:rgba(0,210,150,.55);font-family:Space Mono,monospace;margin-top:5px;border-top:1px solid rgba(0,210,150,.15);padding-top:5px;">Não entra no Dutch — monitorar ao vivo</div>'+
+        '<div style="font-size:7px;color:rgba(255,122,53,.6);font-family:Space Mono,monospace;margin-top:5px;border-top:1px solid rgba(255,122,53,.15);padding-top:5px;">Não entra no Dutch — monitorar ao vivo</div>'+
       '</div>';
     }
 
