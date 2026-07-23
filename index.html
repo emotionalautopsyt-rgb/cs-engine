@@ -5530,34 +5530,48 @@ function calcStakes(cluster, stake, analysisText) {
       if(s.tipo === 'expansao') return;
       if(!s.score || s.score.startsWith('any_other')) return;
       var prob = s.odd > 0 ? 100/s.odd : 0;
-      if(prob < 7.0) {
-        var liq = (S.csOddsLiq && S.csOddsLiq[s.score]) ? S.csOddsLiq[s.score] : 0;
-        // Proteger 2-2 quando btts indica ambos marcam com frequência
+
+      // ── THRESHOLD DINÂMICO baseado no over ─────────────────────────
+      // Quanto mais volume esperado (over baixo), mais scores têm valor
+      // Quanto mais fechado (over alto), mais rigoroso o filtro
+      var probMinDin;
+      if(overAtual <= 1.70)      probMinDin = 5.0;
+      else if(overAtual <= 1.85) probMinDin = 5.5;
+      else if(overAtual <= 2.00) probMinDin = 6.0;
+      else if(overAtual <= 2.20) probMinDin = 6.5;
+      else                       probMinDin = 7.5;
+
+      // ── CRUZAMENTO BTTS para scores com ambos marcando ─────────────
+      // Score com gols dos dois lados (ex: 2-1, 3-1, 1-2) só entra
+      // se btts confirma que ambos vão marcar (btts < 2.15)
+      var scParts = s.score.split('-');
+      var scTemAmbos = scParts.length===2 && parseInt(scParts[0])>0 && parseInt(scParts[1])>0;
+      var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15;
+
+      if(prob < probMinDin || !bttsPermiteAmbos) {
+        // Proteções essenciais que nunca saem independente do threshold
+        var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
         var eh22ComBtts = s.score === '2-2' && bttsAtual <= 1.80;
-        // Jogos de volume alto (btts ≤ 1.70): scores de 5+ gols têm valor real
         var ehVolumeAlto = bttsAtual <= 1.70 &&
           (s.score === '3-1' || s.score === '1-3' ||
            s.score === '3-2' || s.score === '2-3');
-        // EQUIL_OFENSIVO com btts < 1.90 + over >= 1.80: 3-1/1-3 têm valor real
         var eh31EquilOf = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
           (s.score === '3-1' || s.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
-        // CONSERVADOR: 0-1 é Plano B natural quando btts < 2.10
-        // Zebra tem >48% de chance de marcar — não remover por prob limítrofe
         var eh01Conserv = perfilAtual === 'CONSERVADOR' &&
           (s.score === '0-1' || s.score === '1-0') && bttsAtual < 2.10;
-        if(liq < 8000 && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv) {
-          // Verificar se é essencial (âncora ou SUPER_EQUILIBRADO 1-2/2-2 ou ABERTO_BTTS 3-1/2-2)
-          var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
-          var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
-            (s.score === '1-2' || s.score === '2-2' || s.score === '1-0')) ||
-            (perfilAtual === 'ABERTO_BTTS' &&
-            (s.score === '3-1' || s.score === '2-2'));
-          if(!ehAncora && !ehEssencial) {
-            s.tipo = 'expansao';
-            s.stake = 0; s.lucro = 0;
-            console.log('[PROB MIN] '+s.score+' prob='+prob.toFixed(1)+'% liq=R$'+liq+' → expansão');
-          }
-        } // fecha if liq < 8000
+        var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
+          (s.score === '1-2' || s.score === '2-2' || s.score === '1-0')) ||
+          (perfilAtual === 'ABERTO_BTTS' &&
+          (s.score === '3-1' || s.score === '2-2'));
+
+        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial) {
+          s.tipo = 'expansao';
+          s.stake = 0; s.lucro = 0;
+          console.log('[THRESHOLD DIN] '+s.score+' prob='+prob.toFixed(1)+'%'
+            +' min='+probMinDin+'%'
+            +(scTemAmbos&&!bttsPermiteAmbos?' [btts bloqueou]':'')
+            +' → expansão');
+        }
       }
     });
 
