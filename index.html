@@ -3095,7 +3095,15 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     {"score":"3-2","motivo":"Jogo pode ficar caótico — ambos sofrem gols tardios"},
     {"score":"0-0","motivo":"Contexto de classificação garantida pode travar o jogo"}
   ],
-  "volume_precoce": false
+  "volume_precoce": false,
+  "h2h": {
+    "btts_pct": 86,
+    "over25_pct": 71,
+    "placar_mais_freq": "2-1",
+    "visitante_marca_pct": 86,
+    "media_gols": 3.4,
+    "amostra": 7
+  }
 }
 ##JSON_END##
 
@@ -3106,6 +3114,17 @@ CAMPO "volume_precoce" (OPCIONAL — padrão false):
   marcados nesses dois períodos for ≥ 6 em 10 jogos, volume_precoce = true
 - Quando true, força a goleada como DESTINO no Dutch independente do over
 - Na dúvida, mantenha false — é melhor errar para o lado conservador
+
+CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis):
+- "btts_pct": % de jogos H2H onde AMBOS marcaram (calcule dos placares do H2H)
+- "over25_pct": % de jogos H2H com mais de 2 gols no total
+- "placar_mais_freq": placar mais repetido no H2H (formato "X-Y")
+- "visitante_marca_pct": % de jogos H2H onde o visitante atual marcou
+- "media_gols": média de gols por jogo no H2H
+- "amostra": quantos jogos H2H você analisou
+- SÓ inclua se tiver 4+ jogos de H2H disponíveis no texto
+- Use apenas H2H onde o mesmo time era mandante/visitante (não misture lados)
+- Se dados insuficientes ou indisponíveis, OMITA o campo completamente
 
 CAMPO "expansao" (OPCIONAL — só inclua quando identificar cenário específico relevante):
 - Máximo 2 scores
@@ -4491,6 +4510,26 @@ REGRAS ABSOLUTAS:
             console.log('[VOLUME PRECOCE] IA identificou padrão de rajada precoce — goleada força DESTINO');
           }
 
+          // Processar campo "h2h" — dados extraídos do confronto direto pela IA
+          S._h2hData = null;
+          if(voto && voto.h2h && typeof voto.h2h === 'object') {
+            var h2hRaw = voto.h2h;
+            var h2hAmostra = parseInt(h2hRaw.amostra) || 0;
+            if(h2hAmostra >= 4) {
+              S._h2hData = {
+                btts_pct:            parseFloat(h2hRaw.btts_pct) || 0,
+                over25_pct:          parseFloat(h2hRaw.over25_pct) || 0,
+                placar_mais_freq:    h2hRaw.placar_mais_freq || '',
+                visitante_marca_pct: parseFloat(h2hRaw.visitante_marca_pct) || 0,
+                media_gols:          parseFloat(h2hRaw.media_gols) || 0,
+                amostra:             h2hAmostra
+              };
+              console.log('[H2H] Dados extraídos ('+h2hAmostra+' jogos):', JSON.stringify(S._h2hData));
+            } else {
+              console.log('[H2H] Amostra insuficiente ('+h2hAmostra+' jogos) — ignorando');
+            }
+          }
+
           // Processar campo "expansao" — scores de alerta sugeridos pela IA
           if(voto && voto.expansao && Array.isArray(voto.expansao) && voto.expansao.length > 0) {
             S._expansaoIA = voto.expansao.slice(0,2).filter(function(e){
@@ -5546,8 +5585,25 @@ function calcStakes(cluster, stake, analysisText) {
       // se btts confirma que ambos vão marcar (btts < 2.15)
       var scParts = s.score.split('-');
       var scTemAmbos = scParts.length===2 && parseInt(scParts[0])>0 && parseInt(scParts[1])>0;
+
+      // H2H específico sobrescreve btts genérico quando contradiz fortemente:
+      // btts genérico é histórico geral — H2H é esse confronto específico
+      // Se H2H mostra BTTS >= 70% com 4+ jogos, tem mais valor que btts genérico
+      var h2hDesbloqueiaAmbos = false;
+      if(scTemAmbos && bttsAtual >= 2.15 && S._h2hData) {
+        if(S._h2hData.btts_pct >= 70 && S._h2hData.amostra >= 4) {
+          h2hDesbloqueiaAmbos = true;
+        }
+        // Placar mais frequente do H2H nunca é removido
+        if(S._h2hData.placar_mais_freq === s.score && S._h2hData.amostra >= 4) {
+          h2hDesbloqueiaAmbos = true;
+          console.log('[H2H PLACAR FREQ] '+s.score+' é mais frequente no H2H ('+S._h2hData.amostra+'j) — protegido');
+        }
+      }
+
       var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15
-        || prob >= 10.0; // prob alta no CS sobrescreve o btts genérico
+        || prob >= 10.0           // prob alta no CS sobrescreve btts genérico
+        || h2hDesbloqueiaAmbos;   // H2H forte sobrescreve btts genérico
 
       if(prob < probMinDin || !bttsPermiteAmbos) {
         // Proteções essenciais que nunca saem independente do threshold
