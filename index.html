@@ -3103,6 +3103,22 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     "visitante_marca_pct": 86,
     "media_gols": 3.4,
     "amostra": 7
+  },
+  "form_casa": {
+    "over25_pct": 18,
+    "btts_pct": 27,
+    "placar_mais_freq": "2-0",
+    "marca_pct": 73,
+    "clean_sheet_pct": 55,
+    "amostra": 10
+  },
+  "form_fora": {
+    "over25_pct": 45,
+    "btts_pct": 55,
+    "placar_mais_freq": "1-1",
+    "marca_pct": 90,
+    "clean_sheet_pct": 18,
+    "amostra": 10
   }
 }
 ##JSON_END##
@@ -3125,6 +3141,20 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 - SÓ inclua se tiver 4+ jogos de H2H disponíveis no texto
 - Use apenas H2H onde o mesmo time era mandante/visitante (não misture lados)
 - Se dados insuficientes ou indisponíveis, OMITA o campo completamente
+
+CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de cada time):
+- "form_casa": dados do time da CASA nos últimos 10 jogos EM CASA na competição
+- "form_fora": dados do time VISITANTE nos últimos 10 jogos FORA na competição
+- Campos de cada um:
+  → "over25_pct": % de jogos com mais de 2.5 gols (use dados "Jogos com Mais de 2,5 Gols")
+  → "btts_pct": % de jogos onde ambos marcaram (calcule ou use dado disponível)
+  → "placar_mais_freq": placar final mais frequente nos últimos jogos (ex: "2-0")
+  → "marca_pct": % de jogos onde o time marcou pelo menos 1 gol
+  → "clean_sheet_pct": % de jogos sem sofrer gols (use "Jogos sem sofrer")
+  → "amostra": número de jogos analisados (geralmente 10)
+- Extraia diretamente das tabelas de estatísticas da academia quando disponíveis
+- Se os dados não estiverem no texto, OMITA o campo completamente
+- NÃO invente dados — só inclua o que está explicitamente no texto
 
 CAMPO "expansao" (OPCIONAL — só inclua quando identificar cenário específico relevante):
 - Máximo 2 scores
@@ -4528,6 +4558,33 @@ REGRAS ABSOLUTAS:
             } else {
               console.log('[H2H] Amostra insuficiente ('+h2hAmostra+' jogos) — ignorando');
             }
+          }
+
+          // Processar form_casa e form_fora — últimos 10 jogos de cada time
+          // Por enquanto: salvar para exibição visual — não altera scores automaticamente
+          S._formCasa = null;
+          S._formFora = null;
+          if(voto && voto.form_casa && typeof voto.form_casa === 'object') {
+            S._formCasa = {
+              over25_pct:      parseFloat(voto.form_casa.over25_pct) || 0,
+              btts_pct:        parseFloat(voto.form_casa.btts_pct) || 0,
+              placar_mais_freq: voto.form_casa.placar_mais_freq || '',
+              marca_pct:       parseFloat(voto.form_casa.marca_pct) || 0,
+              clean_sheet_pct: parseFloat(voto.form_casa.clean_sheet_pct) || 0,
+              amostra:         parseInt(voto.form_casa.amostra) || 10
+            };
+            console.log('[FORM CASA]', JSON.stringify(S._formCasa));
+          }
+          if(voto && voto.form_fora && typeof voto.form_fora === 'object') {
+            S._formFora = {
+              over25_pct:      parseFloat(voto.form_fora.over25_pct) || 0,
+              btts_pct:        parseFloat(voto.form_fora.btts_pct) || 0,
+              placar_mais_freq: voto.form_fora.placar_mais_freq || '',
+              marca_pct:       parseFloat(voto.form_fora.marca_pct) || 0,
+              clean_sheet_pct: parseFloat(voto.form_fora.clean_sheet_pct) || 0,
+              amostra:         parseInt(voto.form_fora.amostra) || 10
+            };
+            console.log('[FORM FORA]', JSON.stringify(S._formFora));
           }
 
           // Processar campo "expansao" — scores de alerta sugeridos pela IA
@@ -6082,6 +6139,69 @@ function renderCluster(cluster, stake) {
         expansaoEl.style.display = 'none';
       }
     }
+  }
+
+  // Card visual de estatísticas form_casa e form_fora
+  var statsFormEl = document.getElementById('stats-form-card');
+  if(!statsFormEl) {
+    statsFormEl = document.createElement('div');
+    statsFormEl.id = 'stats-form-card';
+    var expansaoEl2 = document.getElementById('genio-expansao');
+    if(expansaoEl2 && expansaoEl2.parentNode) {
+      expansaoEl2.parentNode.insertBefore(statsFormEl, expansaoEl2.nextSibling);
+    }
+  }
+
+  if(S._formCasa || S._formFora || S._h2hData) {
+    var htmlForm = '<div style="margin-top:10px;background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.15);border-radius:10px;padding:12px 14px;">';
+    htmlForm += '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--acc);letter-spacing:2px;margin-bottom:10px;">📊 DADOS EXTRAÍDOS — CRUZAMENTO ESTATÍSTICO</div>';
+    htmlForm += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">';
+
+    // H2H
+    if(S._h2hData) {
+      var h = S._h2hData;
+      htmlForm += '<div style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;">';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">H2H ('+h.amostra+'j)</div>';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);line-height:1.8;">';
+      htmlForm += 'BTTS: <span style="color:'+(h.btts_pct>=60?'var(--grn)':h.btts_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+h.btts_pct+'%</span><br>';
+      htmlForm += 'Over2.5: <span style="color:'+(h.over25_pct>=60?'var(--grn)':h.over25_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+h.over25_pct+'%</span><br>';
+      if(h.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+h.placar_mais_freq+'</span><br>';
+      if(h.media_gols) htmlForm += 'Média: <span style="color:var(--txt)">'+h.media_gols+'</span>';
+      htmlForm += '</div></div>';
+    }
+
+    // Form Casa
+    if(S._formCasa) {
+      var fc = S._formCasa;
+      htmlForm += '<div style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;">';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">🏠 CASA ('+fc.amostra+'j)</div>';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);line-height:1.8;">';
+      htmlForm += 'Over2.5: <span style="color:'+(fc.over25_pct>=60?'var(--grn)':fc.over25_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+fc.over25_pct+'%</span><br>';
+      htmlForm += 'BTTS: <span style="color:'+(fc.btts_pct>=60?'var(--grn)':fc.btts_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+fc.btts_pct+'%</span><br>';
+      if(fc.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+fc.placar_mais_freq+'</span><br>';
+      htmlForm += 'Marca: <span style="color:'+(fc.marca_pct>=80?'var(--grn)':'var(--txt2)')+'">'+fc.marca_pct+'%</span>';
+      htmlForm += '</div></div>';
+    }
+
+    // Form Fora
+    if(S._formFora) {
+      var ff = S._formFora;
+      htmlForm += '<div style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;">';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">✈️ FORA ('+ff.amostra+'j)</div>';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);line-height:1.8;">';
+      htmlForm += 'Over2.5: <span style="color:'+(ff.over25_pct>=60?'var(--grn)':ff.over25_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+ff.over25_pct+'%</span><br>';
+      htmlForm += 'BTTS: <span style="color:'+(ff.btts_pct>=60?'var(--grn)':ff.btts_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+ff.btts_pct+'%</span><br>';
+      if(ff.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+ff.placar_mais_freq+'</span><br>';
+      htmlForm += 'Marca: <span style="color:'+(ff.marca_pct>=80?'var(--grn)':'var(--txt2)')+'">'+ff.marca_pct+'%</span>';
+      htmlForm += '</div></div>';
+    }
+
+    htmlForm += '</div></div>';
+    statsFormEl.innerHTML = htmlForm;
+    statsFormEl.style.display = 'block';
+  } else {
+    statsFormEl.innerHTML = '';
+    statsFormEl.style.display = 'none';
   }
 
   renderFinanceBox();
