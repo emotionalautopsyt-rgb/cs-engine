@@ -5638,23 +5638,42 @@ function calcStakes(cluster, stake, analysisText) {
       else                       probMinDin = 7.5;
 
       // ── CRUZAMENTO BTTS para scores com ambos marcando ─────────────
-      // Score com gols dos dois lados (ex: 2-1, 3-1, 1-2) só entra
-      // se btts confirma que ambos vão marcar (btts < 2.15)
       var scParts = s.score.split('-');
       var scTemAmbos = scParts.length===2 && parseInt(scParts[0])>0 && parseInt(scParts[1])>0;
 
-      // H2H específico sobrescreve btts genérico quando contradiz fortemente:
-      // btts genérico é histórico geral — H2H é esse confronto específico
-      // Se H2H mostra BTTS >= 70% com 4+ jogos, tem mais valor que btts genérico
+      // H2H específico sobrescreve btts genérico quando contradiz fortemente
       var h2hDesbloqueiaAmbos = false;
       if(scTemAmbos && bttsAtual >= 2.15 && S._h2hData) {
         if(S._h2hData.btts_pct >= 70 && S._h2hData.amostra >= 4) {
           h2hDesbloqueiaAmbos = true;
         }
-        // Placar mais frequente do H2H nunca é removido
+        // Placar mais frequente do H2H protegido SOMENTE se coerente com o lado do favorito
+        // Ex: se favorito é casa, placar "0-1" (visitante vence) NÃO deve ser protegido
         if(S._h2hData.placar_mais_freq === s.score && S._h2hData.amostra >= 4) {
-          h2hDesbloqueiaAmbos = true;
-          console.log('[H2H PLACAR FREQ] '+s.score+' é mais frequente no H2H ('+S._h2hData.amostra+'j) — protegido');
+          var freqParts = S._h2hData.placar_mais_freq.split('-');
+          if(freqParts.length === 2) {
+            var freqH = parseInt(freqParts[0]);
+            var freqA = parseInt(freqParts[1]);
+            // Detectar lado do favorito pelo cluster atual
+            var favEhCasaH2H = true;
+            var primeiroAtivo = cluster.find(function(sc){
+              return sc.tipo !== 'expansao' && sc.tipo !== 'expansao_especifica' && sc.score;
+            });
+            if(primeiroAtivo && primeiroAtivo.score) {
+              var pParts = primeiroAtivo.score.split('-');
+              if(pParts.length===2 && parseInt(pParts[1]) > parseInt(pParts[0])) {
+                favEhCasaH2H = false; // favorito é visitante
+              }
+            }
+            // Só protege se o placar freq favorece o lado do favorito
+            var placarFreqCoerente = favEhCasaH2H ? freqH >= freqA : freqA >= freqH;
+            if(placarFreqCoerente) {
+              h2hDesbloqueiaAmbos = true;
+              console.log('[H2H PLACAR FREQ] '+s.score+' freq no H2H e coerente com favorito — protegido');
+            } else {
+              console.log('[H2H PLACAR FREQ] '+s.score+' freq no H2H mas contra o script do favorito — ignorado');
+            }
+          }
         }
       }
 
