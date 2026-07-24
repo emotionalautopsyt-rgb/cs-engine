@@ -5546,7 +5546,8 @@ function calcStakes(cluster, stake, analysisText) {
       // se btts confirma que ambos vão marcar (btts < 2.15)
       var scParts = s.score.split('-');
       var scTemAmbos = scParts.length===2 && parseInt(scParts[0])>0 && parseInt(scParts[1])>0;
-      var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15;
+      var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15
+        || prob >= 10.0; // prob alta no CS sobrescreve o btts genérico
 
       if(prob < probMinDin || !bttsPermiteAmbos) {
         // Proteções essenciais que nunca saem independente do threshold
