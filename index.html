@@ -3869,6 +3869,47 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // Se > 2.0 → Pirâmide
   let pyramidType = 'NORMAL';
   var clusterScores = mainScores.concat(protection);
+
+  // ── COMPLEMENTO CS — scores das odds reais que passam no threshold ──
+  // O perfil define o ponto de partida mas as odds CS são a fonte
+  // mais específica. Se um score tem prob >= threshold e não está
+  // no cluster, ele deve ser incluído — independente do perfil.
+  if(csOdds && Object.keys(csOdds).length > 0) {
+    // Threshold dinâmico baseado no over
+    var thresholdCS;
+    if(over <= 1.70)      thresholdCS = 5.0;
+    else if(over <= 1.85) thresholdCS = 5.5;
+    else if(over <= 2.00) thresholdCS = 6.0;
+    else if(over <= 2.20) thresholdCS = 6.5;
+    else                  thresholdCS = 7.5;
+
+    // Detectar lado do favorito
+    var favEhCasaCS = !favEhVisitante;
+
+    Object.keys(csOdds).forEach(function(sc) {
+      if(clusterScores.includes(sc)) return;
+      if(sc.startsWith('any_other')) return;
+      var odd = csOdds[sc];
+      if(!odd || odd <= 0) return;
+      var prob = 100/odd;
+      if(prob < thresholdCS) return;
+
+      // Verificar coerência com lado do favorito
+      var pts = sc.split('-');
+      if(pts.length !== 2) return;
+      var h = parseInt(pts[0]), a = parseInt(pts[1]);
+      var favoreceCorreto = favEhCasaCS ? h >= a : a >= h;
+      if(!favoreceCorreto) return;
+
+      // Cruzamento btts para scores com ambos marcando
+      var temAmbos = h > 0 && a > 0;
+      if(temAmbos && btts >= 2.15 && prob < 10.0) return;
+
+      // Adicionar ao cluster
+      clusterScores.push(sc);
+      console.log('[CS COMPLEMENTO] '+sc+' prob='+prob.toFixed(1)+'% >= '+thresholdCS+'% → adicionado');
+    });
+  }
   var clusterOdds = clusterScores
     .map(function(s){ return oddScoreMotor(s); })
     .filter(function(o){ return o > 0; });
