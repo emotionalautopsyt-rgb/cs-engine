@@ -3277,84 +3277,119 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   var odd31cs = oddScoreMotor('3-1'); // favorito visitante: lê 1-3
 
   // Decidir quais scores de expansão incluir
+  // ── PROBABILIDADE COMPOSTA — zebra marca ou não ─────────────────
+  // Em vez de decisão binária pelo btts genérico,
+  // cruza btts + form_fora.marca_pct + h2h.btts_pct
+  // para uma decisão mais precisa na zona cinza (btts 2.00-2.15)
+  function calcPZebraMarca() {
+    // Base: probabilidade implícita do btts
+    var pBase = btts > 0 ? (100/btts) : 50;
+
+    // Ajuste pelo form_fora.marca_pct (últimos 10 jogos fora)
+    var ajusteForm = 0;
+    if(S._formFora && S._formFora.marca_pct > 0) {
+      ajusteForm = (S._formFora.marca_pct - 55) * 0.14; // reduzido de 0.20
+      ajusteForm = Math.max(-7, Math.min(7, ajusteForm)); // max ±7%
+    }
+
+    // Ajuste pelo H2H btts_pct (histórico desse confronto específico)
+    var ajusteH2H = 0;
+    if(S._h2hData && S._h2hData.btts_pct > 0 && S._h2hData.amostra >= 4) {
+      ajusteH2H = (S._h2hData.btts_pct - 50) * 0.10; // reduzido de 0.15
+      ajusteH2H = Math.max(-5, Math.min(5, ajusteH2H)); // max ±5%
+    }
+
+    // Ajuste pelo over histórico da zebra fora
+    var ajusteOver = 0;
+    if(S._formFora && S._formFora.over25_pct > 0) {
+      ajusteOver = (S._formFora.over25_pct - 45) * 0.08; // reduzido de 0.10
+      ajusteOver = Math.max(-4, Math.min(4, ajusteOver)); // max ±4%
+    }
+
+    var pFinal = pBase + ajusteForm + ajusteH2H + ajusteOver;
+    pFinal = Math.max(20, Math.min(80, pFinal)); // limitar entre 20-80%
+
+    console.log('[P ZEBRA MARCA] base='+pBase.toFixed(1)+'% form='+ajusteForm.toFixed(1)+
+      ' h2h='+ajusteH2H.toFixed(1)+' over='+ajusteOver.toFixed(1)+
+      ' FINAL='+pFinal.toFixed(1)+'%');
+    return pFinal;
+  }
+
+  var pZebraMarca = calcPZebraMarca();
+  // zebra provavelmente marca se prob composta > 52%
+  var zebraProvavelmenteMarca = pZebraMarca >= 52;
+  // zebra claramente não marca se prob < 44%
+  var zebraClaramenteNaoMarca = pZebraMarca < 44;
+
   function getExpansao() {
-    // Caso 1: BTTS muito alto (> 2.00) = adversário provavelmente não marca
-    if(btts > 2.00) return ['3-0'];
-    // Caso 2: BTTS baixo (< 1.85) = adversário marca regularmente
-    if(btts < 1.85) return ['3-1'];
-    // Caso 3: zona normal (1.85-2.00) = incluir ambos se tiver odds reais
-    // O refinador premium vai decidir qual manter pelo contexto
-    var ambos = [];
-    if(odd30cs > 0 || btts > 1.90) ambos.push('3-0');
-    if(odd31cs > 0 || btts < 1.95) ambos.push('3-1');
-    if(ambos.length === 0) ambos = ['3-0']; // fallback
-    return ambos;
+    // Usar probabilidade composta em vez de btts binário
+    if(zebraClaramenteNaoMarca) return ['3-0'];
+    if(zebraProvavelmenteMarca) return ['3-1'];
+    // Zona de indecisão (44-52%): odds CS decidem
+    var odd30 = csOdds && csOdds['3-0'] ? 100/csOdds['3-0'] : 0;
+    var odd31 = csOdds && csOdds['3-1'] ? 100/csOdds['3-1'] : 0;
+    if(odd31 > odd30) return ['3-1','3-0']; // mercado acredita mais no 3-1
+    if(odd30 > 0) return ['3-0','3-1'];
+    return ['3-0']; // fallback
   }
   var expansao = getExpansao();
-  // scoreExpansao = primeiro da lista (para compatibilidade)
   var scoreExpansao = expansao[0];
 
   if(profileId === 'GOLEADA') {
-    // GOLEADA: 2-0 / 3-0 / 2-1 sempre + 3-1 se BTTS < 2.00
-    if(btts > 2.00) {
+    // GOLEADA: usa probabilidade composta para 3-1 vs 3-0
+    if(zebraClaramenteNaoMarca) {
       mainScores = ['2-0','3-0','2-1'];
     } else {
       mainScores = ['2-0','3-0','2-1','3-1'];
     }
 
   } else if(profileId === 'OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 (btts alto) ou 3-0 (btts desconfiado)
-    // btts < 2.20 = ambos marcam → 3-1 entra (zebra aparece uma vez)
-    // btts >= 2.20 = só favorito marca → 3-0 ganha força (mais no GOLEADA)
-    if(btts < 2.20) {
+    // Probabilidade composta decide se 3-1 entra
+    if(zebraProvavelmenteMarca || (!zebraClaramenteNaoMarca && btts < 2.20)) {
       mainScores = ['1-0','2-0','2-1','3-1'].concat(expansao);
     } else {
       mainScores = ['1-0','2-0','2-1'].concat(expansao);
     }
 
   } else if(profileId === 'EQUILIBRADO_OFENSIVO') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 — favorito ainda dominante mas mais equilíbrio
-    // btts < 2.10 = 3-1 entra (adversário aparece)
-    if(btts < 2.10) {
+    // Probabilidade composta decide se 3-1 entra
+    if(zebraProvavelmenteMarca || (!zebraClaramenteNaoMarca && btts < 2.10)) {
       mainScores = ['1-0','2-0','2-1','3-1'].concat(expansao);
     } else {
       mainScores = ['1-0','2-0','2-1'].concat(expansao);
     }
 
   } else if(profileId === 'EQUILIBRADO') {
-    // PDF: 1-0 / 2-0 / 2-1 — cluster compacto
-    // Mas se btts/over indicam direção clara (>2.00 ou <1.85), usar expansão
-    // btts indeciso (1.85-2.00) → mantém compacto sem expansão
     mainScores = ['1-0','2-0','2-1'];
-    if(btts > 2.00 || btts < 1.85) {
+    if(zebraClaramenteNaoMarca || zebraProvavelmenteMarca) {
       mainScores = mainScores.concat(expansao);
     }
 
   } else if(profileId === 'ABERTO_BTTS') {
-    // PDF: 1-0 / 2-0 / 2-1 / 3-1 + 2-2 em jogos muito abertos
-    // Rota do favorito mantida — 1-0/2-0/2-1 são o caminho de leverage
-    // 3-1 sempre entra porque BTTS é baixo por definição neste perfil
-    // 2-2 entra quando jogo é muito aberto (btts < 1.85 E over < 1.95)
     mainScores = ['1-0','2-0','2-1','3-1'];
-    if(btts < 1.85 && over < 1.95) {
-      mainScores.push('2-2'); // jogo muito aberto — 2-2 entra no Plano A
+    // 2-2 entra quando: prob composta alta + over não fechado + odds CS confirmam
+    var prob22cs = csOdds && csOdds['2-2'] ? 100/csOdds['2-2'] : 0;
+    if(pZebraMarca >= 55 && over < 2.00 && prob22cs >= 5.0) {
+      mainScores.push('2-2');
     }
 
   } else if(profileId === 'CONSERVADOR') {
-    // PDF: 1-0 / 2-0 / 2-1
-    // 3-1 entra se liquidez real justifica (visitante marca no final)
     mainScores = ['1-0','2-0','2-1'];
-    var liq31 = liqScoreMotor('3-1'); // usa liq real do favorito
-    if(liq31 >= 10000) mainScores.push('3-1');
+    if(zebraProvavelmenteMarca) {
+      mainScores.push('3-1');
+    }
 
   } else if(profileId === 'SUPER_EQUILIBRADO') {
-    // Jogo sem favorito claro — cluster centrado no equilíbrio
-    // 2-1 sempre entra — é a vitória mínima do favorito com ambos marcando
-    // Quando btts ≤ 1.70 (volume alto), 3-1 entra — favorito pode marcar 3
     mainScores = ['1-1','1-0','0-1','2-1'];
     if(btts <= 1.70) mainScores.push('3-1');
+    // 2-2 só entra quando prob similar ao 1-1 E prob composta alta
+    var prob22sv = csOdds && csOdds['2-2'] ? 100/csOdds['2-2'] : 0;
+    var prob11sv = csOdds && csOdds['1-1'] ? 100/csOdds['1-1'] : 0;
+    if(pZebraMarca >= 55 && over < 2.10 && prob22sv >= 5.0 &&
+       prob22sv >= prob11sv * 0.75) { // 2-2 tem pelo menos 75% da prob do 1-1
+      mainScores.push('2-2');
+    }
   } else {
-    // ALTO_RISCO: máx 3 scores Plano A (total 5 com PB)
     mainScores = ['1-0','2-0','2-1'];
   }
 
