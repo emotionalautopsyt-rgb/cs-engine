@@ -3116,8 +3116,12 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     "over25_pct": 45,
     "btts_pct": 55,
     "placar_mais_freq": "1-1",
+    "placar_quando_btts": "1-2",
     "marca_pct": 90,
     "clean_sheet_pct": 18,
+    "abre_placar_pct": 80,
+    "vira_quando_atras_pct": 14,
+    "momento": "positivo",
     "amostra": 10
   }
 }
@@ -3143,14 +3147,23 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 - Se dados insuficientes ou indisponíveis, OMITA o campo completamente
 
 CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de cada time):
-- "form_casa": dados do time da CASA nos últimos 10 jogos EM CASA na competição
-- "form_fora": dados do time VISITANTE nos últimos 10 jogos FORA na competição
+- "form_casa": dados do time da CASA nos últimos 10 jogos EM CASA
+- "form_fora": dados do time VISITANTE nos últimos 10 jogos FORA
 - Campos de cada um:
-  → "over25_pct": % de jogos com mais de 2.5 gols (use dados "Jogos com Mais de 2,5 Gols")
-  → "btts_pct": % de jogos onde ambos marcaram (calcule ou use dado disponível)
-  → "placar_mais_freq": placar final mais frequente nos últimos jogos (ex: "2-0")
+  → "over25_pct": % de jogos com mais de 2.5 gols
+  → "btts_pct": % de jogos onde ambos marcaram
+  → "placar_mais_freq": placar final mais frequente (ex: "2-0")
+  → "placar_quando_btts": quando AMBOS marcam, qual placar sai mais? (ex: "1-1", "2-1")
+     Calcule dos resultados: filtre os jogos onde ambos marcaram e veja qual placar domina
   → "marca_pct": % de jogos onde o time marcou pelo menos 1 gol
-  → "clean_sheet_pct": % de jogos sem sofrer gols (use "Jogos sem sofrer")
+  → "clean_sheet_pct": % de jogos sem sofrer gols
+  → "abre_placar_pct": % de jogos onde ESTE time marcou primeiro
+     Use "Abre marcador" da tabela quando disponível
+  → "vira_quando_atras_pct": quando sofreu o primeiro gol, % de vezes que virou
+     Use "Reviravoltas" da tabela — ex: "1 em 8 jogos" = 12%
+  → "momento": forma atual — "positivo" (3+ vitórias nos últimos 5) ou
+     "negativo" (3+ derrotas/empates nos últimos 5) ou "neutro"
+     Calcule da sequência atual e resultados recentes
   → "amostra": número de jogos analisados (geralmente 10)
 - Extraia diretamente das tabelas de estatísticas da academia quando disponíveis
 - Se os dados não estiverem no texto, OMITA o campo completamente
@@ -3945,6 +3958,70 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       console.log('[CS COMPLEMENTO] '+sc+' prob='+prob.toFixed(1)+'% >= '+thresholdCS+'% → adicionado');
     });
   }
+
+  // ── PROTEÇÃO CIRÚRGICA — form_casa e form_fora ───────────────────
+  
+  // 1. placar_quando_btts: score histórico quando ambos marcam
+  var placarBttsFav = favEhVisitante
+    ? (S._formFora && S._formFora.placar_quando_btts ? S._formFora.placar_quando_btts : '')
+    : (S._formCasa && S._formCasa.placar_quando_btts ? S._formCasa.placar_quando_btts : '');
+
+  if(placarBttsFav && !clusterScores.includes(placarBttsFav) && btts < 2.10) {
+    // Verificar coerência com lado do favorito
+    var pBttsPartes = placarBttsFav.split('-');
+    var pBttsCoerente = false;
+    if(pBttsPartes.length === 2) {
+      var pBttsH = parseInt(pBttsPartes[0]);
+      var pBttsA = parseInt(pBttsPartes[1]);
+      // favorito deve ter mais gols ou empate — não pode ser zebra vencendo
+      pBttsCoerente = favEhVisitante ? (pBttsA >= pBttsH) : (pBttsH >= pBttsA);
+    }
+
+    if(pBttsCoerente) {
+      // Verificar se odds CS confirmam (prob >= 4%)
+      var oddBtts = csOdds && csOdds[placarBttsFav] ? csOdds[placarBttsFav] : 0;
+      var probBtts = oddBtts > 0 ? 100/oddBtts : 0;
+      if(probBtts >= 4.0) {
+        clusterScores.push(placarBttsFav);
+        console.log('[FORM BTTS] '+placarBttsFav+' placar histórico quando BTTS prob='+probBtts.toFixed(1)+'% → adicionado');
+      } else if(oddBtts === 0) {
+        // Sem odds CS disponíveis — adiciona só se btts for muito favorável
+        if(btts < 1.90) {
+          clusterScores.push(placarBttsFav);
+          console.log('[FORM BTTS] '+placarBttsFav+' sem odds CS mas btts favorável → adicionado');
+        }
+      }
+    } else {
+      console.log('[FORM BTTS] '+placarBttsFav+' incoerente com lado do favorito — ignorado');
+    }
+  }
+
+  // 2. abre_placar_pct: favorito abre em >70% → confirma âncora e protege caminho
+  //    Se favorito abre muito, o primeiro score do caminho é quase certo
+  var abreAncora = favEhVisitante
+    ? (S._formFora ? S._formFora.abre_placar_pct : 0)
+    : (S._formCasa ? S._formCasa.abre_placar_pct : 0);
+  
+  // 3. vira_quando_atras: zebra raramente vira → não precisa de muitos planos B
+  //    Se zebra nunca vira, plano B com favorito na frente é suficiente
+  //    Já considerado na seleção do cluster — informação visual disponível
+
+  // 4. momento: time em momentum negativo → cluster mais compacto
+  var momentoFav = favEhVisitante
+    ? (S._formFora ? S._formFora.momento : 'neutro')
+    : (S._formCasa ? S._formCasa.momento : 'neutro');
+  
+  // Se favorito em momento negativo, remove scores de goleada do cluster
+  if(momentoFav === 'negativo' && clusterScores.length > 4) {
+    clusterScores = clusterScores.filter(function(sc) {
+      var pts = sc.split('-');
+      if(pts.length !== 2) return true;
+      var h = parseInt(pts[0]), a = parseInt(pts[1]);
+      var golsFav = favEhVisitante ? a : h;
+      return golsFav <= 2; // remove scores com 3+ gols do favorito em momento negativo
+    });
+    console.log('[FORM MOMENTO] Favorito em momento negativo — scores de goleada removidos');
+  }
   var clusterOdds = clusterScores
     .map(function(s){ return oddScoreMotor(s); })
     .filter(function(o){ return o > 0; });
@@ -4637,28 +4714,35 @@ REGRAS ABSOLUTAS:
           }
 
           // Processar form_casa e form_fora — últimos 10 jogos de cada time
-          // Por enquanto: salvar para exibição visual — não altera scores automaticamente
           S._formCasa = null;
           S._formFora = null;
           if(voto && voto.form_casa && typeof voto.form_casa === 'object') {
             S._formCasa = {
-              over25_pct:      parseFloat(voto.form_casa.over25_pct) || 0,
-              btts_pct:        parseFloat(voto.form_casa.btts_pct) || 0,
-              placar_mais_freq: voto.form_casa.placar_mais_freq || '',
-              marca_pct:       parseFloat(voto.form_casa.marca_pct) || 0,
-              clean_sheet_pct: parseFloat(voto.form_casa.clean_sheet_pct) || 0,
-              amostra:         parseInt(voto.form_casa.amostra) || 10
+              over25_pct:          parseFloat(voto.form_casa.over25_pct) || 0,
+              btts_pct:            parseFloat(voto.form_casa.btts_pct) || 0,
+              placar_mais_freq:    voto.form_casa.placar_mais_freq || '',
+              placar_quando_btts:  voto.form_casa.placar_quando_btts || '',
+              marca_pct:           parseFloat(voto.form_casa.marca_pct) || 0,
+              clean_sheet_pct:     parseFloat(voto.form_casa.clean_sheet_pct) || 0,
+              abre_placar_pct:     parseFloat(voto.form_casa.abre_placar_pct) || 0,
+              vira_quando_atras:   parseFloat(voto.form_casa.vira_quando_atras_pct) || 0,
+              momento:             voto.form_casa.momento || 'neutro',
+              amostra:             parseInt(voto.form_casa.amostra) || 10
             };
             console.log('[FORM CASA]', JSON.stringify(S._formCasa));
           }
           if(voto && voto.form_fora && typeof voto.form_fora === 'object') {
             S._formFora = {
-              over25_pct:      parseFloat(voto.form_fora.over25_pct) || 0,
-              btts_pct:        parseFloat(voto.form_fora.btts_pct) || 0,
-              placar_mais_freq: voto.form_fora.placar_mais_freq || '',
-              marca_pct:       parseFloat(voto.form_fora.marca_pct) || 0,
-              clean_sheet_pct: parseFloat(voto.form_fora.clean_sheet_pct) || 0,
-              amostra:         parseInt(voto.form_fora.amostra) || 10
+              over25_pct:          parseFloat(voto.form_fora.over25_pct) || 0,
+              btts_pct:            parseFloat(voto.form_fora.btts_pct) || 0,
+              placar_mais_freq:    voto.form_fora.placar_mais_freq || '',
+              placar_quando_btts:  voto.form_fora.placar_quando_btts || '',
+              marca_pct:           parseFloat(voto.form_fora.marca_pct) || 0,
+              clean_sheet_pct:     parseFloat(voto.form_fora.clean_sheet_pct) || 0,
+              abre_placar_pct:     parseFloat(voto.form_fora.abre_placar_pct) || 0,
+              vira_quando_atras:   parseFloat(voto.form_fora.vira_quando_atras_pct) || 0,
+              momento:             voto.form_fora.momento || 'neutro',
+              amostra:             parseInt(voto.form_fora.amostra) || 10
             };
             console.log('[FORM FORA]', JSON.stringify(S._formFora));
           }
@@ -6268,26 +6352,30 @@ function renderCluster(cluster, stake) {
     // Form Casa
     if(S._formCasa) {
       var fc = S._formCasa;
+      var momCorCasa = fc.momento === 'positivo' ? 'var(--grn)' : fc.momento === 'negativo' ? 'var(--red)' : 'var(--txt3)';
       htmlForm += '<div style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;">';
-      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">🏠 CASA ('+fc.amostra+'j)</div>';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">🏠 CASA ('+fc.amostra+'j) <span style="color:'+momCorCasa+'">'+fc.momento.toUpperCase()+'</span></div>';
       htmlForm += '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);line-height:1.8;">';
       htmlForm += 'Over2.5: <span style="color:'+(fc.over25_pct>=60?'var(--grn)':fc.over25_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+fc.over25_pct+'%</span><br>';
       htmlForm += 'BTTS: <span style="color:'+(fc.btts_pct>=60?'var(--grn)':fc.btts_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+fc.btts_pct+'%</span><br>';
-      if(fc.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+fc.placar_mais_freq+'</span><br>';
-      htmlForm += 'Marca: <span style="color:'+(fc.marca_pct>=80?'var(--grn)':'var(--txt2)')+'">'+fc.marca_pct+'%</span>';
+      if(fc.placar_quando_btts) htmlForm += 'Btts→: <span style="color:var(--acc)">'+fc.placar_quando_btts+'</span><br>';
+      else if(fc.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+fc.placar_mais_freq+'</span><br>';
+      if(fc.abre_placar_pct) htmlForm += 'Abre: <span style="color:'+(fc.abre_placar_pct>=70?'var(--grn)':'var(--txt2)')+'">'+fc.abre_placar_pct+'%</span>';
       htmlForm += '</div></div>';
     }
 
     // Form Fora
     if(S._formFora) {
       var ff = S._formFora;
+      var momCorFora = ff.momento === 'positivo' ? 'var(--grn)' : ff.momento === 'negativo' ? 'var(--red)' : 'var(--txt3)';
       htmlForm += '<div style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;">';
-      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">✈️ FORA ('+ff.amostra+'j)</div>';
+      htmlForm += '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);margin-bottom:6px;">✈️ FORA ('+ff.amostra+'j) <span style="color:'+momCorFora+'">'+ff.momento.toUpperCase()+'</span></div>';
       htmlForm += '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--txt2);line-height:1.8;">';
       htmlForm += 'Over2.5: <span style="color:'+(ff.over25_pct>=60?'var(--grn)':ff.over25_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+ff.over25_pct+'%</span><br>';
       htmlForm += 'BTTS: <span style="color:'+(ff.btts_pct>=60?'var(--grn)':ff.btts_pct>=40?'var(--ylw)':'var(--txt3)')+'">'+ff.btts_pct+'%</span><br>';
-      if(ff.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+ff.placar_mais_freq+'</span><br>';
-      htmlForm += 'Marca: <span style="color:'+(ff.marca_pct>=80?'var(--grn)':'var(--txt2)')+'">'+ff.marca_pct+'%</span>';
+      if(ff.placar_quando_btts) htmlForm += 'Btts→: <span style="color:var(--acc)">'+ff.placar_quando_btts+'</span><br>';
+      else if(ff.placar_mais_freq) htmlForm += 'Freq: <span style="color:var(--acc)">'+ff.placar_mais_freq+'</span><br>';
+      if(ff.abre_placar_pct) htmlForm += 'Abre: <span style="color:'+(ff.abre_placar_pct>=70?'var(--grn)':'var(--txt2)')+'">'+ff.abre_placar_pct+'%</span>';
       htmlForm += '</div></div>';
     }
 
