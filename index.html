@@ -5839,6 +5839,7 @@ function calcStakes(cluster, stake, analysisText) {
 
       var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15
         || prob >= 10.0           // prob alta no CS sobrescreve btts genérico
+        || (prob >= probMinDin && prob >= 8.5) // acima do threshold com margem → não bloquear
         || h2hDesbloqueiaAmbos;   // H2H forte sobrescreve btts genérico
 
       if(prob < probMinDin || !bttsPermiteAmbos) {
@@ -5865,6 +5866,15 @@ function calcStakes(cluster, stake, analysisText) {
             +(scTemAmbos&&!bttsPermiteAmbos?' [btts bloqueou]':'')
             +' → expansão');
         }
+      }
+
+      // ── REGRA FAV FORTE: 0-0 não entra quando favorito < 1.65 ────
+      // Com fav@1.54, o favorito tem 65% de chance de vencer.
+      // 0-0 contradiz esse favoritismo — deve ser EXPANSÃO no máximo.
+      if(s.score === '0-0' && favAtual > 0 && favAtual < 1.65 && s.tipo !== 'expansao') {
+        s.tipo = 'expansao';
+        s.stake = 0; s.lucro = 0;
+        console.log('[FAV FORTE] 0-0 removido do Dutch — fav@'+favAtual+' < 1.65');
       }
     });
 
