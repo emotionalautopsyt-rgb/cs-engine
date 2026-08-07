@@ -5581,13 +5581,18 @@ function calcStakes(cluster, stake, analysisText) {
       // Threshold mínimo: goleada só aparece (mesmo como expansão) se prob >= 8%
       // E se over não está extremamente alto (jogo under) — over > 2.80 = jogo under, goleada não faz sentido
       const overAtualGol = parseFloat(document.getElementById('pk-over')?.value) || 2.0;
+      const favAtualGol = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
       const jogoUnder = overAtualGol > 2.80;
-      // Goleada só aparece como EXPANSÃO quando tem valor real:
-      // → prob >= 8% E (over <= 1.85 OU prob >= 12%)
-      // Evita card laranja em todo jogo sem volume real
+      // Goleada não aparece quando:
+      // 1. over alto (> 1.90) sem prob suficiente (< 12%)
+      // 2. over muito alto (> 2.50) — poucos gols esperados
+      // 3. fav forte (< 1.65) + over alto (> 2.20) — favorito domina mas jogo fechado
+      //    Nesse caso o 3-0/3-1 específico tem mais valor que goleada genérica
       const overJustificaGoleada = overAtualGol <= 1.90 || probAnyOther >= 12.0;
-      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada) {
-        console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+(jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto sem prob suficiente)':'')));
+      const favForteJogoFechado = favAtualGol < 1.65 && overAtualGol > 2.20;
+      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado) {
+        console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+
+          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':'')));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
@@ -5858,7 +5863,11 @@ function calcStakes(cluster, stake, analysisText) {
           (perfilAtual === 'ABERTO_BTTS' &&
           (s.score === '3-1' || s.score === '2-2'));
 
-        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial) {
+        // Score acima do threshold com margem — não remover pelo btts
+        // (veio do complemento CS com valor real)
+        var ehComplementoCS = prob >= probMinDin && !scTemAmbos;
+
+        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial && !ehComplementoCS) {
           s.tipo = 'expansao';
           s.stake = 0; s.lucro = 0;
           console.log('[THRESHOLD DIN] '+s.score+' prob='+prob.toFixed(1)+'%'
