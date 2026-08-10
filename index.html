@@ -2242,6 +2242,39 @@ function calcPoisson() {
   }
   var lam=(lo+hi)/2;
 
+  // ── λ COMBINADO — pondera over de mercado + médias reais dos times ──
+  // Se temos médias dos times extraídas pela IA, usa XG real combinado
+  var lamFavMerc = lam * 0.55; // split padrão pelo over
+  var lamZebMerc = lam * 0.45;
+  var lamFavFinal = lamFavMerc;
+  var lamZebFinal = lamZebMerc;
+
+  var formFav = !S._favEhVisitante ? S._formCasa : S._formFora;
+  var formZeb = !S._favEhVisitante ? S._formFora : S._formCasa;
+
+  if(formFav && formFav.media_gols_marcados > 0 && formZeb && formZeb.media_gols_sofridos > 0) {
+    var lamFavReal = (formFav.media_gols_marcados + formZeb.media_gols_sofridos) / 2;
+    var lamZebReal = (formZeb.media_gols_marcados + formFav.media_gols_sofridos) / 2;
+    // Pondera: 60% mercado + 40% médias reais
+    lamFavFinal = lamFavMerc * 0.60 + lamFavReal * 0.40;
+    lamZebFinal = lamZebMerc * 0.60 + lamZebReal * 0.40;
+    console.log('[λ COMBINADO] mercado fav='+lamFavMerc.toFixed(2)+' zeb='+lamZebMerc.toFixed(2)+
+      ' | real fav='+lamFavReal.toFixed(2)+' zeb='+lamZebReal.toFixed(2)+
+      ' | final fav='+lamFavFinal.toFixed(2)+' zeb='+lamZebFinal.toFixed(2));
+  }
+
+  // Salvar λ combinado para uso no motor
+  S._lamFav = parseFloat(lamFavFinal.toFixed(2));
+  S._lamZeb = parseFloat(lamZebFinal.toFixed(2));
+
+  // ── ALERTA DE TIMING — gols concentrados no 76-90 ──
+  var gols76Fav = formFav ? (formFav.gols_76_90_pct || 0) : 0;
+  var gols76Zeb = formZeb ? (formZeb.gols_76_90_pct || 0) : 0;
+  S._gols76_90 = Math.max(gols76Fav, gols76Zeb);
+  if(S._gols76_90 >= 40) {
+    console.log('[TIMING] '+S._gols76_90+'% gols no 76-90 — jogo decide tarde');
+  }
+
   var p35=probOver(lam,3);
   var p45=probOver(lam,4);
   var p55=probOver(lam,5);
@@ -2494,6 +2527,20 @@ function checkPackball() {
   if(/blooming|tamayapo|bolivar|potosi|aurora vs|real oruro|vojvodina|beogard|radnick|partizan|crvena zvezda|skenderbeu|kukesi|flamurtari/i.test(textoLower)) {
     alertasEv.push({ tipo:'negativo',
       msg:'🔴 Liga com mercado ineficiente — Bolívia, Sérvia ou ligas de baixa liquidez CS. Odds podem estar na faixa certa mas o oddmaker tem menos informação. Alta variância, EV incerto. Reduzir stake ou evitar.'
+    });
+  }
+
+  // ── ALERTA TIMING DE GOLS ────────────────────────────────
+  if(S._gols76_90 >= 40) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'⏰ GOLS TARDIOS — '+S._gols76_90+'% dos gols saem entre 76-90\'. '
+        +'Jogo costuma decidir tarde. Aguardar pelo menos 70\' antes de qualquer LAY — '
+        +'odds caem mais e o lucro é maior quando o gol confirma no final.'
+    });
+  } else if(S._gols76_90 >= 30) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'⏰ TENDÊNCIA TARDIA — '+S._gols76_90+'% dos gols no 76-90\'. '
+        +'Vale aguardar antes de dar LAY para maximizar o lucro.'
     });
   }
 
@@ -3171,6 +3218,10 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     "abre_placar_pct": 80,
     "vira_quando_atras_pct": 14,
     "momento": "positivo",
+    "media_gols_marcados": 1.8,
+    "media_gols_sofridos": 0.9,
+    "media_total": 2.7,
+    "gols_76_90_pct": 35,
     "amostra": 10
   }
 }
@@ -3210,6 +3261,16 @@ CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de
      Use "Abre marcador" da tabela quando disponível
   → "vira_quando_atras_pct": quando sofreu o primeiro gol, % de vezes que virou
      Use "Reviravoltas" da tabela — ex: "1 em 8 jogos" = 12%
+  → "media_gols_marcados": média de gols marcados por jogo (use "Média de gols marcados por jogo" da tabela)
+     Para form_casa: use coluna Casa. Para form_fora: use coluna Fora.
+  → "media_gols_sofridos": média de gols sofridos por jogo (use "Média de gols sofridos por jogo")
+     Para form_casa: use coluna Casa. Para form_fora: use coluna Fora.
+  → "media_total": média de gols totais por jogo (marcados + sofridos)
+     Use "Média de gols marcados+sofridos" da tabela
+  → "gols_76_90_pct": % dos gols marcados que saíram entre 76-90'
+     Calcule: gols no período 76-90 ÷ total de gols marcados × 100
+     Ex: "marcou 5 de seus 12 gols entre os minutos (76'-90')" = 42%
+     Se não disponível, omitir
   → "momento": forma atual — "positivo" (3+ vitórias nos últimos 5) ou
      "negativo" (3+ derrotas/empates nos últimos 5) ou "neutro"
      Calcule da sequência atual e resultados recentes
@@ -5034,6 +5095,10 @@ REGRAS ABSOLUTAS:
               abre_placar_pct:     parseFloat(voto.form_casa.abre_placar_pct) || 0,
               vira_quando_atras:   parseFloat(voto.form_casa.vira_quando_atras_pct) || 0,
               momento:             voto.form_casa.momento || 'neutro',
+              media_gols_marcados: parseFloat(voto.form_casa.media_gols_marcados) || 0,
+              media_gols_sofridos: parseFloat(voto.form_casa.media_gols_sofridos) || 0,
+              media_total:         parseFloat(voto.form_casa.media_total) || 0,
+              gols_76_90_pct:      parseFloat(voto.form_casa.gols_76_90_pct) || 0,
               amostra:             parseInt(voto.form_casa.amostra) || 10
             };
             console.log('[FORM CASA]', JSON.stringify(S._formCasa));
@@ -5049,6 +5114,10 @@ REGRAS ABSOLUTAS:
               abre_placar_pct:     parseFloat(voto.form_fora.abre_placar_pct) || 0,
               vira_quando_atras:   parseFloat(voto.form_fora.vira_quando_atras_pct) || 0,
               momento:             voto.form_fora.momento || 'neutro',
+              media_gols_marcados: parseFloat(voto.form_fora.media_gols_marcados) || 0,
+              media_gols_sofridos: parseFloat(voto.form_fora.media_gols_sofridos) || 0,
+              media_total:         parseFloat(voto.form_fora.media_total) || 0,
+              gols_76_90_pct:      parseFloat(voto.form_fora.gols_76_90_pct) || 0,
               amostra:             parseInt(voto.form_fora.amostra) || 10
             };
             console.log('[FORM FORA]', JSON.stringify(S._formFora));
