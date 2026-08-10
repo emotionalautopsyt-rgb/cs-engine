@@ -4046,14 +4046,272 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   }
 
   // 2. abre_placar_pct: favorito abre em >70% → confirma âncora e protege caminho
-  //    Se favorito abre muito, o primeiro score do caminho é quase certo
   var abreAncora = favEhVisitante
     ? (S._formFora ? S._formFora.abre_placar_pct : 0)
     : (S._formCasa ? S._formCasa.abre_placar_pct : 0);
-  
-  // 3. vira_quando_atras: zebra raramente vira → não precisa de muitos planos B
-  //    Se zebra nunca vira, plano B com favorito na frente é suficiente
-  //    Já considerado na seleção do cluster — informação visual disponível
+
+  // ── PERFIL DA ZEBRA — ajusta cluster baseado no histórico ────────────
+  // Zebra = time visitante quando favorito é casa, ou time da casa quando favorito é visitante
+  var zebraFormData = !favEhVisitante ? S._formFora : S._formCasa;
+
+  if(zebraFormData && zebraFormData.amostra >= 5) {
+    var zMarca    = zebraFormData.marca_pct || 0;
+    var zVira     = zebraFormData.vira_quando_atras || 0;
+    var zOver     = zebraFormData.over25_pct || 0;
+    var zBtts     = zebraFormData.btts_pct || 0;
+    var zMomento  = zebraFormData.momento || 'neutro';
+
+    // Calcular pontuação da zebra
+    var zPontos = 0;
+    if(zMarca >= 65) zPontos++;
+    if(zMarca >= 75) zPontos++;
+    if(zVira  >= 25) zPontos++;
+    if(zVira  >= 35) zPontos++;
+    if(zOver  >= 55) zPontos++;
+    if(zBtts  >= 60) zPontos++;
+    if(zMomento === 'positivo') zPontos++;
+
+    var zPontosPassiva = 0;
+    if(zMarca <= 35) zPontosPassiva++;
+    if(zMarca <= 25) zPontosPassiva++;
+    if(zVira  <= 15) zPontosPassiva++;
+    if(zVira  <= 10) zPontosPassiva++;
+    if(zOver  <= 30) zPontosPassiva++;
+    if(zMomento === 'negativo') zPontosPassiva++;
+
+    // Score de vitória da zebra (0-1 ou 1-0 dependendo do lado)
+    var scoreVitZebra  = favEhVisitante ? '1-0' : '0-1';
+    var scoreVitZebra2 = favEhVisitante ? '2-1' : '1-2'; // zebra vence por 2
+    var scoreEmpate    = '1-1';
+
+    // ── ZEBRA MUITO OFENSIVA (5+ pontos) ──
+    // Remove 3-0/goleada/2-0, adiciona 0-1 e 1-2
+    if(zPontos >= 5) {
+      // Remove scores com 0 gols da zebra (só favorito marca)
+      clusterScores = clusterScores.filter(function(sc) {
+        var pts = sc.split('-');
+        if(pts.length !== 2) return true;
+        var h = parseInt(pts[0]), a = parseInt(pts[1]);
+        var golsZebra = favEhVisitante ? h : a;
+        // Remove scores onde zebra não marca com 3+ gols do favorito
+        if(golsZebra === 0) {
+          var golsFav = favEhVisitante ? a : h;
+          return golsFav <= 1; // mantém só 1-0 ou 0-1 sem gol da zebra
+        }
+        return true;
+      });
+      // Adiciona vitória da zebra e 1-2
+      if(!clusterScores.includes(scoreVitZebra)) clusterScores.push(scoreVitZebra);
+      if(btts < 2.00 && !clusterScores.includes(scoreVitZebra2)) clusterScores.push(scoreVitZebra2);
+      if(!clusterScores.includes(scoreEmpate)) clusterScores.push(scoreEmpate);
+      console.log('[ZEBRA MUITO OFENSIVA] '+zMarca+'% marca, '+zVira+'% vira — cluster ajustado');
+    }
+
+    // ── ZEBRA OFENSIVA (3-4 pontos) ──
+    // Remove 3-0, adiciona 0-1
+    else if(zPontos >= 3) {
+      // Remove scores com 3+ gols do favorito sem zebra marcar
+      clusterScores = clusterScores.filter(function(sc) {
+        var pts = sc.split('-');
+        if(pts.length !== 2) return true;
+        var h = parseInt(pts[0]), a = parseInt(pts[1]);
+        var golsZebra = favEhVisitante ? h : a;
+        var golsFav   = favEhVisitante ? a : h;
+        // Remove 3-0, 4-0 etc (favorito faz 3+ sem zebra marcar)
+        return !(golsFav >= 3 && golsZebra === 0);
+      });
+      // Adiciona 0-1 baseado no btts
+      if(btts < 2.00 && !clusterScores.includes(scoreVitZebra)) {
+        clusterScores.push(scoreVitZebra);
+      }
+      if(!clusterScores.includes(scoreEmpate)) clusterScores.push(scoreEmpate);
+      console.log('[ZEBRA OFENSIVA] '+zMarca+'% marca, '+zVira+'% vira — 3-0 removido, 0-1 adicionado');
+    }
+
+    // ── ZEBRA MODERADA (1-2 pontos ou marca 50%+) ──
+    // Adiciona 0-1 se btts < 1.90 — mercado confirma ambos marcam
+    else if(zPontos >= 2 || zMarca >= 50) {
+      if(btts < 1.90 && !clusterScores.includes(scoreVitZebra)) {
+        clusterScores.push(scoreVitZebra);
+        console.log('[ZEBRA MODERADA] btts<1.90 + marca='+zMarca+'% → 0-1 adicionado');
+      }
+    }
+
+    // ── ZEBRA PASSIVA (3+ pontos passiva) ──
+    // Remove planos B desnecessários — cluster só do favorito
+    else if(zPontosPassiva >= 3) {
+      // Remove scores com gol da zebra exceto 1-1 quando btts < 2.00
+      clusterScores = clusterScores.filter(function(sc) {
+        var pts = sc.split('-');
+        if(pts.length !== 2) return true;
+        var h = parseInt(pts[0]), a = parseInt(pts[1]);
+        var golsZebra = favEhVisitante ? h : a;
+        // Mantém scores sem gol da zebra + 1-1 se btts razoável
+        if(golsZebra > 0) {
+          if(sc === scoreEmpate && btts < 2.10) return true; // mantém 1-1
+          return false; // remove outros com gol da zebra
+        }
+        return true;
+      });
+      console.log('[ZEBRA PASSIVA] '+zMarca+'% marca, '+zVira+'% vira — planos B removidos');
+    }
+
+    // Garantir limite de 5-7 scores
+    if(clusterScores.length > 7) {
+      // Remove os menos relevantes (scores com odds mais altas)
+      var comOdds = clusterScores.map(function(sc) {
+        return { sc: sc, odd: oddScoreMotor(sc) || 999 };
+      });
+      comOdds.sort(function(a,b) { return a.odd - b.odd; }); // menor odd = mais provável
+      clusterScores = comOdds.slice(0, 7).map(function(x) { return x.sc; });
+      console.log('[ZEBRA] Cluster limitado a 7 scores');
+    }
+  }
+
+  // ── CAMADA 8 — PERFIL DO FAVORITO pelos últimos 10 jogos ──────────
+  // Analisa form_casa do favorito (ou form_fora se favorito é visitante)
+  // para calibrar os scores do favorito no cluster
+  var favFormData = favEhVisitante ? S._formFora : S._formCasa;
+
+  if(favFormData && favFormData.amostra >= 5) {
+    var fMarca       = favFormData.marca_pct || 0;
+    var fOver        = favFormData.over25_pct || 0;
+    var fClean       = favFormData.clean_sheet_pct || 0;
+    var fPlacarFreq  = favFormData.placar_mais_freq || '';
+    var fPlacarBtts  = favFormData.placar_quando_btts || '';
+    var fAbre        = favFormData.abre_placar_pct || 0;
+    var fMomento     = favFormData.momento || 'neutro';
+
+    // ── FAVORITO GOLEADOR (over alto, marca muito, placar freq alto) ──
+    // Ex: Bayern em casa — over75% + marca90% + placar_freq "3-0"
+    var favGoleador = false;
+    var placarFreqGols = 0;
+    if(fPlacarFreq) {
+      var pfPartes = fPlacarFreq.split('-');
+      if(pfPartes.length === 2) {
+        var pfFav = favEhVisitante ? parseInt(pfPartes[1]) : parseInt(pfPartes[0]);
+        placarFreqGols = pfFav;
+        if(pfFav >= 3) favGoleador = true;
+      }
+    }
+
+    var pontosGoleador = 0;
+    if(fOver >= 65) pontosGoleador++;
+    if(fOver >= 75) pontosGoleador++;
+    if(fMarca >= 85) pontosGoleador++;
+    if(fMarca >= 90) pontosGoleador++;
+    if(favGoleador) pontosGoleador += 2; // placar mais freq tem 3+ gols
+    if(fMomento === 'positivo') pontosGoleador++;
+
+    // ── FAVORITO COMPACTO (over baixo, clean sheets, marca 1-2 gols e para) ──
+    var pontosCompacto = 0;
+    if(fOver <= 35) pontosCompacto++;
+    if(fOver <= 25) pontosCompacto++;
+    if(fClean >= 50) pontosCompacto++;
+    if(fClean >= 60) pontosCompacto++;
+    if(placarFreqGols <= 1) pontosCompacto++;
+    if(fMomento === 'negativo') pontosCompacto++;
+
+    // Scores do favorito (casa ou fora)
+    var scFav3x0 = favEhVisitante ? '0-3' : '3-0';
+    var scFav3x1 = favEhVisitante ? '1-3' : '3-1';
+    var scFav2x0 = favEhVisitante ? '0-2' : '2-0';
+    var scFav1x0 = favEhVisitante ? '0-1' : '1-0';
+    var scFav2x1 = favEhVisitante ? '1-2' : '2-1';
+
+    // FAVORITO GOLEADOR (4+ pontos) — força scores altos no cluster
+    if(pontosGoleador >= 4) {
+      // Se zebra também é ofensiva — prioriza 3-1 em vez de 3-0
+      // (favorito faz 3, zebra aparece 1 vez)
+      var zebraEhOfensiva = zebraFormData && zebraFormData.amostra >= 5 &&
+        ((zebraFormData.marca_pct || 0) >= 65 || (zebraFormData.vira_quando_atras || 0) >= 25);
+
+      if(zebraEhOfensiva) {
+        // Zebra ofensiva + favorito goleador → 3-1 é mais provável que 3-0
+        if(!clusterScores.includes(scFav3x1)) {
+          var odd3x1z = csOdds && csOdds[scFav3x1] ? 100/csOdds[scFav3x1] : 0;
+          if(odd3x1z >= 4.0 || odd3x1z === 0) {
+            clusterScores.push(scFav3x1);
+            console.log('[FAV GOLEADOR+ZEBRA] '+scFav3x1+' prevalece sobre 3-0 — zebra ofensiva');
+          }
+        }
+        // Não adiciona 3-0 quando zebra é ofensiva
+      } else {
+        // Zebra passiva/normal + favorito goleador → 3-0 entra
+        if(!clusterScores.includes(scFav3x0)) {
+          var odd3x0g = csOdds && csOdds[scFav3x0] ? 100/csOdds[scFav3x0] : 0;
+          if(odd3x0g >= 4.0 || odd3x0g === 0) {
+            clusterScores.push(scFav3x0);
+            console.log('[FAV GOLEADOR] '+scFav3x0+' adicionado — favorito faz 3+ em '+fOver+'% jogos');
+          }
+        }
+        if(!clusterScores.includes(scFav3x1) && pZebraMarca >= 44) {
+          var odd3x1g = csOdds && csOdds[scFav3x1] ? 100/csOdds[scFav3x1] : 0;
+          if(odd3x1g >= 4.0 || odd3x1g === 0) {
+            clusterScores.push(scFav3x1);
+            console.log('[FAV GOLEADOR] '+scFav3x1+' adicionado — favorito goleador com zebra marcando');
+          }
+        }
+      }
+      console.log('[FAV GOLEADOR] '+fOver+'% over, placar_freq='+fPlacarFreq+', pontos='+pontosGoleador);
+    }
+
+    // FAVORITO COMPACTO (3+ pontos) — remove scores altos do cluster
+    if(pontosCompacto >= 3) {
+      var antesLen = clusterScores.length;
+      clusterScores = clusterScores.filter(function(sc) {
+        // Remove 3-0, 3-1 e goleada quando favorito é compacto
+        if(sc === scFav3x0 || sc === scFav3x1) return false;
+        if(sc.startsWith('any_other')) return false;
+        var pts = sc.split('-');
+        if(pts.length !== 2) return true;
+        var h = parseInt(pts[0]), a = parseInt(pts[1]);
+        var golsFav = favEhVisitante ? a : h;
+        return golsFav <= 2; // favorito dificilmente faz mais de 2
+      });
+      // Garante que 1-0 e 2-0 estão (núcleo do favorito compacto)
+      if(!clusterScores.includes(scFav1x0)) clusterScores.push(scFav1x0);
+      if(!clusterScores.includes(scFav2x0)) clusterScores.push(scFav2x0);
+      console.log('[FAV COMPACTO] '+fOver+'% over, clean='+fClean+'%, pontos='+pontosCompacto+' — 3+ gols removidos');
+    }
+
+    // PLACAR MAIS FREQUENTE DO FAVORITO — protege no cluster
+    if(fPlacarFreq && !clusterScores.includes(fPlacarFreq)) {
+      // Verifica coerência com lado do favorito
+      var pfp = fPlacarFreq.split('-');
+      if(pfp.length === 2) {
+        var pfH = parseInt(pfp[0]), pfA = parseInt(pfp[1]);
+        var pfFavGols = favEhVisitante ? pfA : pfH;
+        var pfCoerente = favEhVisitante ? pfA >= pfH : pfH >= pfA;
+        // Só adiciona se favorito tem mais gols e prob CS confirma
+        if(pfCoerente && pfFavGols >= 1 && pfFavGols <= 3) {
+          var oddPf = csOdds && csOdds[fPlacarFreq] ? 100/csOdds[fPlacarFreq] : 0;
+          if(oddPf >= 4.0 || oddPf === 0) {
+            clusterScores.push(fPlacarFreq);
+            console.log('[FAV PLACAR FREQ] '+fPlacarFreq+' protegido — placar mais frequente do favorito');
+          }
+        }
+      }
+    }
+
+    // Garantir limite de 5-7 scores após ajustes do favorito
+    if(clusterScores.length > 7) {
+      var comOddsFav = clusterScores.map(function(sc) {
+        return { sc: sc, odd: oddScoreMotor(sc) || 999 };
+      });
+      comOddsFav.sort(function(a,b) { return a.odd - b.odd; });
+      clusterScores = comOddsFav.slice(0, 7).map(function(x) { return x.sc; });
+    }
+    if(clusterScores.length < 5) {
+      // Garante mínimo de 5 — adiciona scores básicos se necessário
+      var basicos = [scFav1x0, scFav2x0, scFav2x1, '1-1', scFav3x0];
+      basicos.forEach(function(sc) {
+        if(clusterScores.length < 5 && !clusterScores.includes(sc)) {
+          clusterScores.push(sc);
+        }
+      });
+    }
+  }
 
   // 4. momento: time em momentum negativo → cluster mais compacto
   var momentoFav = favEhVisitante
