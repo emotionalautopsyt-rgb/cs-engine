@@ -2497,6 +2497,55 @@ function checkPackball() {
     });
   }
 
+  // ── ALERTA PERFIL DA ZEBRA ────────────────────────────────
+  // Usa form_fora (visitante) para classificar a zebra
+  var zebraForm = !favEhVisitante ? S._formFora : S._formCasa;
+  if(zebraForm && zebraForm.amostra >= 5) {
+    var zebraMarcaPct    = zebraForm.marca_pct || 0;
+    var zebraViraPct     = zebraForm.vira_quando_atras || 0;
+    var zebraOverPct     = zebraForm.over25_pct || 0;
+    var zebraBttsPct     = zebraForm.btts_pct || 0;
+    var zebraMomento     = zebraForm.momento || 'neutro';
+
+    // ZEBRA OFENSIVA — marca muito, vira quando atrás, momento positivo
+    var pontos = 0;
+    if(zebraMarcaPct >= 65) pontos++;
+    if(zebraMarcaPct >= 75) pontos++;
+    if(zebraViraPct >= 25) pontos++;
+    if(zebraViraPct >= 35) pontos++;
+    if(zebraOverPct >= 55) pontos++;
+    if(zebraBttsPct >= 60) pontos++;
+    if(zebraMomento === 'positivo') pontos++;
+
+    // ZEBRA PASSIVA — raramente marca, nunca vira
+    var pontosPassiva = 0;
+    if(zebraMarcaPct <= 35) pontosPassiva++;
+    if(zebraMarcaPct <= 25) pontosPassiva++;
+    if(zebraViraPct <= 15) pontosPassiva++;
+    if(zebraViraPct <= 10) pontosPassiva++;
+    if(zebraOverPct <= 30) pontosPassiva++;
+    if(zebraMomento === 'negativo') pontosPassiva++;
+
+    if(pontos >= 3) {
+      var nivelZebra = pontos >= 5 ? '🔴 ZEBRA MUITO OFENSIVA' : '🟡 ZEBRA OFENSIVA';
+      var tipoZebra = pontos >= 5 ? 'negativo' : 'atencao';
+      alertasEv.push({ tipo: tipoZebra,
+        msg: nivelZebra+' — A zebra marca em '+zebraMarcaPct+'% dos jogos'
+          +(zebraViraPct>0?' e reverte '+zebraViraPct+'% das vezes quando está atrás':'')+'. '
+          +(zebraOverPct>0?'Over 2.5 em '+zebraOverPct+'% dos jogos. ':'' )
+          +'Cluster deve incluir plano B com gol da zebra (1-1 ou 0-1). '
+          +(pontos>=5?'Considere reduzir stake ou evitar este jogo.':'Atenção redobrada ao vivo.')
+      });
+    } else if(pontosPassiva >= 3) {
+      alertasEv.push({ tipo:'positivo',
+        msg:'✅ ZEBRA PASSIVA — A zebra marca em apenas '+zebraMarcaPct+'% dos jogos'
+          +(zebraViraPct>0?' e quase nunca reverte ('+zebraViraPct+'%)':'')+'. '
+          +'Cluster limpo a favor do favorito — plano B com gol da zebra pode ser desnecessário. '
+          +'Scores de goleada do favorito têm mais valor aqui.'
+      });
+    }
+  }
+
   // Renderizar alertas de EV se existirem
   if(alertasEv.length > 0) {
     var alertasHtml = alertasEv.map(function(a) {
