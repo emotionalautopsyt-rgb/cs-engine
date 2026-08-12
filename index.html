@@ -2547,7 +2547,7 @@ function checkPackball() {
   // ── ALERTA PERFIL DA ZEBRA ────────────────────────────────
   // Usa form_fora (visitante) para classificar a zebra
   var zebraForm = !favEhVisitante ? S._formFora : S._formCasa;
-  if(zebraForm && zebraForm.amostra >= 5) {
+  if(zebraForm && zebraForm.amostra >= 3) {
     var zebraMarcaPct    = zebraForm.marca_pct || 0;
     var zebraViraPct     = zebraForm.vira_quando_atras || 0;
     var zebraOverPct     = zebraForm.over25_pct || 0;
@@ -4115,7 +4115,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // Zebra = time visitante quando favorito é casa, ou time da casa quando favorito é visitante
   var zebraFormData = !favEhVisitante ? S._formFora : S._formCasa;
 
-  if(zebraFormData && zebraFormData.amostra >= 5) {
+  if(zebraFormData && zebraFormData.amostra >= 3) {
     var zMarca    = zebraFormData.marca_pct || 0;
     var zVira     = zebraFormData.vira_quando_atras || 0;
     var zOver     = zebraFormData.over25_pct || 0;
@@ -4234,7 +4234,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   // para calibrar os scores do favorito no cluster
   var favFormData = favEhVisitante ? S._formFora : S._formCasa;
 
-  if(favFormData && favFormData.amostra >= 5) {
+  if(favFormData && favFormData.amostra >= 3) {
     var fMarca       = favFormData.marca_pct || 0;
     var fOver        = favFormData.over25_pct || 0;
     var fClean       = favFormData.clean_sheet_pct || 0;
@@ -4284,7 +4284,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     if(pontosGoleador >= 4) {
       // Se zebra também é ofensiva — prioriza 3-1 em vez de 3-0
       // (favorito faz 3, zebra aparece 1 vez)
-      var zebraEhOfensiva = zebraFormData && zebraFormData.amostra >= 5 &&
+      var zebraEhOfensiva = zebraFormData && zebraFormData.amostra >= 3 &&
         ((zebraFormData.marca_pct || 0) >= 65 || (zebraFormData.vira_quando_atras || 0) >= 25);
 
       if(zebraEhOfensiva) {
@@ -5965,7 +5965,10 @@ function calcStakes(cluster, stake, analysisText) {
       // 3. fav forte (< 1.65) + over alto (> 2.20) — favorito domina mas jogo fechado
       //    Nesse caso o 3-0/3-1 específico tem mais valor que goleada genérica
       const overJustificaGoleada = overAtualGol <= 1.90 || probAnyOther >= 12.0;
-      const favForteJogoFechado = favAtualGol < 1.65 && overAtualGol > 2.20;
+      const favForteJogoFechado = favAtualGol < 1.65 && overAtualGol > 2.15;
+      // favForteJogoFechado tem prioridade absoluta — prob alta não sobrescreve
+      // fav@1.33 domina mas over alto = jogo fechado = goleada genérica não tem valor
+      // usar 3-0 específico em vez de any_other_home genérico
       if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado) {
         console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+
           (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':'')));
@@ -6220,7 +6223,7 @@ function calcStakes(cluster, stake, analysisText) {
 
       var bttsPermiteAmbos = !scTemAmbos || bttsAtual < 2.15
         || prob >= 10.0           // prob alta no CS sobrescreve btts genérico
-        || (prob >= probMinDin && prob >= 8.5) // acima do threshold com margem → não bloquear
+        || (prob >= probMinDin && prob >= 7.5) // acima do threshold → não bloquear
         || h2hDesbloqueiaAmbos;   // H2H forte sobrescreve btts genérico
 
       if(prob < probMinDin || !bttsPermiteAmbos) {
