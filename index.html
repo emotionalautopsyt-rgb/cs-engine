@@ -3198,6 +3198,7 @@ PARTE 1 — JSON DO CLUSTER (PRIMEIRO — antes da análise):
     "placar_mais_freq": "2-1",
     "visitante_marca_pct": 86,
     "media_gols": 3.4,
+    "empates_pct": 29,
     "amostra": 7
   },
   "form_casa": {
@@ -3241,6 +3242,8 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 - "placar_mais_freq": placar mais repetido no H2H (formato "X-Y")
 - "visitante_marca_pct": % de jogos H2H onde o visitante atual marcou
 - "media_gols": média de gols por jogo no H2H
+- "empates_pct": % de jogos H2H que terminaram empatados (qualquer placar de empate)
+  Ex: se 4 de 11 jogos H2H terminaram empatados (1-1, 2-2, 0-0), empates_pct = 36
 - "amostra": quantos jogos H2H você analisou
 - SÓ inclua se tiver 4+ jogos de H2H disponíveis no texto
 - Use apenas H2H onde o mesmo time era mandante/visitante (não misture lados)
@@ -5073,6 +5076,7 @@ REGRAS ABSOLUTAS:
                 placar_mais_freq:    h2hRaw.placar_mais_freq || '',
                 visitante_marca_pct: parseFloat(h2hRaw.visitante_marca_pct) || 0,
                 media_gols:          parseFloat(h2hRaw.media_gols) || 0,
+                empates_pct:         parseFloat(h2hRaw.empates_pct) || 0,
                 amostra:             h2hAmostra
               };
               console.log('[H2H] Dados extraídos ('+h2hAmostra+' jogos):', JSON.stringify(S._h2hData));
@@ -5966,12 +5970,24 @@ function calcStakes(cluster, stake, analysisText) {
       //    Nesse caso o 3-0/3-1 específico tem mais valor que goleada genérica
       const overJustificaGoleada = overAtualGol <= 1.90 || probAnyOther >= 12.0;
       const favForteJogoFechado = favAtualGol < 1.65 && overAtualGol > 2.15;
-      // favForteJogoFechado tem prioridade absoluta — prob alta não sobrescreve
-      // fav@1.33 domina mas over alto = jogo fechado = goleada genérica não tem valor
-      // usar 3-0 específico em vez de any_other_home genérico
-      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado) {
+
+      // Favorito sem histórico de goleada — placar_mais_freq com 0-2 gols
+      // Ex: Sport em casa tem placar_mais_freq "1-1" (36%) — nunca goleou recente
+      var favSemHistoricoGoleada = false;
+      var favFormGoleadaCheck = S._favEhVisitante ? S._formFora : S._formCasa;
+      if(favFormGoleadaCheck && favFormGoleadaCheck.amostra >= 3 && favFormGoleadaCheck.placar_mais_freq) {
+        var pfgPartes = favFormGoleadaCheck.placar_mais_freq.split('-');
+        if(pfgPartes.length === 2) {
+          var pfgFavGols = S._favEhVisitante ? parseInt(pfgPartes[1]) : parseInt(pfgPartes[0]);
+          if(pfgFavGols <= 2 && (favFormGoleadaCheck.over25_pct || 100) <= 45) {
+            favSemHistoricoGoleada = true;
+          }
+        }
+      }
+
+      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado || favSemHistoricoGoleada) {
         console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+
-          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':'')));
+          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':favSemHistoricoGoleada?' (favorito sem histórico goleada)':'')));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
@@ -6226,7 +6242,20 @@ function calcStakes(cluster, stake, analysisText) {
         || (prob >= probMinDin && prob >= 7.5) // acima do threshold → não bloquear
         || h2hDesbloqueiaAmbos;   // H2H forte sobrescreve btts genérico
 
-      if(prob < probMinDin || !bttsPermiteAmbos) {
+      // ── PROTEÇÃO 2-2 — H2H com múltiplos empates OU form do favorito ────
+      // Condição A: confronto direto tem histórico forte de empates (3+ em 8+ jogos)
+      // Condição B: form_casa do favorito mostra 2-2 como segundo placar mais comum
+      var favForm22 = S._favEhVisitante ? S._formFora : S._formCasa;
+      var ehProtecao22H2H = S._h2hData && S._h2hData.amostra >= 8 && S._h2hData.empates_pct >= 27;
+      var ehProtecao22Form = favForm22 && favForm22.amostra >= 8 &&
+        favForm22.placar_mais_freq === '2-2'; // se 2-2 é O placar mais freq do favorito
+      var ehProtecao22 = s.score === '2-2' && (ehProtecao22H2H || ehProtecao22Form) &&
+        prob >= 4.5; // mínimo absoluto — nunca entra com prob irrisória
+      if(ehProtecao22 && (prob < probMinDin || !bttsPermiteAmbos)) {
+        console.log('[PROTEÇÃO 2-2] via '+(ehProtecao22H2H?'H2H ('+S._h2hData.empates_pct+'% empates)':'form favorito (placar_mais_freq=2-2)'));
+      }
+
+      if((prob < probMinDin || !bttsPermiteAmbos) && !ehProtecao22) {
         // Proteções essenciais que nunca saem independente do threshold
         var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
         var eh22ComBtts = s.score === '2-2' && bttsAtual <= 1.80;
