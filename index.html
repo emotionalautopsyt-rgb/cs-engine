@@ -3249,9 +3249,30 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 - Use apenas H2H onde o mesmo time era mandante/visitante (não misture lados)
 - Se dados insuficientes ou indisponíveis, OMITA o campo completamente
 
+⚠️ REGRA CRÍTICA — IDENTIFICAÇÃO DE MANDANTE/VISITANTE DESTA PARTIDA:
+Antes de preencher qualquer campo, identifique o mandante (casa) e o visitante
+(fora) DESTA PARTIDA ESPECÍFICA usando APENAS a frase de abertura do texto,
+no formato "TimeA e TimeB jogam no Estádio X" ou "TimeA vs TimeB" —
+o PRIMEIRO time citado nessa frase é sempre o MANDANTE (casa) desta partida,
+o segundo é o VISITANTE (fora).
+Isso vale MESMO QUANDO:
+- É jogo de volta de mata-mata e o time visitante atual venceu o jogo de ida em
+  seu próprio estádio (o mandante da VOLTA pode ser diferente do mandante da IDA)
+- O texto menciona "vantagem de jogar em casa" de forma genérica sem especificar
+  qual partida — sempre confie na frase de abertura, não em menções soltas
+- Um dos times parece estatisticamente mais forte — força do time NÃO determina
+  quem é mandante
+NUNCA troque os lados com base em qual bloco de estatísticas aparece primeiro
+no texto, ou em qual time tem melhor campanha. Use SOMENTE a frase de abertura
+com o nome do estádio para decidir. Se o texto disser explicitamente algo como
+"após a vitória em casa do Santos" referindo-se ao jogo de IDA, isso NÃO significa
+que Santos é mandante NESTA partida (volta) — releia a frase de abertura.
+
 CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de cada time):
-- "form_casa": dados do time da CASA nos últimos 10 jogos EM CASA
-- "form_fora": dados do time VISITANTE nos últimos 10 jogos FORA
+- "form_casa": dados do time MANDANTE desta partida (identificado acima),
+  usando os últimos 10 jogos EM CASA desse time
+- "form_fora": dados do time VISITANTE desta partida (identificado acima),
+  usando os últimos 10 jogos FORA desse time
 - Campos de cada um:
   → "over25_pct": % de jogos com mais de 2.5 gols
   → "btts_pct": % de jogos onde ambos marcaram
