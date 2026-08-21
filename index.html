@@ -2544,6 +2544,33 @@ function checkPackball() {
     });
   }
 
+  // ── ALERTA AMOSTRA INSTÁVEL — início de temporada + volume alto ──
+  // Detecta: amostra pequena (2-3 jogos) + média de gols alta (3.5+) +
+  // pelo menos um time sem vitória/pontos — sinal de jogo imprevisível
+  var formCasaInst = S._formCasa;
+  var formForaInst = S._formFora;
+  var mediaTotalCasa = formCasaInst ? (formCasaInst.media_total || 0) : 0;
+  var mediaTotalFora = formForaInst ? (formForaInst.media_total || 0) : 0;
+  var amostraCasaInst = formCasaInst ? (formCasaInst.amostra || 0) : 0;
+  var amostraForaInst = formForaInst ? (formForaInst.amostra || 0) : 0;
+  var momentoCasaNeg = formCasaInst && formCasaInst.momento === 'negativo';
+  var momentoForaNeg = formForaInst && formForaInst.momento === 'negativo';
+
+  var amostraPequena = (amostraCasaInst > 0 && amostraCasaInst <= 3) ||
+                        (amostraForaInst > 0 && amostraForaInst <= 3);
+  var volumeAlto = mediaTotalCasa >= 3.5 || mediaTotalFora >= 3.5;
+  var timeInstavel = momentoCasaNeg || momentoForaNeg;
+
+  if(amostraPequena && volumeAlto) {
+    alertasEv.push({ tipo:'negativo',
+      msg:'⚠️ AMOSTRA INSTÁVEL — início de temporada com poucos jogos disputados '
+        +'('+(amostraCasaInst||amostraForaInst)+'j) e volume de gols recente muito alto '
+        +'('+Math.max(mediaTotalCasa,mediaTotalFora).toFixed(1)+' gols/jogo em média). '
+        +'Times ainda calibrando ritmo competitivo — risco de variância acima do normal. '
+        +'Considere reduzir stake ou aguardar mais jogos da temporada para confirmar o padrão.'
+    });
+  }
+
   // ── ALERTA PERFIL DA ZEBRA ────────────────────────────────
   // Usa form_fora (visitante) para classificar a zebra
   var zebraForm = !favEhVisitante ? S._formFora : S._formCasa;
