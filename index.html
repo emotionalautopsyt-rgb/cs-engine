@@ -3278,10 +3278,30 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 
 ⚠️ REGRA CRÍTICA — IDENTIFICAÇÃO DE MANDANTE/VISITANTE DESTA PARTIDA:
 Antes de preencher qualquer campo, identifique o mandante (casa) e o visitante
-(fora) DESTA PARTIDA ESPECÍFICA usando APENAS a frase de abertura do texto,
-no formato "TimeA e TimeB jogam no Estádio X" ou "TimeA vs TimeB" —
+(fora) DESTA PARTIDA ESPECÍFICA. Siga esta ordem de prioridade:
+
+PRIORIDADE 1 — Frase de abertura explícita:
+Procure o formato "TimeA e TimeB jogam no Estádio X" ou "TimeA vs TimeB" —
 o PRIMEIRO time citado nessa frase é sempre o MANDANTE (casa) desta partida,
-o segundo é o VISITANTE (fora).
+o segundo é o VISITANTE (fora). Se essa frase existir, ela é a fonte
+definitiva — pare aqui e não considere outras pistas.
+
+PRIORIDADE 2 — Quando NÃO houver frase de abertura (ex: texto começa direto
+com "Análise TimeA" / "Análise TimeB" sem mencionar o estádio):
+Procure expressões contextuais explícitas em qualquer parte do texto como:
+  "visitar o estádio de", "visita o líder/campeão/adversário",
+  "recebe em casa", "atua em seu estádio", "joga em seus domínios",
+  "diante de sua torcida", "fora de seus domínios"
+Essas expressões indicam claramente quem é o mandante. Leia o texto
+INTEIRO (análise de ambos os times) antes de decidir — a pista pode
+estar na análise do time visitante ("Fulano vai visitar o estádio do
+líder") e não na análise do mandante.
+
+PRIORIDADE 3 — Quando não houver nenhuma pista textual clara:
+Use a ordem dos times no nome/URL do confronto (ex: "sirius/hacken"
+ou "sirius vs hacken" nos metadados) — o primeiro time geralmente é
+o mandante nas convenções de sites de estatísticas de apostas.
+
 Isso vale MESMO QUANDO:
 - É jogo de volta de mata-mata e o time visitante atual venceu o jogo de ida em
   seu próprio estádio (o mandante da VOLTA pode ser diferente do mandante da IDA)
@@ -3289,11 +3309,15 @@ Isso vale MESMO QUANDO:
   qual partida — sempre confie na frase de abertura, não em menções soltas
 - Um dos times parece estatisticamente mais forte — força do time NÃO determina
   quem é mandante
+- Um dos times é o líder/favorito claro — o líder pode estar jogando FORA
 NUNCA troque os lados com base em qual bloco de estatísticas aparece primeiro
-no texto, ou em qual time tem melhor campanha. Use SOMENTE a frase de abertura
-com o nome do estádio para decidir. Se o texto disser explicitamente algo como
-"após a vitória em casa do Santos" referindo-se ao jogo de IDA, isso NÃO significa
-que Santos é mandante NESTA partida (volta) — releia a frase de abertura.
+no texto, ou em qual time tem melhor campanha. Se o texto disser explicitamente
+algo como "após a vitória em casa do Santos" referindo-se ao jogo de IDA, isso
+NÃO significa que Santos é mandante NESTA partida (volta).
+
+Antes de finalizar o JSON, faça uma checagem: releia a frase ou pista que você
+usou para decidir mandante/visitante e confirme que ela se refere a ESTA
+partida especificamente, não a um jogo anterior ou a uma menção genérica.
 
 CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de cada time):
 - "form_casa": dados do time MANDANTE desta partida (identificado acima),
