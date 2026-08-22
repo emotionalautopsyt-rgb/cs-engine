@@ -5262,7 +5262,7 @@ REGRAS ABSOLUTAS:
     const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|GÊNIO NÃO APROVOU.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
 
     // ── Detecção de contexto (definir ANTES dos indicadores) ─────────
-    const isCopa = /copa\s+detectada|⚠️\s*COPA|eliminatório|play.?off|mata.?mata|FA\s+Cup|Champions|Europa\s+League|Taça|knock.?out/i.test(reply);
+    const isCopa = /copa\s+detectada|⚠️\s*COPA|eliminatório|play.?off|mata.?mata|FA\s+Cup|\bChampions\b(?!\s*hip)|Europa\s+League|Taça|knock.?out/i.test(reply);
     const isEarlySeason = /DADO\s+LIMITADO|menos\s+de\s+8\s+rodadas|⚠️.*dado.*limitado/i.test(reply);
 
     // ── xG EXTRACTION from bot text ──────────────────────────────────
@@ -5432,11 +5432,21 @@ REGRAS ABSOLUTAS:
           // Usar perfil Poisson calculado internamente
           const poisson = S._poisson || {};
           const perfilGoleada = poisson.perfilGoleada || 'BAIXA';
-          const entrarComoDestino = (perfilGoleada === 'LIMPA' || (perfilGoleada === 'SUJA' && volumePrecoce)) &&
+
+          // ── Regras unificadas com o Caminho 1 (renderCluster) ──────
+          // over alto (>2.15) + fav forte (<1.65) = jogo fechado, sem goleada
+          const favAtualExp2 = parseFloat(document.getElementById('pk-fav')?.value) || 2.0;
+          const favForteJogoFechadoExp = favAtualExp2 < 1.65 && overAtualExp2 > 2.15;
+          // over moderado/alto sem prob compensando não justifica goleada
+          const overJustificaGoleadaExp = overAtualExp2 <= 1.90 || probExp >= 12.0;
+
+          const entrarComoDestino = !favForteJogoFechadoExp && overJustificaGoleadaExp &&
+            (perfilGoleada === 'LIMPA' || (perfilGoleada === 'SUJA' && volumePrecoce)) &&
             (probExp >= probAncora || probExp >= 15.0);
 
           console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% | âncora: '+
-            probAncora.toFixed(1)+'% | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
+            probAncora.toFixed(1)+'% | favForteFechado:'+favForteJogoFechadoExp+
+            ' | overJustifica:'+overJustificaGoleadaExp+' | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
 
           if(entrarComoDestino) {
             // Entra como score normal do cluster — participa do Dutch
