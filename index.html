@@ -2571,6 +2571,20 @@ function checkPackball() {
     });
   }
 
+  // ── ALERTA DADOS DE TEMPORADA ANTERIOR ────────────────────
+  var usaTempAnteriorCasa = formCasaInst && formCasaInst.temporadaAnterior;
+  var usaTempAnteriorFora = formForaInst && formForaInst.temporadaAnterior;
+  if(usaTempAnteriorCasa || usaTempAnteriorFora) {
+    var timeTempAnt = usaTempAnteriorCasa && usaTempAnteriorFora ? 'ambos os times'
+      : usaTempAnteriorCasa ? 'o time da casa' : 'o time visitante';
+    alertasEv.push({ tipo:'atencao',
+      msg:'📅 DADO DE TEMPORADA ANTERIOR — como '+timeTempAnt+' ainda não tem jogos '
+        +'suficientes nesta temporada, o perfil usado vem da temporada passada. '
+        +'Contexto pode ter mudado (técnico, elenco, patamar) — os critérios de '
+        +'goleador/compacto exigem confirmação mais forte para ativar.'
+    });
+  }
+
   // ── ALERTA PERFIL DA ZEBRA ────────────────────────────────
   // Usa form_fora (visitante) para classificar a zebra
   var zebraForm = !favEhVisitante ? S._formFora : S._formCasa;
@@ -3353,6 +3367,33 @@ CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de
 - Extraia diretamente das tabelas de estatísticas da academia quando disponíveis
 - Se os dados não estiverem no texto, OMITA o campo completamente
 - NÃO invente dados — só inclua o que está explicitamente no texto
+
+⚠️ FALLBACK — TABELA DA COMPETIÇÃO ATUAL VAZIA (início de temporada):
+Se a tabela "Gols" específica da competição atual vier com todos os campos
+vazios ou "-" (ex: "Média de gols marcados por jogo: -"), isso significa que
+o time ainda não jogou dessa competição nesta temporada (ou jogou muito pouco).
+Nesse caso, SIGA ESTES PASSOS antes de omitir o campo:
+
+1. Procure na seção "Últimos 10 jogos em todas as competições" os jogos que
+   têm rótulo de TEMPORADA ANTERIOR na mesma competição (ex: jogos marcados
+   "25/26" quando a partida atual é da temporada "26/27", especialmente se
+   forem da mesma liga/divisão do time).
+2. Se encontrar 3+ jogos da temporada anterior na mesma competição/divisão,
+   calcule "media_gols_marcados", "media_gols_sofridos", "media_total",
+   "placar_mais_freq" e "over25_pct" a partir DESSES jogos.
+3. IGNORE jogos claramente de amistoso/pré-temporada para esse cálculo —
+   sinais de amistoso: adversário de divisão muito inferior ou não-liga
+   (ex: times amadores, reservas), clube de elite improvável para aquele
+   nível (ex: time pequeno jogando contra Roma, Barcelona, PSG em amistoso
+   de pré-temporada), ou múltiplos jogos em sequência muito curta (pré-temporada
+   costuma ter jogo a cada 3-4 dias, calendário oficial não).
+4. Quando usar esse fallback, adicione o campo extra:
+   "amostra_temporada_anterior": true
+   Isso avisa o motor que o dado é de contexto mais fraco (temporada passada),
+   não da forma atual do time.
+5. Se não houver pelo menos 3 jogos competitivos reais (nem atuais nem da
+   temporada anterior) para calcular esses campos, OMITA — não é melhor
+   usar dado fraco do que não usar nenhum.
 
 CAMPO "expansao" (OPCIONAL — só inclua quando identificar cenário específico relevante):
 - Máximo 2 scores
@@ -4355,8 +4396,13 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     var scFav1x0 = favEhVisitante ? '0-1' : '1-0';
     var scFav2x1 = favEhVisitante ? '1-2' : '2-1';
 
-    // FAVORITO GOLEADOR (4+ pontos) — força scores altos no cluster
-    if(pontosGoleador >= 4) {
+    // FAVORITO GOLEADOR (4+ pontos, ou 5+ se dado é de temporada anterior)
+    // — força scores altos no cluster
+    var thresholdGoleador = favFormData.temporadaAnterior ? 5 : 4;
+    if(favFormData.temporadaAnterior && pontosGoleador >= 4 && pontosGoleador < thresholdGoleador) {
+      console.log('[FAV GOLEADOR] pontos='+pontosGoleador+' mas dado é de temporada anterior — threshold elevado para '+thresholdGoleador+', não ativa');
+    }
+    if(pontosGoleador >= thresholdGoleador) {
       // Se zebra também é ofensiva — prioriza 3-1 em vez de 3-0
       // (favorito faz 3, zebra aparece 1 vez)
       var zebraEhOfensiva = zebraFormData && zebraFormData.amostra >= 3 &&
@@ -5161,6 +5207,7 @@ REGRAS ABSOLUTAS:
           S._formCasa = null;
           S._formFora = null;
           if(voto && voto.form_casa && typeof voto.form_casa === 'object') {
+            var tempAnteriorCasa = voto.form_casa.amostra_temporada_anterior === true;
             S._formCasa = {
               over25_pct:          parseFloat(voto.form_casa.over25_pct) || 0,
               btts_pct:            parseFloat(voto.form_casa.btts_pct) || 0,
@@ -5175,11 +5222,14 @@ REGRAS ABSOLUTAS:
               media_gols_sofridos: parseFloat(voto.form_casa.media_gols_sofridos) || 0,
               media_total:         parseFloat(voto.form_casa.media_total) || 0,
               gols_76_90_pct:      parseFloat(voto.form_casa.gols_76_90_pct) || 0,
-              amostra:             parseInt(voto.form_casa.amostra) || 10
+              amostra:             parseInt(voto.form_casa.amostra) || 10,
+              temporadaAnterior:   tempAnteriorCasa
             };
+            if(tempAnteriorCasa) console.log('[FORM CASA] ⚠️ dado de temporada anterior — peso reduzido');
             console.log('[FORM CASA]', JSON.stringify(S._formCasa));
           }
           if(voto && voto.form_fora && typeof voto.form_fora === 'object') {
+            var tempAnteriorFora = voto.form_fora.amostra_temporada_anterior === true;
             S._formFora = {
               over25_pct:          parseFloat(voto.form_fora.over25_pct) || 0,
               btts_pct:            parseFloat(voto.form_fora.btts_pct) || 0,
@@ -5194,8 +5244,10 @@ REGRAS ABSOLUTAS:
               media_gols_sofridos: parseFloat(voto.form_fora.media_gols_sofridos) || 0,
               media_total:         parseFloat(voto.form_fora.media_total) || 0,
               gols_76_90_pct:      parseFloat(voto.form_fora.gols_76_90_pct) || 0,
-              amostra:             parseInt(voto.form_fora.amostra) || 10
+              amostra:             parseInt(voto.form_fora.amostra) || 10,
+              temporadaAnterior:   tempAnteriorFora
             };
+            if(tempAnteriorFora) console.log('[FORM FORA] ⚠️ dado de temporada anterior — peso reduzido');
             console.log('[FORM FORA]', JSON.stringify(S._formFora));
           }
 
@@ -6601,7 +6653,7 @@ function renderCluster(cluster, stake) {
     });
   }
 
-  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && s.tipo !== 'expansao_especifica'));
+  const probTotal = calcProbTotal(cluster.filter(s=>s.odd>0 && s.tipo !== 'expansao_especifica' && s.tipo !== 'expansao'));
   const mxL = Math.max(...cluster.map(s=>s.lucro||0));
   const ts = cluster.reduce((a,s)=>a+(s.stake||0),0);
   const worstCase = -stake;
