@@ -4376,6 +4376,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       var oddVolume = csOdds && csOdds[scoreVolume] ? 100/csOdds[scoreVolume] : 0;
       if(oddVolume >= 4.0 || oddVolume === 0) {
         clusterScores.push(scoreVolume);
+        S._scoreVolumeCamada8b = scoreVolume; // marca para proteção no threshold (renderCluster)
         console.log('[VOLUME AMOSTRA MÍNIMA] '+scoreVolume+' adicionado — favorito com '+
           favFormDataVol.media_total+' gols/jogo em apenas '+favFormDataVol.amostra+' jogo(s). '+
           'Sinal forte mas amostra pequena — score de volume incluído com cautela.');
@@ -6427,7 +6428,23 @@ function calcStakes(cluster, stake, analysisText) {
         console.log('[PROTEÇÃO 2-2] via '+(ehProtecao22H2H?'H2H ('+S._h2hData.empates_pct+'% empates)':'form favorito (placar_mais_freq=2-2)'));
       }
 
-      if((prob < probMinDin || !bttsPermiteAmbos) && !ehProtecao22) {
+      // ── PROTEÇÃO POR PROXIMIDADE — score estruturalmente importante ────
+      // Quando nenhuma camada específica (zebra/favorito/H2H) justificou a entrada,
+      // mas o score está muito perto do threshold (até 1.0pp abaixo) E representa
+      // um caminho estrutural chave (zebra abre o placar ou empate simples),
+      // protege mesmo sem "história" — a proximidade matemática + importância
+      // do caminho (early bird paradox: se acontecer cedo, precisa estar coberto)
+      // já justificam.
+      var ehCaminhoEstrutural = (s.score === '0-1' || s.score === '1-0' ||
+        s.score === '1-1' || s.score === '0-0');
+      var ehProximidade = ehCaminhoEstrutural && !ehProtecao22 &&
+        prob >= (probMinDin - 1.0) && prob < probMinDin && cluster.length <= 7;
+      if(ehProximidade) {
+        console.log('[PROXIMIDADE] '+s.score+' protegido — prob '+prob.toFixed(1)+'% está a '+
+          (probMinDin-prob).toFixed(1)+'pp do threshold '+probMinDin+'%, caminho estrutural da partida');
+      }
+
+      if((prob < probMinDin || !bttsPermiteAmbos) && !ehProtecao22 && !ehProximidade) {
         // Proteções essenciais que nunca saem independente do threshold
         var ehAncora = s.score === (S.currentGame && S.currentGame.lastAncora);
         var eh22ComBtts = s.score === '2-2' && bttsAtual <= 1.80;
@@ -6447,7 +6464,14 @@ function calcStakes(cluster, stake, analysisText) {
         // (veio do complemento CS com valor real)
         var ehComplementoCS = prob >= probMinDin && !scTemAmbos;
 
-        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial && !ehComplementoCS) {
+        // Score adicionado pela Camada 8b (sinal de volume com amostra mínima)
+        // — protegido para não ser removido pelo filtro logo em seguida
+        var ehVolumeCamada8b = s.score === S._scoreVolumeCamada8b;
+        if(ehVolumeCamada8b) {
+          console.log('[PROTEÇÃO CAMADA 8b] '+s.score+' protegido — veio do sinal de volume');
+        }
+
+        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial && !ehComplementoCS && !ehVolumeCamada8b) {
           s.tipo = 'expansao';
           s.stake = 0; s.lucro = 0;
           console.log('[THRESHOLD DIN] '+s.score+' prob='+prob.toFixed(1)+'%'
@@ -6508,7 +6532,13 @@ function calcStakes(cluster, stake, analysisText) {
         (candidato.score === '3-1' || candidato.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
       var eh01ConservCap = perfilAtual === 'CONSERVADOR' &&
         (candidato.score === '0-1' || candidato.score === '1-0') && bttsAtual < 2.10;
-      if(ehAncora || ehEssencial || eh31EquilOfCap || eh01ConservCap) break;
+      var ehVolumeCamada8bCap = candidato.score === S._scoreVolumeCamada8b;
+      // Proteção estrutural só vale se a prob ainda for razoável (>= threshold-1.5pp)
+      // — evita travar o corte quando o cluster está genuinamente grande demais
+      var ehCaminhoEstruturalCap = (candidato.score === '0-1' || candidato.score === '1-0' ||
+        candidato.score === '1-1' || candidato.score === '0-0') &&
+        candidato.prob >= (probMinDin - 1.5);
+      if(ehAncora || ehEssencial || eh31EquilOfCap || eh01ConservCap || ehVolumeCamada8bCap || ehCaminhoEstruturalCap) break;
 
       candidato.tipo = 'expansao';
       candidato.stake = 0; candidato.lucro = 0;
