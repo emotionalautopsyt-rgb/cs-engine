@@ -2571,6 +2571,18 @@ function checkPackball() {
     });
   }
 
+  // ── ALERTA SINAL DE VOLUME COM AMOSTRA MÍNIMA ─────────────
+  var favFormVolAlert = !favEhVisitante ? S._formCasa : S._formFora;
+  if(favFormVolAlert && favFormVolAlert.amostra >= 1 && favFormVolAlert.amostra <= 2 &&
+     (favFormVolAlert.media_total || 0) >= 4.0) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'🔥 SINAL DE VOLUME — favorito com média de '+favFormVolAlert.media_total+
+        ' gols/jogo em apenas '+favFormVolAlert.amostra+' jogo(s) disputado(s) esta temporada. '+
+        'Amostra pequena demais para o perfil completo de goleador ativar, mas o sinal é forte '+
+        'demais para ignorar — um score de volume foi adicionado ao cluster com cautela.'
+    });
+  }
+
   // ── ALERTA DADOS DE TEMPORADA ANTERIOR ────────────────────
   var usaTempAnteriorCasa = formCasaInst && formCasaInst.temporadaAnterior;
   var usaTempAnteriorFora = formForaInst && formForaInst.temporadaAnterior;
@@ -4342,6 +4354,32 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       comOdds.sort(function(a,b) { return a.odd - b.odd; }); // menor odd = mais provável
       clusterScores = comOdds.slice(0, 7).map(function(x) { return x.sc; });
       console.log('[ZEBRA] Cluster limitado a 7 scores');
+    }
+  }
+
+  // ── CAMADA 8b — SINAL DE VOLUME COM AMOSTRA MÍNIMA (1-2 jogos) ────
+  // Quando o favorito tem só 1-2 jogos na temporada mas volume EXTREMO
+  // (media_total >= 4.0), a Camada 8 normal não ativa (exige amostra>=3).
+  // Em vez de ignorar completamente, adiciona 1 score extra de volume
+  // como 6º/7º membro do cluster — cautelosamente, sem reconfigurar tudo.
+  var favFormDataVol = favEhVisitante ? S._formFora : S._formCasa;
+  if(favFormDataVol && favFormDataVol.amostra >= 1 && favFormDataVol.amostra <= 2 &&
+     (favFormDataVol.media_total || 0) >= 4.0 && clusterScores.length < 7) {
+
+    var favGolsVol = 3; // fav+2 acima do padrão (ex: 1-0 vira 3-0/3-1)
+    var zebraGolsVol = (pZebraMarca >= 44) ? 1 : 0; // zebra marca se sinal permitir
+    var scoreVolume = favEhVisitante
+      ? (zebraGolsVol + '-' + favGolsVol)
+      : (favGolsVol + '-' + zebraGolsVol);
+
+    if(!clusterScores.includes(scoreVolume)) {
+      var oddVolume = csOdds && csOdds[scoreVolume] ? 100/csOdds[scoreVolume] : 0;
+      if(oddVolume >= 4.0 || oddVolume === 0) {
+        clusterScores.push(scoreVolume);
+        console.log('[VOLUME AMOSTRA MÍNIMA] '+scoreVolume+' adicionado — favorito com '+
+          favFormDataVol.media_total+' gols/jogo em apenas '+favFormDataVol.amostra+' jogo(s). '+
+          'Sinal forte mas amostra pequena — score de volume incluído com cautela.');
+      }
     }
   }
 
