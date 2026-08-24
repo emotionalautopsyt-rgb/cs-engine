@@ -885,8 +885,8 @@ e garantir que o DNA seja lido corretamente."></textarea>
         <div class="dv"></div>
         <div class="card-title" style="margin-bottom:10px;">📊 Odds de Mercado — Filtro de Entrada</div>
         <div class="ab ab-b" style="margin-bottom:10px;">
-          <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO</div>
-          <div class="ab-text">O Gênio opera qualquer liga se as odds de mercado tiverem edge real. A liga não importa — o jogo específico importa. Preencha as 3 odds abaixo para ver a avaliação do Gênio.</div>
+          <div class="ab-title" style="color:var(--acc);">O MERCADO É O FILTRO PRINCIPAL</div>
+          <div class="ab-text">As odds de mercado (fav/over/btts) são o primeiro filtro — mas liquidez, contexto de temporada e qualidade da liga continuam importando para sua gestão ao vivo. O Gênio avalia o jogo específico e alerta quando a liga é problemática, a amostra está contaminada por amistoso, ou a liquidez é baixa demais para operar com segurança, mesmo com boas odds. Preencha as 3 odds abaixo para ver a avaliação do Gênio.</div>
         </div>
         <div class="g3">
           <div><label>Odd Favorito</label><input id="pk-fav" type="text" inputmode="decimal" step="0.01" placeholder="1.75" oninput="this.value=this.value.replace(',','.');checkPackball();autosaveForm()"></div>
@@ -4648,6 +4648,24 @@ async function analisarJogo() {
   const textoRaw = document.getElementById('an-texto')?.value?.trim() || '';
   // Limitar a 3000 chars para evitar timeout na API
   const texto = textoRaw.length > 3000 ? textoRaw.substring(0, 3000) + '...' : textoRaw;
+
+  // ── EXTRAÇÃO DETERMINÍSTICA DO MANDANTE — independente da IA ──────
+  // Regex busca o padrão "TimeA e TimeB jogam/se enfrentam/medem forças"
+  // no texto bruto. Isso NÃO depende da IA interpretar nada — é ground
+  // truth extraído diretamente pelo código, para servir de conferência
+  // contra a narrativa gerada (que já errou casa/fora múltiplas vezes).
+  S._mandanteDetectado = null;
+  S._visitanteDetectado = null;
+  try {
+    const mRegex = /([A-ZÀ-Ý0-9][^\n,\.]{1,40}?)\s+e\s+([A-ZÀ-Ý0-9][^\n,\.]{1,40}?)\s+(?:jogam|se enfrentam|medem for[çc]as|disputam|recebe)/i;
+    const mMatch = textoRaw.match(mRegex);
+    if(mMatch) {
+      S._mandanteDetectado = mMatch[1].trim();
+      S._visitanteDetectado = mMatch[2].trim();
+      console.log('[MANDANTE DETECTADO] '+S._mandanteDetectado+' (casa) vs '+S._visitanteDetectado+' (fora) — extraído por regex, independente da IA');
+    }
+  } catch(e) { console.log('[MANDANTE DETECTADO] regex falhou:', e); }
+
   const fav = parseFloat(document.getElementById('pk-fav')?.value) || 0;
   const btts = parseFloat(document.getElementById('pk-btts')?.value) || 0;
   const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
@@ -5346,7 +5364,21 @@ REGRAS ABSOLUTAS:
       .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--txt)">$1</strong>')
       .trim();
 
-    if(out) out.innerHTML = fmt;
+    // ── SELO DETERMINÍSTICO DE MANDANTE — independente da narrativa da IA ──
+    // Extraído por regex direto do texto colado, sempre visível, para você
+    // conferir contra o que a narrativa abaixo disser (que já errou antes)
+    var seloMandante = '';
+    if(S._mandanteDetectado && S._visitanteDetectado) {
+      seloMandante = '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);'+
+        'border-radius:8px;padding:8px 12px;margin-bottom:14px;font-family:Space Mono,monospace;'+
+        'font-size:10px;color:var(--acc);">'+
+        '🏟️ MANDANTE (detectado no texto, sem IA): <strong>'+S._mandanteDetectado+'</strong>'+
+        ' &nbsp;|&nbsp; VISITANTE: <strong>'+S._visitanteDetectado+'</strong>'+
+        ' &nbsp;<span style="color:var(--txt3);">— confira contra a narrativa abaixo</span>'+
+        '</div>';
+    }
+
+    if(out) out.innerHTML = seloMandante + fmt;
     if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
@@ -6158,9 +6190,23 @@ function calcStakes(cluster, stake, analysisText) {
         }
       }
 
-      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado || favSemHistoricoGoleada) {
+      // ── CAMINHO INTERMEDIÁRIO — precisa existir um "degrau" de 3 gols ──
+      // Goleada (4+) exige passar por 3 gols antes. Se NENHUM score de
+      // 3 gols do favorito (3-0/3-1/3-2) tem probabilidade minimamente
+      // relevante, mostrar a goleada sugere um destino sem caminho visível
+      // até ele — inútil pra gestão ao vivo baseada em progressão de gols.
+      var score3x0 = favAwayExpansion ? '0-3' : '3-0';
+      var score3x1 = favAwayExpansion ? '1-3' : '3-1';
+      var score3x2 = favAwayExpansion ? '2-3' : '3-2';
+      var prob3x0 = S.csOdds && S.csOdds[score3x0] ? 100/S.csOdds[score3x0] : 0;
+      var prob3x1 = S.csOdds && S.csOdds[score3x1] ? 100/S.csOdds[score3x1] : 0;
+      var prob3x2 = S.csOdds && S.csOdds[score3x2] ? 100/S.csOdds[score3x2] : 0;
+      var maxProb3Gols = Math.max(prob3x0, prob3x1, prob3x2);
+      var semCaminhoIntermediario = maxProb3Gols > 0 && maxProb3Gols < 4.5;
+
+      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado || favSemHistoricoGoleada || semCaminhoIntermediario) {
         console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+
-          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':favSemHistoricoGoleada?' (favorito sem histórico goleada)':'')));
+          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':favSemHistoricoGoleada?' (favorito sem histórico goleada)':semCaminhoIntermediario?' (sem caminho de 3 gols — max='+maxProb3Gols.toFixed(1)+'%)':'')));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
@@ -6535,9 +6581,16 @@ function calcStakes(cluster, stake, analysisText) {
       var ehVolumeCamada8bCap = candidato.score === S._scoreVolumeCamada8b;
       // Proteção estrutural só vale se a prob ainda for razoável (>= threshold-1.5pp)
       // — evita travar o corte quando o cluster está genuinamente grande demais
+      // (probMinDin recalculado localmente — não está no escopo desta função)
+      var probMinDinCap;
+      if(overAtual <= 1.70)      probMinDinCap = 5.0;
+      else if(overAtual <= 1.85) probMinDinCap = 5.5;
+      else if(overAtual <= 2.00) probMinDinCap = 6.0;
+      else if(overAtual <= 2.20) probMinDinCap = 6.5;
+      else                       probMinDinCap = 7.5;
       var ehCaminhoEstruturalCap = (candidato.score === '0-1' || candidato.score === '1-0' ||
         candidato.score === '1-1' || candidato.score === '0-0') &&
-        candidato.prob >= (probMinDin - 1.5);
+        candidato.prob >= (probMinDinCap - 1.5);
       if(ehAncora || ehEssencial || eh31EquilOfCap || eh01ConservCap || ehVolumeCamada8bCap || ehCaminhoEstruturalCap) break;
 
       candidato.tipo = 'expansao';
