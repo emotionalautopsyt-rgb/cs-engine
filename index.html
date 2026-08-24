@@ -4680,13 +4680,32 @@ async function analisarJogo() {
   // contra a narrativa gerada (que já errou casa/fora múltiplas vezes).
   S._mandanteDetectado = null;
   S._visitanteDetectado = null;
+  S._mandanteFonte = null; // 'frase' ou 'url' — pra você saber a confiabilidade
   try {
+    // PLANO A — frase de abertura ("TimeA e TimeB jogam/se enfrentam...")
     const mRegex = /([A-ZÀ-Ý0-9][^\n,\.]{1,40}?)\s+e\s+([A-ZÀ-Ý0-9][^\n,\.]{1,40}?)\s+(?:jogam|se enfrentam|medem for[çc]as|disputam|recebe)/i;
     const mMatch = textoRaw.match(mRegex);
     if(mMatch) {
       S._mandanteDetectado = mMatch[1].trim();
       S._visitanteDetectado = mMatch[2].trim();
-      console.log('[MANDANTE DETECTADO] '+S._mandanteDetectado+' (casa) vs '+S._visitanteDetectado+' (fora) — extraído por regex, independente da IA');
+      S._mandanteFonte = 'frase';
+      console.log('[MANDANTE DETECTADO] '+S._mandanteDetectado+' (casa) vs '+S._visitanteDetectado+' (fora) — via frase de abertura');
+    } else {
+      // PLANO B (fallback) — URL da academia: .../stats/match/pais/liga/time1/time2/id
+      // A ordem na URL segue mandante/visitante na convenção do site.
+      const urlRegex = /academiadasapostasbrasil\.com\/stats\/match\/[a-z0-9-]+\/[a-z0-9-]+\/([a-z0-9-]+)\/([a-z0-9-]+)\//i;
+      const urlMatch = textoRaw.match(urlRegex);
+      if(urlMatch) {
+        const slugToName = function(slug) {
+          return slug.split('-').map(function(w) {
+            return w.charAt(0).toUpperCase() + w.slice(1);
+          }).join(' ');
+        };
+        S._mandanteDetectado = slugToName(urlMatch[1]);
+        S._visitanteDetectado = slugToName(urlMatch[2]);
+        S._mandanteFonte = 'url';
+        console.log('[MANDANTE DETECTADO] '+S._mandanteDetectado+' (casa) vs '+S._visitanteDetectado+' (fora) — via URL (fallback, sem frase de abertura no texto)');
+      }
     }
   } catch(e) { console.log('[MANDANTE DETECTADO] regex falhou:', e); }
 
@@ -5393,12 +5412,16 @@ REGRAS ABSOLUTAS:
     // conferir contra o que a narrativa abaixo disser (que já errou antes)
     var seloMandante = '';
     if(S._mandanteDetectado && S._visitanteDetectado) {
+      var fonteTxt = S._mandanteFonte === 'url'
+        ? '<span style="color:#ffb84d;">(via URL — texto sem frase de abertura)</span>'
+        : '<span style="color:var(--txt3);">(via frase de abertura)</span>';
       seloMandante = '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);'+
         'border-radius:8px;padding:8px 12px;margin-bottom:14px;font-family:Space Mono,monospace;'+
         'font-size:10px;color:var(--acc);">'+
-        '🏟️ MANDANTE (detectado no texto, sem IA): <strong>'+S._mandanteDetectado+'</strong>'+
+        '🏟️ MANDANTE (detectado sem IA): <strong>'+S._mandanteDetectado+'</strong>'+
         ' &nbsp;|&nbsp; VISITANTE: <strong>'+S._visitanteDetectado+'</strong>'+
-        ' &nbsp;<span style="color:var(--txt3);">— confira contra a narrativa abaixo</span>'+
+        ' &nbsp;'+fonteTxt+
+        '<br><span style="color:var(--txt3);">— confira contra a narrativa abaixo</span>'+
         '</div>';
     }
 
