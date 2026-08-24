@@ -6551,47 +6551,85 @@ function calcStakes(cluster, stake, analysisText) {
     // ── REGRA 3: Cortar até maxScores ────────────────────────────────
     ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
     var tentativasMax = 0;
+    // ── VERIFICAÇÃO DE QUALIDADE ORGÂNICA ANTES DE CORTAR ──────────────
+    // Se TODOS os scores ativos passam no threshold pela odd real, sem
+    // precisar de nenhuma proteção especial (H2H, zebra, camada 8b,
+    // proximidade), o cluster foi montado organicamente pela matemática
+    // do mercado — cortar um deles pra caber num limite fixo remove
+    // valor real sem reduzir risco de verdade. Nesse caso, o teto sobe
+    // para 7 (nunca mais que isso).
+    var probMinDinOrganico;
+    if(overAtual <= 1.70)      probMinDinOrganico = 5.0;
+    else if(overAtual <= 1.85) probMinDinOrganico = 5.5;
+    else if(overAtual <= 2.00) probMinDinOrganico = 6.0;
+    else if(overAtual <= 2.20) probMinDinOrganico = 6.5;
+    else                       probMinDinOrganico = 7.5;
+
+    var todosOrganicos = ativos.every(function(s) {
+      return s.prob >= probMinDinOrganico;
+    });
+
+    if(todosOrganicos && ativos.length <= 7) {
+      maxScores = Math.max(maxScores, ativos.length); // não corta — todos qualificam sozinhos
+      console.log('[MAX SCORES] Todos os '+ativos.length+' scores passam no threshold ('+
+        probMinDinOrganico+'%) sem proteção especial — cluster orgânico, não corta. maxScores ajustado para '+maxScores);
+    }
+
     while(ativos.length > maxScores && tentativasMax < 6) {
       tentativasMax++;
       // Ordem de remoção: planb menor prob → destino menor prob → caminho menor prob
+      // Ordena TODOS os candidatos elegíveis por probabilidade (menor primeiro),
+      // e percorre a lista até achar um que NÃO esteja protegido — em vez de
+      // desistir assim que o mais fraco de todos estiver protegido.
+      var candidatosOrdenados = [];
+      var planbsAll = ativos.filter(function(s){ return s.tipo === 'planb'; });
+      if(planbsAll.length > 1) {
+        planbsAll.sort(function(a,b){ return a.prob-b.prob; });
+        candidatosOrdenados = candidatosOrdenados.concat(planbsAll);
+      }
+      var destsAll = ativos.filter(function(s){ return s.tipo === 'destino'; });
+      if(destsAll.length > 1) {
+        destsAll.sort(function(a,b){ return a.prob-b.prob; });
+        candidatosOrdenados = candidatosOrdenados.concat(destsAll);
+      }
+
+      if(candidatosOrdenados.length === 0) break;
+
       var candidato = null;
-      var planbs = ativos.filter(function(s){ return s.tipo === 'planb'; });
-      if(planbs.length > 1) {
-        planbs.sort(function(a,b){ return a.prob-b.prob; });
-        candidato = planbs[0];
+      for(var ci = 0; ci < candidatosOrdenados.length; ci++) {
+        var cTest = candidatosOrdenados[ci];
+        // Proteger âncora e essenciais
+        var ehAncoraT = cTest.score === (S.currentGame && S.currentGame.lastAncora);
+        var ehEssencialT = (perfilAtual === 'SUPER_EQUILIBRADO' &&
+          (cTest.score === '1-2' || cTest.score === '2-2' || cTest.score === '1-0')) ||
+          (perfilAtual === 'ABERTO_BTTS' &&
+          (cTest.score === '3-1' || cTest.score === '2-2'));
+        var eh31EquilOfCapT = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
+          (cTest.score === '3-1' || cTest.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
+        var eh01ConservCapT = perfilAtual === 'CONSERVADOR' &&
+          (cTest.score === '0-1' || cTest.score === '1-0') && bttsAtual < 2.10;
+        var ehVolumeCamada8bCapT = cTest.score === S._scoreVolumeCamada8b;
+        var probMinDinCapT;
+        if(overAtual <= 1.70)      probMinDinCapT = 5.0;
+        else if(overAtual <= 1.85) probMinDinCapT = 5.5;
+        else if(overAtual <= 2.00) probMinDinCapT = 6.0;
+        else if(overAtual <= 2.20) probMinDinCapT = 6.5;
+        else                       probMinDinCapT = 7.5;
+        var ehCaminhoEstruturalCapT = (cTest.score === '0-1' || cTest.score === '1-0' ||
+          cTest.score === '1-1' || cTest.score === '0-0') &&
+          cTest.prob >= (probMinDinCapT - 1.5);
+
+        var protegidoT = ehAncoraT || ehEssencialT || eh31EquilOfCapT || eh01ConservCapT ||
+          ehVolumeCamada8bCapT || ehCaminhoEstruturalCapT;
+
+        if(!protegidoT) { candidato = cTest; break; } // achou um removível — usa esse
+        console.log('[MAX SCORES] '+cTest.score+' protegido, tentando próximo candidato...');
       }
+
       if(!candidato) {
-        var dests = ativos.filter(function(s){ return s.tipo === 'destino'; });
-        if(dests.length > 1) {
-          dests.sort(function(a,b){ return a.prob-b.prob; });
-          candidato = dests[0];
-        }
+        console.log('[MAX SCORES] todos os candidatos restantes estão protegidos — cluster fica com '+ativos.length+' scores (acima do máx='+maxScores+', mas todos justificados)');
+        break;
       }
-      if(!candidato) break;
-      // Proteger âncora e essenciais
-      var ehAncora = candidato.score === (S.currentGame && S.currentGame.lastAncora);
-      var ehEssencial = (perfilAtual === 'SUPER_EQUILIBRADO' &&
-        (candidato.score === '1-2' || candidato.score === '2-2' || candidato.score === '1-0')) ||
-        (perfilAtual === 'ABERTO_BTTS' &&
-        (candidato.score === '3-1' || candidato.score === '2-2'));
-      var eh31EquilOfCap = perfilAtual === 'EQUILIBRADO_OFENSIVO' &&
-        (candidato.score === '3-1' || candidato.score === '1-3') && bttsAtual < 1.90 && overAtual >= 1.80;
-      var eh01ConservCap = perfilAtual === 'CONSERVADOR' &&
-        (candidato.score === '0-1' || candidato.score === '1-0') && bttsAtual < 2.10;
-      var ehVolumeCamada8bCap = candidato.score === S._scoreVolumeCamada8b;
-      // Proteção estrutural só vale se a prob ainda for razoável (>= threshold-1.5pp)
-      // — evita travar o corte quando o cluster está genuinamente grande demais
-      // (probMinDin recalculado localmente — não está no escopo desta função)
-      var probMinDinCap;
-      if(overAtual <= 1.70)      probMinDinCap = 5.0;
-      else if(overAtual <= 1.85) probMinDinCap = 5.5;
-      else if(overAtual <= 2.00) probMinDinCap = 6.0;
-      else if(overAtual <= 2.20) probMinDinCap = 6.5;
-      else                       probMinDinCap = 7.5;
-      var ehCaminhoEstruturalCap = (candidato.score === '0-1' || candidato.score === '1-0' ||
-        candidato.score === '1-1' || candidato.score === '0-0') &&
-        candidato.prob >= (probMinDinCap - 1.5);
-      if(ehAncora || ehEssencial || eh31EquilOfCap || eh01ConservCap || ehVolumeCamada8bCap || ehCaminhoEstruturalCap) break;
 
       candidato.tipo = 'expansao';
       candidato.stake = 0; candidato.lucro = 0;
@@ -6786,7 +6824,7 @@ function renderCluster(cluster, stake) {
   const nPlanoA = cluster.filter(s=>s.tipo==='caminho'||s.tipo==='destino').length;
   const nPlanoB = cluster.filter(s=>s.tipo==='planb').length;
   const nExp = cluster.filter(s=>s.tipo==='expansao').length;
-  const total = cluster.length;
+  const total = cluster.filter(s=>s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica').length;
 
   // Build explanation dynamically based on actual counts
   let explWhy = '';
