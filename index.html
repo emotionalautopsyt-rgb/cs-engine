@@ -4180,12 +4180,36 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       var prob = 100/odd;
       if(prob < thresholdCS) return;
 
-      // Verificar coerência com lado do favorito
       var pts = sc.split('-');
       if(pts.length !== 2) return;
       var h = parseInt(pts[0]), a = parseInt(pts[1]);
-      var favoreceCorreto = favEhCasaCS ? h >= a : a >= h;
-      if(!favoreceCorreto) return;
+
+      // ── PLACAR DE VITÓRIA DA ZEBRA — analisar dados reais, não bloquear cego ──
+      // Antes: qualquer placar onde a zebra vence de verdade (não empata) era
+      // sempre ignorado aqui, mesmo com odd real justificando. Agora: verifica
+      // o momento e a capacidade de marcar da zebra antes de decidir.
+      var zebraVenceOutright = favEhCasaCS ? (a > h) : (h > a);
+      if(zebraVenceOutright) {
+        var zebraFormCS = favEhCasaCS ? S._formFora : S._formCasa;
+        var zebraMomentoRuim = zebraFormCS && zebraFormCS.momento === 'negativo';
+        var zebraMarcaFraca = zebraFormCS && zebraFormCS.amostra >= 3 && (zebraFormCS.marca_pct || 100) < 40;
+        // Exige margem extra (thresholdCS + 1.5pp) pra vitória da zebra —
+        // é cenário de upset, precisa de mais confirmação da odd real.
+        // Se momento E ataque da zebra são claramente ruins, exige ainda mais.
+        var margemExtra = (zebraMomentoRuim && zebraMarcaFraca) ? 3.0 : 1.5;
+        if(prob < thresholdCS + margemExtra) {
+          console.log('[CS COMPLEMENTO] '+sc+' (vitória zebra) prob='+prob.toFixed(1)+
+            '% não atinge margem extra de upset ('+(thresholdCS+margemExtra).toFixed(1)+'%) — ignorado');
+          return;
+        }
+        console.log('[CS COMPLEMENTO] '+sc+' (vitória zebra) prob='+prob.toFixed(1)+
+          '% passa margem de upset — momento='+(zebraFormCS?zebraFormCS.momento:'?')+
+          ' marca_pct='+(zebraFormCS?zebraFormCS.marca_pct:'?'));
+      } else {
+        // Placar normal (favorito vence ou empate) — checagem padrão de coerência
+        var favoreceCorreto = favEhCasaCS ? h >= a : a >= h;
+        if(!favoreceCorreto) return;
+      }
 
       // Cruzamento btts para scores com ambos marcando
       var temAmbos = h > 0 && a > 0;
