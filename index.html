@@ -3289,6 +3289,25 @@ CAMPO "volume_precoce" (OPCIONAL — padrão false):
 - Quando true, força a goleada como DESTINO no Dutch independente do over
 - Na dúvida, mantenha false — é melhor errar para o lado conservador
 
+CAMPO "sugestao_editor" (OPCIONAL — extrair quando presente no texto):
+- Procure no texto por "Sugestão de Aposta", "Sugestão do editor" ou similar —
+  geralmente aparece como um mercado + odd (ex: "Ambas equipes marcam? Sim
+  Odd 1.70" ou "Menos de 2,5 gols Odd 1.55")
+- "mercado": qual mercado foi sugerido (ex: "btts_sim", "under_25", "over_25",
+  "vitoria_casa", "vitoria_fora", "handicap")
+- "direcao": em resumo, o que o editor está apostando vai acontecer
+  (ex: "ambos marcam", "poucos gols", "vitória do favorito")
+- Essa sugestão é escrita por um analista humano do site, que viu escalação,
+  contexto tático, notícias do time e a análise completa de ambas equipes —
+  informação que vai além dos números puros. Trate como um sinal profissional
+  adicional para SEMPRE cruzar com os outros dados (odds, H2H, forma), não
+  apenas quando os dados estatísticos forem fracos. O peso desse sinal é
+  maior quando H2H é curto ou a amostra de forma é pequena, mas conta sempre.
+  Se a sugestão for "ambas marcam", isso reforça scores com os dois times
+  marcando no cluster. Se for "menos de 2,5" ou "under", reforça scores mais
+  fechados (1-0, 0-1, 1-1). Se não encontrar essa seção no texto, omita o
+  campo completamente — não invente uma sugestão que não está lá.
+
 CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis):
 - "btts_pct": % de jogos H2H onde AMBOS marcaram (calcule dos placares do H2H)
 - "over25_pct": % de jogos H2H com mais de 2 gols no total
@@ -3372,6 +3391,14 @@ CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de
      Calcule: gols no período 76-90 ÷ total de gols marcados × 100
      Ex: "marcou 5 de seus 12 gols entre os minutos (76'-90')" = 42%
      Se não disponível, omitir
+  → "teve_goleada_recente": true/false — o time venceu ALGUM dos últimos
+     10 jogos por 4+ gols de diferença (ex: 4-0, 5-1, 4-2 conta; 3-0 NÃO conta)?
+     IMPORTANTE: "over 2.5" ou "muitos gols no jogo" NÃO é a mesma coisa
+     que goleada — um jogo 3-2 tem muitos gols mas NÃO é goleada (margem
+     de apenas 1). Só marque true se encontrar pelo menos um resultado
+     como 4-0, 4-1, 5-0, 5-1, 5-2, 6-0 etc nos últimos 10 jogos listados.
+     Se não conseguir confirmar claramente pelos placares listados, use false
+     — não assuma que existe goleada só porque o time marca muitos gols.
   → "momento": forma atual — "positivo" (3+ vitórias nos últimos 5) ou
      "negativo" (3+ derrotas/empates nos últimos 5) ou "neutro"
      Calcule da sequência atual e resultados recentes
@@ -3557,11 +3584,34 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       ajusteOver = Math.max(-4, Math.min(4, ajusteOver)); // max ±4%
     }
 
-    var pFinal = pBase + ajusteForm + ajusteH2H + ajusteOver;
+    // Ajuste pela sugestão do editor da academia — SEMPRE cruzado com os
+    // outros dados, não só quando falta informação. É análise de um
+    // profissional que viu escalação, contexto tático e forma completa —
+    // vale como sinal adicional sempre. Peso é MAIOR quando os outros
+    // dados são mais fracos (H2H curto, amostra pequena), mas nunca zero.
+    var ajusteEditor = 0;
+    var h2hFraco = !S._h2hData || S._h2hData.amostra < 4;
+    var amostraFracaForm = !S._formFora || S._formFora.amostra < 5;
+    var dadosFracos = h2hFraco || amostraFracaForm;
+    if(S._sugestaoEditor) {
+      var dir = (S._sugestaoEditor.direcao || '').toLowerCase();
+      var pesoBase = dadosFracos ? 6 : 3; // peso maior quando dados fracos, mas sempre presente
+      if(dir.indexOf('ambos') >= 0 || dir.indexOf('ambas') >= 0) {
+        ajusteEditor = pesoBase; // editor sugere btts — empurra pZebraMarca pra cima
+      } else if(dir.indexOf('poucos gols') >= 0 || dir.indexOf('under') >= 0 || dir.indexOf('menos de') >= 0) {
+        ajusteEditor = -pesoBase; // editor sugere jogo fechado — empurra pra baixo
+      }
+      if(ajusteEditor !== 0) {
+        console.log('[SUGESTÃO EDITOR] peso='+pesoBase+'pp ('+(dadosFracos?'dados fracos, peso alto':'dados ricos, peso moderado')+
+          ') — aplicando ajuste de '+ajusteEditor+'pp baseado em: "'+S._sugestaoEditor.direcao+'"');
+      }
+    }
+
+    var pFinal = pBase + ajusteForm + ajusteH2H + ajusteOver + ajusteEditor;
     pFinal = Math.max(20, Math.min(80, pFinal)); // limitar entre 20-80%
 
     console.log('[P ZEBRA MARCA] base='+pBase.toFixed(1)+'% form='+ajusteForm.toFixed(1)+
-      ' h2h='+ajusteH2H.toFixed(1)+' over='+ajusteOver.toFixed(1)+
+      ' h2h='+ajusteH2H.toFixed(1)+' over='+ajusteOver.toFixed(1)+' editor='+ajusteEditor.toFixed(1)+
       ' FINAL='+pFinal.toFixed(1)+'%');
     return pFinal;
   }
@@ -5283,6 +5333,16 @@ REGRAS ABSOLUTAS:
           }
 
           // Processar campo "h2h" — dados extraídos do confronto direto pela IA
+          // Processar sugestão do editor da academia — sinal humano adicional
+          S._sugestaoEditor = null;
+          if(voto && voto.sugestao_editor && typeof voto.sugestao_editor === 'object') {
+            S._sugestaoEditor = {
+              mercado: voto.sugestao_editor.mercado || '',
+              direcao: voto.sugestao_editor.direcao || ''
+            };
+            console.log('[SUGESTÃO EDITOR]', JSON.stringify(S._sugestaoEditor));
+          }
+
           S._h2hData = null;
           if(voto && voto.h2h && typeof voto.h2h === 'object') {
             var h2hRaw = voto.h2h;
@@ -5322,6 +5382,8 @@ REGRAS ABSOLUTAS:
               media_gols_sofridos: parseFloat(voto.form_casa.media_gols_sofridos) || 0,
               media_total:         parseFloat(voto.form_casa.media_total) || 0,
               gols_76_90_pct:      parseFloat(voto.form_casa.gols_76_90_pct) || 0,
+              teve_goleada_recente: voto.form_casa.teve_goleada_recente === true ? true :
+                                     voto.form_casa.teve_goleada_recente === false ? false : undefined,
               amostra:             parseInt(voto.form_casa.amostra) || 10,
               temporadaAnterior:   tempAnteriorCasa
             };
@@ -5344,6 +5406,8 @@ REGRAS ABSOLUTAS:
               media_gols_sofridos: parseFloat(voto.form_fora.media_gols_sofridos) || 0,
               media_total:         parseFloat(voto.form_fora.media_total) || 0,
               gols_76_90_pct:      parseFloat(voto.form_fora.gols_76_90_pct) || 0,
+              teve_goleada_recente: voto.form_fora.teve_goleada_recente === true ? true :
+                                     voto.form_fora.teve_goleada_recente === false ? false : undefined,
               amostra:             parseInt(voto.form_fora.amostra) || 10,
               temporadaAnterior:   tempAnteriorFora
             };
@@ -6237,6 +6301,24 @@ function calcStakes(cluster, stake, analysisText) {
         }
       }
 
+      // ── SEM MARGEM DE GOLEADA NOS ÚLTIMOS JOGOS — verificação separada ──
+      // over25_pct alto = MUITOS gols no jogo (pode ser 2-2, 3-2, volume sem
+      // domínio). Isso é DIFERENTE de goleada real (vitória por 4+ gols de
+      // diferença). Um time pode ter over alto sem NUNCA vencer com margem
+      // grande — precisa checar isso separadamente.
+      var favSemMargemGoleada = false;
+      if(favFormGoleadaCheck && favFormGoleadaCheck.amostra >= 5) {
+        // teve_goleada_recente: campo booleano extraído pela IA — indica se
+        // o time venceu ALGUM dos últimos jogos por 4+ gols de diferença.
+        // Se o campo não foi extraído (undefined), trata como "sem confirmação"
+        // e é conservador — só bloqueia se over25_pct também for baixo/médio,
+        // evitando falso-positivo quando a IA simplesmente não extraiu o campo.
+        var teveGoleadaRecente = favFormGoleadaCheck.teve_goleada_recente;
+        if(teveGoleadaRecente === false && (favFormGoleadaCheck.over25_pct || 0) < 85) {
+          favSemMargemGoleada = true;
+        }
+      }
+
       // ── CAMINHO INTERMEDIÁRIO — precisa existir um "degrau" de 3 gols ──
       // Goleada (4+) exige passar por 3 gols antes. Se NENHUM score de
       // 3 gols do favorito (3-0/3-1/3-2) tem probabilidade minimamente
@@ -6251,9 +6333,9 @@ function calcStakes(cluster, stake, analysisText) {
       var maxProb3Gols = Math.max(prob3x0, prob3x1, prob3x2);
       var semCaminhoIntermediario = maxProb3Gols > 0 && maxProb3Gols < 4.5;
 
-      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado || favSemHistoricoGoleada || semCaminhoIntermediario) {
+      if(probAnyOther < 8.0 || jogoUnder || !overJustificaGoleada || favForteJogoFechado || favSemHistoricoGoleada || favSemMargemGoleada || semCaminhoIntermediario) {
         console.log('[GOLEADA] '+expansionScore+' ignorada — prob='+probAnyOther.toFixed(1)+'% over='+overAtualGol+
-          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':favSemHistoricoGoleada?' (favorito sem histórico goleada)':semCaminhoIntermediario?' (sem caminho de 3 gols — max='+maxProb3Gols.toFixed(1)+'%)':'')));
+          (jogoUnder?' (jogo under)':(!overJustificaGoleada?' (over alto)':favForteJogoFechado?' (fav forte + jogo fechado)':favSemHistoricoGoleada?' (favorito sem histórico goleada)':favSemMargemGoleada?' (favorito sem margem de goleada nos últimos jogos)':semCaminhoIntermediario?' (sem caminho de 3 gols — max='+maxProb3Gols.toFixed(1)+'%)':'')));
       } else {
       // Decidir se entra como DESTINO NORMAL ou ALERTA/EXPANSÃO
       const probAncoraCl = cluster.length > 0
