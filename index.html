@@ -6659,10 +6659,18 @@ function calcStakes(cluster, stake, analysisText) {
       // ── REGRA FAV FORTE: 0-0 não entra quando favorito < 1.65 ────
       // Com fav@1.54, o favorito tem 65% de chance de vencer.
       // 0-0 contradiz esse favoritismo — deve ser EXPANSÃO no máximo.
+      // EXCEÇÃO: se o H2H específico entre esses dois times já teve
+      // um 0-0 recente, isso é dado direto mais forte que a regra
+      // genérica de "fav forte" — não remove nesse caso.
       if(s.score === '0-0' && favAtual > 0 && favAtual < 1.65 && s.tipo !== 'expansao') {
-        s.tipo = 'expansao';
-        s.stake = 0; s.lucro = 0;
-        console.log('[FAV FORTE] 0-0 removido do Dutch — fav@'+favAtual+' < 1.65');
+        var h2hTeve00 = S._h2hData && S._h2hData.placar_mais_freq === '0-0';
+        if(!h2hTeve00) {
+          s.tipo = 'expansao';
+          s.stake = 0; s.lucro = 0;
+          console.log('[FAV FORTE] 0-0 removido do Dutch — fav@'+favAtual+' < 1.65 (sem precedente de 0-0 no H2H)');
+        } else {
+          console.log('[FAV FORTE] 0-0 mantido apesar de fav@'+favAtual+' < 1.65 — H2H já teve 0-0 entre esses times');
+        }
       }
     });
 
