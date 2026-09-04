@@ -1955,6 +1955,7 @@ function selectSbGame(id) {
   // Clear inputs only if no saved state
   if(!S.currentGame.savedAnTexto) {
     ['an-texto','cs-paste'].forEach(fid => { const el=document.getElementById(fid); if(el) el.value=''; });
+    try { localStorage.removeItem('cs_autosave'); } catch(e) {}
   }
 
   // Restore game state
@@ -5440,12 +5441,18 @@ REGRAS ABSOLUTAS:
       .replace(/Total na lista vertical = \d+ scores exatos/, 'Total na lista vertical = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores exatos');
 
     // ── FASE 2: Narrativa com cluster final ───────────────────
+    // max_tokens reduzido de 3000 para 2000 — narrativas reais analisadas
+    // hoje usam tipicamente 600-1000 tokens, então essa margem ainda é
+    // folgada. O objetivo é reduzir o tempo MÁXIMO de geração possível,
+    // diminuindo o risco de estourar o timeout da função do Netlify
+    // (que pode gerar cobrança "fantasma" — a Anthropic processa e
+    // cobra mesmo quando o Netlify desiste e devolve 504 pro usuário).
     const resp = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 3000,
+        max_tokens: 2000,
         temperature: 0.3,
         system: SP,
         messages: [{ role:'user', content: promptFinal }]
@@ -7414,6 +7421,7 @@ function resetCluster() {
   const out = document.getElementById('resultado-out');
   if(out) out.innerHTML = '<div style=\"text-align:center;padding:60px 20px;color:var(--txt3);\"><div style=\"font-size:56px;margin-bottom:20px;filter:drop-shadow(0 0 16px rgba(0,212,255,.25));">🧠</div><div style=\"font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--txt3);margin-bottom:20px;\">GÊNIO DOS PLACARES</div><div style=\"display:flex;flex-direction:column;gap:10px;text-align:left;max-width:220px;margin:0 auto;\"><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>⚡</span><span>Lendo padrões e contexto</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>📊</span><span>Analisando odds e perfil</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>🎯</span><span>Calculando cluster de placares</span></div><div style=\"display:flex;align-items:center;gap:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);opacity:0.5;\"><span>✍️</span><span>Gerando narrativa</span></div></div></div>';
   ['an-texto','cs-paste','pk-fav','pk-btts','pk-over'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  try { localStorage.removeItem('cs_autosave'); } catch(e) {}
   const st=document.getElementById('cs-status'); if(st) st.textContent='';
   const pk=document.getElementById('pk-status'); if(pk) pk.innerHTML='';
   openModal();
@@ -8755,6 +8763,7 @@ function autosaveForm() {
         over:  (document.getElementById('pk-over')||{}).value || '',
         btts:  (document.getElementById('pk-btts')||{}).value || '',
         cs:    (document.getElementById('cs-input')||document.getElementById('cs-odds')||{}).value || '',
+        ts:    Date.now() // timestamp — usado pra expirar rascunhos antigos
       };
       localStorage.setItem('cs_autosave', JSON.stringify(formData));
     } catch(e) {}
@@ -8766,6 +8775,14 @@ function restoreAutosave() {
     var saved = localStorage.getItem('cs_autosave');
     if(!saved) return;
     var d = JSON.parse(saved);
+    // Expira rascunhos com mais de 30 minutos — evita que texto de um
+    // jogo antigo (de dias atrás, esquecido por reload/fechamento
+    // acidental antes de clicar Analisar) reapareça sozinho depois
+    var TRINTA_MIN = 30 * 60 * 1000;
+    if(!d.ts || (Date.now() - d.ts) > TRINTA_MIN) {
+      localStorage.removeItem('cs_autosave');
+      return;
+    }
     if(d.texto && d.texto.length > 20) {
       if(document.getElementById('an-texto')) document.getElementById('an-texto').value = d.texto;
       if(d.fav && document.getElementById('pk-fav')) document.getElementById('pk-fav').value = d.fav;
