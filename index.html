@@ -1181,6 +1181,8 @@ window.recalcularBacktest = function() {
   });
   save();
   console.log('[RECÁLCULO] '+corrigidos+' jogos corrigidos (cluster). '+corrigidosAncora+' jogos corrigidos (âncora). '+semCluster+' jogos têm placar mas SEM cluster salvo (não recalculáveis).');
+  if(typeof renderPerf === 'function') renderPerf();
+  if(typeof updHdr === 'function') updHdr();
   return {corrigidos: corrigidos, corrigidosAncora: corrigidosAncora, semClusterSalvo: semCluster, total: S.hist.length};
 };
 function saveGames() {
@@ -5529,7 +5531,7 @@ REGRAS ABSOLUTAS:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        max_tokens: 1500,
         temperature: 0.3,
         system: SP,
         messages: [{ role:'user', content: promptFinal }]
