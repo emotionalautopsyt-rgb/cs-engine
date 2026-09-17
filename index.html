@@ -1161,7 +1161,7 @@ function calcPlacarNoCluster(placarFinal, clusterSalvo) {
 // tudo que já está salvo. Jogos sem cluster salvo (campo vazio/ausente)
 // não têm como ser recalculados — não sabemos qual era o cluster deles.
 window.recalcularBacktest = function() {
-  var corrigidos = 0, semCluster = 0;
+  var corrigidos = 0, corrigidosAncora = 0, semCluster = 0;
   S.hist.forEach(function(r){
     if(r.sc && Array.isArray(r.cluster) && r.cluster.length > 0) {
       var novoValor = calcPlacarNoCluster(r.sc, r.cluster);
@@ -1171,10 +1171,17 @@ window.recalcularBacktest = function() {
     } else if(r.sc && (!r.cluster || r.cluster.length === 0)) {
       semCluster++;
     }
+    // Recalcular também "âncora acertou" — mesmo bug, mesmos 2 pontos
+    // de salvamento nunca preenchiam esse campo corretamente
+    if(r.sc && r.ancora) {
+      var novoAncora = r.sc === r.ancora;
+      if(r.placarNaAncora !== novoAncora) corrigidosAncora++;
+      r.placarNaAncora = novoAncora;
+    }
   });
   save();
-  console.log('[RECÁLCULO] '+corrigidos+' jogos corrigidos. '+semCluster+' jogos têm placar mas SEM cluster salvo (não recalculáveis).');
-  return {corrigidos: corrigidos, semClusterSalvo: semCluster, total: S.hist.length};
+  console.log('[RECÁLCULO] '+corrigidos+' jogos corrigidos (cluster). '+corrigidosAncora+' jogos corrigidos (âncora). '+semCluster+' jogos têm placar mas SEM cluster salvo (não recalculáveis).');
+  return {corrigidos: corrigidos, corrigidosAncora: corrigidosAncora, semClusterSalvo: semCluster, total: S.hist.length};
 };
 function saveGames() {
   try {
