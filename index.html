@@ -1130,6 +1130,52 @@ const S = {
   lastGenioApproval: null
 };
 function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
+
+// ── HELPER — calcula se o placar final bateu no cluster ──────────────
+// Extraído do fluxo principal (encerrar via sidebar) pra ser reutilizado
+// em TODOS os pontos que salvam resultado no histórico. Antes, só esse
+// fluxo calculava isso — os outros 2 (Resultado Rápido e registrarResultado)
+// nunca setavam esse campo, fazendo esses jogos contarem como "não bateu"
+// na métrica de backtest mesmo quando o placar realmente batia no cluster.
+function calcPlacarNoCluster(placarFinal, clusterSalvo) {
+  clusterSalvo = clusterSalvo || [];
+  if(!placarFinal) return false;
+  var bateu = clusterSalvo.some(function(c){ return (c.score||c) === placarFinal; });
+  if(bateu) return true;
+  var partes = placarFinal.split('-').map(Number);
+  if(partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1])) {
+    var golsCasa = partes[0], golsFora = partes[1];
+    var temAnyHome = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_home'; });
+    var temAnyAway = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_away'; });
+    if(temAnyHome && (golsCasa - golsFora) >= 4) return true;
+    if(temAnyAway && (golsFora - golsCasa) >= 4) return true;
+  }
+  return false;
+}
+
+// ── RECÁLCULO RETROATIVO — corrige jogos já salvos com o bug ─────────
+// Jogos salvos via "Resultado Rápido" ou registrarResultado antes desta
+// correção nunca tiveram placarNoCluster calculado, contando errado
+// como "não bateu" na métrica de backtest mesmo tendo batido de verdade.
+// Rode window.recalcularBacktest() uma vez no console pra corrigir
+// tudo que já está salvo. Jogos sem cluster salvo (campo vazio/ausente)
+// não têm como ser recalculados — não sabemos qual era o cluster deles.
+window.recalcularBacktest = function() {
+  var corrigidos = 0, semCluster = 0;
+  S.hist.forEach(function(r){
+    if(r.sc && Array.isArray(r.cluster) && r.cluster.length > 0) {
+      var novoValor = calcPlacarNoCluster(r.sc, r.cluster);
+      if(r.placarNoCluster !== novoValor) corrigidos++;
+      r.placarNoCluster = novoValor;
+      if(!r.totalScores) r.totalScores = r.cluster.length;
+    } else if(r.sc && (!r.cluster || r.cluster.length === 0)) {
+      semCluster++;
+    }
+  });
+  save();
+  console.log('[RECÁLCULO] '+corrigidos+' jogos corrigidos. '+semCluster+' jogos têm placar mas SEM cluster salvo (não recalculáveis).');
+  return {corrigidos: corrigidos, semClusterSalvo: semCluster, total: S.hist.length};
+};
 function saveGames() {
   try {
     // Limitar tamanho antes de salvar — remover campos pesados de jogos antigos
@@ -7798,7 +7844,12 @@ function regRapido() {
     oddsFav: S.currentGame?.savedPkFav || '',
     btts: S.currentGame?.savedPkBtts || '',
     over: S.currentGame?.savedPkOver || '',
-    cluster: S.currentGame?.cluster || []
+    cluster: S.currentGame?.cluster || [],
+    perfil: S.currentGame?.savedPerfil || '',
+    ancora: S.currentGame?.savedAncora || '',
+    placarNoCluster: calcPlacarNoCluster(S.currentGame?.placar||'', S.currentGame?.cluster||[]),
+    placarNaAncora: !!(S.currentGame?.placar && S.currentGame?.savedAncora && S.currentGame.savedAncora === S.currentGame.placar),
+    totalScores: (S.currentGame?.cluster||[]).length
   });
   save();
   const rv = document.getElementById('l-rv');
@@ -8891,7 +8942,11 @@ function registrarResultado(g, num) {
         over: g.savedPkOver || ''
       },
       cluster: Array.isArray(g.cluster) ? g.cluster.map(function(s){ return {score:s.score, odd:s.odd, tipo:s.tipo}; }) : [],
-      ancora: g.lastAncora || ''
+      ancora: g.lastAncora || '',
+      perfil: g.savedPerfil || '',
+      placarNoCluster: calcPlacarNoCluster(g.placar||'', g.cluster||[]),
+      placarNaAncora: !!(g.placar && g.lastAncora && g.lastAncora === g.placar),
+      totalScores: Array.isArray(g.cluster) ? g.cluster.length : 0
     });
   } else {
     jaExiste.v = num;
