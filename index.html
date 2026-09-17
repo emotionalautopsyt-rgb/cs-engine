@@ -4715,9 +4715,14 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   }
 
   if(favEhVisitante) {
+    console.log('[INVERSÃO] favEhVisitante=true — invertendo mainScores/protection. '+
+      'ANTES: mainScores=['+mainScores.join(',')+'] protection=['+protection.join(',')+']');
     mainScores = invArr(mainScores);
     protection = invArr(protection);
     ancora     = inv(ancora);
+    console.log('[INVERSÃO] DEPOIS: mainScores=['+mainScores.join(',')+'] protection=['+protection.join(',')+']');
+  } else {
+    console.log('[INVERSÃO] favEhVisitante=false — NÃO inverte. mainScores=['+mainScores.join(',')+']');
   }
 
   return {
