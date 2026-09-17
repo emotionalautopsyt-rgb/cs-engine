@@ -2857,17 +2857,26 @@ function parseCS() {
         }
       }
 
-      // Blindagem LAY: odds muito altas no CS são suspeitas
-      // Se o score é 1-0 e odd > 30, provavelmente é LAY
+      // Blindagem LAY: odds muito altas no CS são suspeitas de serem LAY
+      // em vez de BACK. MAS: se não existe NENHUMA alternativa menor que
+      // 30, isso não é necessariamente confusão de LAY/BACK — pode ser
+      // que o placar seja raro o suficiente (ex: 3-1 num jogo de over
+      // baixo) pra ter odd real alta legitimamente nos dois níveis de
+      // preço. Bug real encontrado: Levski vs Salzburg, 3-1 com odds
+      // 34 e 36 (ambas >30, nenhuma alternativa) — a versão antiga
+      // descartava (backOdd=null), fazendo o score entrar no cluster
+      // sem odd nenhuma, quebrado ("@ ?" no card). Agora: só corrige
+      // pra uma odd MENOR quando ela realmente existir; se não existir,
+      // mantém a menor odd disponível mesmo sendo >30, em vez de jogar
+      // fora o dado inteiro.
       if(backOdd && backOdd > 30) {
-        // Verificar se tem uma odd menor disponível
         const menorOdd = allOdds.find(o => o.v < 30);
         if(menorOdd) {
           backOdd = menorOdd.v;
           backLiq = menorOdd.liq;
-        } else {
-          backOdd = null; // não confiar nessa odd
         }
+        // else: mantém backOdd como está (a menor odd disponível,
+        // mesmo >30) — não descarta mais o dado.
       }
 
       if(backOdd && backOdd >= 3.0 && !S.csOdds[score]) {
@@ -7145,6 +7154,20 @@ function renderCluster(cluster, stake) {
       }
     }
     var oddDisplay = s.odd>0 ? s.odd : '?';
+    var semOddValida = !(s.odd > 0);
+    if(semOddValida) {
+      console.warn('[ODD QUEBRADA] Score "'+s.score+'" está no cluster sem odd válida. '+
+        'S.csOdds["'+s.score+'"] = '+(S.csOdds ? S.csOdds[s.score] : 'S.csOdds indefinido')+
+        '. Isso indica falha no parse da tabela de odds pra esse score específico.');
+    }
+    // Se mesmo depois do fallback a odd continua sem valor real, isso é
+    // dado quebrado — nunca deve parecer parte normal do Dutch. Em vez do
+    // "?" discreto (fácil de passar batido numa decisão ao vivo), marca
+    // com aviso vermelho explícito, deixando claro que esse score
+    // específico não tem preço confiável e não deve ser usado pra apostar.
+    var avisoOddQuebrada = semOddValida
+      ? '<div style="background:rgba(255,59,48,.15);border:1px solid rgba(255,59,48,.5);border-radius:4px;padding:2px 6px;font-size:7px;color:#ff3b30;font-family:Space Mono,monospace;margin-top:4px;">⚠️ ODD NÃO ENCONTRADA — NÃO USAR</div>'
+      : '';
     var probW2    = Math.min(s.prob*1.8,100);
     var pgLine2   = s.oddPG>0 ? '<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--grn);margin-bottom:4px;">→ @'+s.oddPG+' pós-gol</div>' : '';
     return '<div style="background:'+cardCol.bg+';border:2px solid '+borderSt+';border-radius:12px;padding:16px 12px;text-align:center;position:relative;cursor:default;transition:transform .15s,box-shadow .2s;min-width:120px;'+shadowSt+animDelay+'" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">'+
@@ -7159,6 +7182,7 @@ function renderCluster(cluster, stake) {
         '<div style="width:'+probW2+'%;height:100%;background:'+cardCol.bar+';border-radius:3px;"></div>'+
       '</div>'+
       '<div style="font-family:Space Mono,monospace;font-size:8px;color:'+cardCol.bar+';margin-bottom:8px;">'+s.prob+'% implícita</div>'+
+      avisoOddQuebrada+
       pgLine2+
     '</div>';
   }).join('');
