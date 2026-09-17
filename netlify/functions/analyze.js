@@ -10,11 +10,11 @@ exports.handler = async function(event) {
     // tempo da própria função do Netlify (10s no plano atual). Sem isso, a
     // Anthropic continuava processando e cobrando mesmo depois do Netlify
     // já ter desistido de esperar e devolvido erro genérico pro navegador.
-    // Com isso, a chamada é cancelada de forma limpa em 8.5s (margem de
-    // segurança de 1.5s antes do limite de 10s), e o erro que volta pro
-    // frontend já vem identificado como timeout, não erro genérico.
+    // Com isso, a chamada é cancelada de forma limpa em 9.5s (margem de
+    // segurança de apenas 0.5s antes do limite de 10s), e o erro que volta
+    // pro frontend já vem identificado como timeout, não erro genérico.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8500);
+    const timeoutId = setTimeout(() => controller.abort(), 9500);
 
     let response;
     try {
@@ -50,12 +50,7 @@ exports.handler = async function(event) {
     if (err.name === 'AbortError') {
       return {
         statusCode: 504,
-        body: JSON.stringify({ error: { message: 'Timeout — a análise demorou demais e foi cancelada antes de completar (limite de 8.5s).' } })
+        body: JSON.stringify({ error: { message: 'Timeout — a análise demorou demais e foi cancelada antes de completar (limite de 9.5s).' } })
       };
     }
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: { message: err.message } })
-    };
-  }
-};
