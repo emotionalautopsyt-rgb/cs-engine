@@ -3157,6 +3157,19 @@ junto com o Plano B
 (proteção via [scores tipo planb]).
 [1 frase de contexto].
 
+⚠️ REGRA CRÍTICA — NUNCA INVENTE TIMING DE GOLS SEM DADO:
+As linhas "Risco de gol cedo" e "Potencial tardio" abaixo só podem citar um
+padrão específico de minutagem (ex: "marca cedo", "decide após os 75'") SE
+a tabela "Momento dos gols" do texto fonte tiver pelo menos um valor
+preenchido (algum número em qualquer faixa 0-15/16-30/.../76-90) para o
+time em questão. Se a tabela estiver completamente vazia (todas as células
+sem número, para os dois times), você NÃO tem dado nenhum de timing —
+nesse caso, escreva essas duas linhas de forma genérica, baseada só em
+contexto (favoritismo, jogo aberto/fechado), SEM inventar um padrão de
+minutagem específico. Nunca afirme "o time X não costuma abrir cedo" ou
+"concentra decisões entre Y-Z" se a tabela de origem não tiver nenhum
+número sustentando isso — isso é fabricação de dado, é proibido.
+
 REGRA CRÍTICA DE CONSISTÊNCIA — LEIA COM ATENÇÃO:
 Os scores entre parênteses do "Plano A" e "Plano B" acima DEVEM ser EXATAMENTE
 os mesmos scores já escritos na lista vertical acima, sem adicionar, remover,
@@ -3322,48 +3335,12 @@ CAMPO "h2h" (OPCIONAL — extrair quando dados de confronto direto disponíveis)
 - Use apenas H2H onde o mesmo time era mandante/visitante (não misture lados)
 - Se dados insuficientes ou indisponíveis, OMITA o campo completamente
 
-⚠️ REGRA CRÍTICA — IDENTIFICAÇÃO DE MANDANTE/VISITANTE DESTA PARTIDA:
-Antes de preencher qualquer campo, identifique o mandante (casa) e o visitante
-(fora) DESTA PARTIDA ESPECÍFICA. Siga esta ordem de prioridade:
-
-PRIORIDADE 1 — Frase de abertura explícita:
-Procure o formato "TimeA e TimeB jogam no Estádio X" ou "TimeA vs TimeB" —
-o PRIMEIRO time citado nessa frase é sempre o MANDANTE (casa) desta partida,
-o segundo é o VISITANTE (fora). Se essa frase existir, ela é a fonte
-definitiva — pare aqui e não considere outras pistas.
-
-PRIORIDADE 2 — Quando NÃO houver frase de abertura (ex: texto começa direto
-com "Análise TimeA" / "Análise TimeB" sem mencionar o estádio):
-Procure expressões contextuais explícitas em qualquer parte do texto como:
-  "visitar o estádio de", "visita o líder/campeão/adversário",
-  "recebe em casa", "atua em seu estádio", "joga em seus domínios",
-  "diante de sua torcida", "fora de seus domínios"
-Essas expressões indicam claramente quem é o mandante. Leia o texto
-INTEIRO (análise de ambos os times) antes de decidir — a pista pode
-estar na análise do time visitante ("Fulano vai visitar o estádio do
-líder") e não na análise do mandante.
-
-PRIORIDADE 3 — Quando não houver nenhuma pista textual clara:
-Use a ordem dos times no nome/URL do confronto (ex: "sirius/hacken"
-ou "sirius vs hacken" nos metadados) — o primeiro time geralmente é
-o mandante nas convenções de sites de estatísticas de apostas.
-
-Isso vale MESMO QUANDO:
-- É jogo de volta de mata-mata e o time visitante atual venceu o jogo de ida em
-  seu próprio estádio (o mandante da VOLTA pode ser diferente do mandante da IDA)
-- O texto menciona "vantagem de jogar em casa" de forma genérica sem especificar
-  qual partida — sempre confie na frase de abertura, não em menções soltas
-- Um dos times parece estatisticamente mais forte — força do time NÃO determina
-  quem é mandante
-- Um dos times é o líder/favorito claro — o líder pode estar jogando FORA
-NUNCA troque os lados com base em qual bloco de estatísticas aparece primeiro
-no texto, ou em qual time tem melhor campanha. Se o texto disser explicitamente
-algo como "após a vitória em casa do Santos" referindo-se ao jogo de IDA, isso
-NÃO significa que Santos é mandante NESTA partida (volta).
-
-Antes de finalizar o JSON, faça uma checagem: releia a frase ou pista que você
-usou para decidir mandante/visitante e confirme que ela se refere a ESTA
-partida especificamente, não a um jogo anterior ou a uma menção genérica.
+NOTA — MANDANTE/VISITANTE: quando o prompt começar com "FATO OBRIGATÓRIO —
+MANDANTE", use exatamente esse dado, sem questionar. Se essa nota não
+aparecer (raro — falha na detecção automática), identifique pela frase de
+abertura ("TimeA e TimeB jogam/se enfrentam...", primeiro = casa) ou, na
+falta dela, por expressões como "visita o estádio de"/"recebe em casa".
+Força do time NUNCA determina mandante — o líder pode jogar fora.
 
 CAMPOS "form_casa" e "form_fora" (OPCIONAIS — extrair dos últimos 10 jogos de cada time):
 - "form_casa": dados do time MANDANTE desta partida (identificado acima),
@@ -4760,6 +4737,28 @@ async function analisarJogo() {
     }
   } catch(e) { console.log('[MANDANTE DETECTADO] regex falhou:', e); }
 
+  // ── EXTRAÇÃO DETERMINÍSTICA DO FAVORITO REAL — via grid de odds CS ──
+  // A narrativa já errou "quem é favorito" mesmo com casa/fora corretos
+  // (caso real: La Coruña vs Sevilla, 16/09 — narrativa disse Sevilla
+  // favorito quando o grid de CS odds mostrava o oposto). Isso calcula
+  // objetivamente, ANTES da IA escrever, comparando a média das odds de
+  // vitória casa (1-0,2-0,2-1,3-0,3-1) vs vitória fora (0-1,0-2,1-2,0-3,1-3)
+  // — o lado com média mais BAIXA (mais provável) é o favorito real.
+  S._favoritoRealViaCsOdds = null;
+  try {
+    const parA = ['1-0','2-0','2-1','3-0','3-1'];
+    const parB = ['0-1','0-2','1-2','0-3','1-3'];
+    const casaVals = parA.map(function(k){ return S.csOdds && S.csOdds[k]; }).filter(function(v){ return v>1; });
+    const foraVals = parB.map(function(k){ return S.csOdds && S.csOdds[k]; }).filter(function(v){ return v>1; });
+    if(casaVals.length>=3 && foraVals.length>=3) {
+      const avgCasa = casaVals.reduce(function(a,b){return a+b;},0)/casaVals.length;
+      const avgFora = foraVals.reduce(function(a,b){return a+b;},0)/foraVals.length;
+      S._favoritoRealViaCsOdds = avgCasa < avgFora ? 'casa' : 'fora';
+      console.log('[FAVORITO REAL] avgCasa='+avgCasa.toFixed(1)+' avgFora='+avgFora.toFixed(1)+
+        ' → favorito real = '+S._favoritoRealViaCsOdds+' (via grid de CS odds, independente da IA)');
+    }
+  } catch(e) { console.log('[FAVORITO REAL] cálculo falhou:', e); }
+
   const fav = parseFloat(document.getElementById('pk-fav')?.value) || 0;
   const btts = parseFloat(document.getElementById('pk-btts')?.value) || 0;
   const over = parseFloat(document.getElementById('pk-over')?.value) || 0;
@@ -5433,12 +5432,37 @@ REGRAS ABSOLUTAS:
     }
     // A partir daqui usa engineFinal (motor + validação da IA)
     // Atualizar prompt com cluster final validado
-    const promptFinal = prompt
+    let promptFinal = prompt
       .replace('Plano A: '+engine.mainScores.join(', '), 'Plano A: '+engineFinal.mainScores.join(', '))
       .replace('Plano B: '+engine.protection.join(', '), 'Plano B: '+engineFinal.protection.join(', '))
       .replace('Âncora: '+engine.ancora, 'Âncora: '+engineFinal.ancora)
       .replace('2. A âncora sugerida pelo motor É '+engine.ancora, '2. A âncora sugerida pelo motor É '+engineFinal.ancora)
       .replace(/Total na lista vertical = \d+ scores exatos/, 'Total na lista vertical = '+(engineFinal.mainScores.length+engineFinal.protection.length)+' scores exatos');
+
+    // ── INJETAR FATOS DETERMINÍSTICOS OBRIGATÓRIOS (não depende da IA) ──
+    // Mandante e favorito real já foram calculados por código (regex/URL
+    // pro mandante, grid de odds CS pro favorito) — isso é ground truth,
+    // não opinião da IA. Antes disso, o selo só aparecia na TELA mas nunca
+    // era lido pela IA, o que não impedia ela de errar casa/fora e
+    // favorito na narrativa mesmo com o dado certo disponível. Agora isso
+    // vira instrução obrigatória no início do prompt.
+    let fatosDeterministicos = '';
+    if(S._mandanteDetectado && S._visitanteDetectado) {
+      fatosDeterministicos += 'FATO OBRIGATÓRIO — MANDANTE: "'+S._mandanteDetectado+'" é o time da CASA nesta '+
+        'partida, e "'+S._visitanteDetectado+'" é o VISITANTE. Isso foi extraído diretamente do texto/URL, não é '+
+        'opinião — NUNCA inverta isso na narrativa, mesmo que outras pistas do texto pareçam sugerir o contrário.\n';
+    }
+    if(S._favoritoRealViaCsOdds) {
+      const nomeFavorito = S._favoritoRealViaCsOdds === 'casa' ? S._mandanteDetectado : S._visitanteDetectado;
+      if(nomeFavorito) {
+        fatosDeterministicos += 'FATO OBRIGATÓRIO — FAVORITO: "'+nomeFavorito+'" é o FAVORITO real desta partida, '+
+          'calculado objetivamente pela média das odds de correct score (não é opinião). NUNCA afirme que o outro '+
+          'time é o favorito, mesmo que a redação do texto fonte pareça sugerir isso.\n';
+      }
+    }
+    if(fatosDeterministicos) {
+      promptFinal = fatosDeterministicos + '\n' + promptFinal;
+    }
 
     // ── FASE 2: Narrativa com cluster final ───────────────────
     // max_tokens reduzido de 3000 para 2000 — narrativas reais analisadas
