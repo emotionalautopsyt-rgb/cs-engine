@@ -2919,6 +2919,40 @@ function parseCS() {
 // ===== FÓRMULA DE PROBABILIDADE =====
 function calcProb(odd) { return odd>0 ? parseFloat(((1/odd)*100).toFixed(1)) : 0; }
 
+// ── PROBABILIDADE PRÓPRIA POR SCORE — Poisson bivariado ──────────────
+// Usa S._lamFav/S._lamZeb (já calculados em calcPoisson, combinando
+// 60% odd de over do mercado + 40% médias reais dos times) pra gerar
+// uma probabilidade PRÓPRIA de cada placar específico, independente
+// da odd de correct score do mercado. Isso permite comparar "quanto
+// meu modelo acha que esse placar vale" vs "quanto o mercado está
+// cobrando por ele" — a base de qualquer EV real, não só threshold.
+// Antes de hoje (16/09), lamFav/lamZeb eram calculados e nunca mais
+// usados em lugar nenhum do código — essa função ativa esse dado.
+function poissonScoreProb(golsFav, golsZeb) {
+  if(!S._lamFav || !S._lamZeb || S._lamFav <= 0 || S._lamZeb <= 0) return null;
+  function poissonPMF(lam, k) {
+    var p = 1;
+    for(var i=1; i<=k; i++) p *= lam/i;
+    return p * Math.exp(-lam);
+  }
+  var pFav = poissonPMF(S._lamFav, golsFav);
+  var pZeb = poissonPMF(S._lamZeb, golsZeb);
+  return parseFloat((pFav * pZeb * 100).toFixed(2));
+}
+
+// Recebe um score no formato absoluto do board ("2-1" = casa 2, fora 1)
+// e devolve a probabilidade do MODELO (não do mercado) para esse score,
+// já considerando de que lado está o favorito.
+function calcModelProb(scoreAbsoluto) {
+  if(!scoreAbsoluto || scoreAbsoluto.startsWith('any_other')) return null;
+  var parts = scoreAbsoluto.split('-').map(Number);
+  if(parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  var golsCasa = parts[0], golsFora = parts[1];
+  var golsFav = S._favEhVisitante ? golsFora : golsCasa;
+  var golsZeb = S._favEhVisitante ? golsCasa : golsFora;
+  return poissonScoreProb(golsFav, golsZeb);
+}
+
 // Validates a score string — rejects timing strings like "31-45", "76-90"
 // Valid scores: each side must be single digit 0-9 (max 9 goals per team)
 function validScore(s) {
@@ -4967,8 +5001,74 @@ async function analisarJogo() {
   const favEhVisitanteReal = favPorOdds || favPorLiq || favPorCombinado ||
     (favVisTextual && avgVisitante > 0 && avgVisitante < avgCasa * 0.90);
 
+  // ── SALVAR EM S — bug real corrigido em 16/09 ──────────────────────
+  // S._favEhVisitante era LIDO por calcPoisson() e calcModelProb() mas
+  // NUNCA era definido em lugar nenhum — sempre undefined (falso),
+  // fazendo o modelo assumir que o favorito é sempre o time da casa,
+  // mesmo quando o favorito real é o visitante (vimos isso hoje em
+  // Kifisia, UTA/Sepsi, Levski/Salzburg). Isso quebraria silenciosamente
+  // o cálculo de EV/EDGE pra qualquer jogo com favorito visitante.
+  S._favEhVisitante = favEhVisitanteReal;
+
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal, S.csOddsLiq);
+
+  // ── REDE DE SEGURANÇA — escaneia a tabela COMPLETA de odds ──────
+  // Bug real confirmado hoje (16/09, casos Omonia/Celta e UTA/Sepsi):
+  // cada perfil (CONSERVADOR, SUPER_EQUILIBRADO, ALTO_RISCO etc) tem
+  // uma lista de mainScores/protection FIXA no código, que não escaneia
+  // a tabela de odds inteira — então um score com probabilidade real
+  // ALTA (maior até que scores já incluídos) pode ficar de fora só
+  // porque não está na lista hardcoded daquele perfil específico.
+  // Essa camada roda ANTES da IA — corrige a lista que a IA vai narrar,
+  // então a narrativa e o cluster final sempre batem (sem violar a
+  // trava de "cluster soberano" que existe depois da validação da IA).
+  try {
+    var probMinDinScan;
+    if(over <= 1.70)      probMinDinScan = 5.0;
+    else if(over <= 1.85) probMinDinScan = 5.5;
+    else if(over <= 2.00) probMinDinScan = 6.0;
+    else if(over <= 2.20) probMinDinScan = 6.5;
+    else                   probMinDinScan = 7.5;
+
+    var jaNoCluster = {};
+    engine.mainScores.concat(engine.protection).forEach(function(sc){ jaNoCluster[sc] = true; });
+
+    var candidatosResgatados = [];
+    Object.keys(S.csOdds || {}).forEach(function(sc){
+      // Ignora mercados especiais (any_other_*, etc) e scores já presentes
+      if(!sc || sc.startsWith('any_other') || jaNoCluster[sc]) return;
+      var partsRescan = sc.split('-');
+      if(partsRescan.length !== 2 || isNaN(parseInt(partsRescan[0])) || isNaN(parseInt(partsRescan[1]))) return;
+      var oddRescan = S.csOdds[sc];
+      if(!oddRescan || oddRescan <= 1) return;
+      var probRescan = 100 / oddRescan;
+      if(probRescan < probMinDinScan) return;
+
+      // ── EXCEÇÃO ESPECÍFICA PRO 0-0 — não é "qualquer score que passa
+      // no threshold entra". 0-0 é raro e só faz sentido de verdade
+      // quando o jogo é GENUINAMENTE under (poucos gols esperados dos
+      // dois lados) — não só porque a odd isolada bateu um número.
+      // Exige over>2.20 (fora da faixa "moderada/aberta") E btts>=1.90
+      // (mercado não convicto de ambos marcarem) ao mesmo tempo.
+      if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) {
+        console.log('[REDE DE SEGURANÇA] 0-0 qualificaria pelo threshold ('+probRescan.toFixed(1)+
+          '%) mas o jogo não é genuinamente under (over@'+over+', btts@'+btts+') — não resgata.');
+        return;
+      }
+
+      candidatosResgatados.push(sc);
+    });
+
+    if(candidatosResgatados.length > 0) {
+      console.log('[REDE DE SEGURANÇA] Perfil "'+engine.profileId+'" tinha lista fixa sem '+
+        candidatosResgatados.length+' score(s) que qualificam pelo threshold ('+probMinDinScan+'%): '+
+        candidatosResgatados.join(', ')+' — adicionando ao Plano B.');
+      engine.protection = engine.protection.concat(candidatosResgatados);
+    }
+  } catch(eRedeSeg) {
+    console.log('[REDE DE SEGURANÇA] erro ao escanear:', eRedeSeg);
+  }
 
   // ── PRÉ-REFINO: refinar o cluster do motor ANTES da IA validar ──
   // Ordem correta: motor → refino premium → IA valida → cluster final
@@ -5493,6 +5593,19 @@ REGRAS ABSOLUTAS:
           } else {
             S._expansaoIA = [];
           }
+
+          // ── RECALCULAR POISSON COM DADOS REAIS — bug real corrigido em 16/09 ──
+          // calcPoisson() já tinha rodado ANTES da IA responder (linha ~4870),
+          // quando S._formCasa/S._formFora ainda não existiam — então o λ
+          // combinado (60% mercado + 40% forma real) sempre caía pro
+          // fallback 100% mercado, silenciosamente, mesmo com dado real
+          // disponível. Agora que form_casa/form_fora acabaram de ser
+          // preenchidos com o dado real da IA, recalcula de verdade —
+          // isso alimenta o modelo Poisson usado no cálculo de EV/EDGE
+          // de cada score (calcModelProb), que senão ficaria baseado só
+          // na odd de mercado, perdendo o objetivo de ter um modelo
+          // PRÓPRIO e independente pra comparar contra o mercado.
+          calcPoisson();
         }
       }
     } catch(eV) {
@@ -6960,13 +7073,22 @@ function calcStakes(cluster, stake, analysisText) {
     return oa !== ob ? oa - ob : b.prob - a.prob;
   });
 
-  // ── STEP 7: Implied odds from bot text (for EDGE badges) ──────────
-  const implRe = /(\d{1,2}-\d{1,2})[^|\n]*\|[^|\n]*@[\d.]+[^|\n]*\|\s*~?@([\d.]+)\s*\|/gi;
-  let im;
-  while((im = implRe.exec(text)) !== null) {
-    const found = cluster.find(s => s.score === im[1]);
-    if(found && validScore(im[1])) found.impliedOdd = parseFloat(im[2]);
-  }
+  // ── STEP 7: Implied odds via modelo Poisson próprio (para EDGE badges) ──
+  // ANTES: regex tentava ler uma "odd implícita" que a IA escrevia no
+  // texto num formato antigo ("~@X.X |") que não existe mais na narrativa
+  // atual — o badge de EDGE ficava morto, nunca disparava. AGORA: usa o
+  // modelo Poisson próprio (S._lamFav/S._lamZeb, já combinando mercado +
+  // forma real dos times) pra gerar uma odd "justa" independente do
+  // mercado, e comparar contra a odd real — EV genuíno, não estimativa
+  // da IA no texto.
+  cluster.forEach(function(s) {
+    if(!s.score || s.score.startsWith('any_other')) return;
+    var modelProb = calcModelProb(s.score);
+    if(modelProb && modelProb > 0.1) {
+      s.impliedOdd = parseFloat((100 / modelProb).toFixed(2));
+      s._modelProb = modelProb;
+    }
+  });
 }
 
 // ===== RENDER CLUSTER =====
