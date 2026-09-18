@@ -925,6 +925,14 @@ e garantir que o DNA seja lido corretamente."></textarea>
         </div>
         <div id="cs-status" style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);margin-bottom:8px;"></div>
 
+        <!-- MEDIÇÃO DE EDGE: capturar a linha de fechamento perto do kickoff.
+             Cole as odds CS atualizadas e clique. Não muda nenhuma decisão do
+             robô — só grava o preço de fechamento para o cálculo de CLV. -->
+        <button type="button" onclick="capturarLinhaFechamento()"
+          style="width:100%;margin-bottom:10px;padding:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:var(--txt2);font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1px;cursor:pointer;">
+          📌 CAPTURAR LINHA DE FECHAMENTO (perto do kickoff, com as odds atuais coladas)
+        </button>
+
         <button class="genio-analisar-btn" id="btn-analisar" onclick="analisarJogo()">
           <span>🧠 GERAR ANÁLISE DO GÊNIO</span>
         </button>
@@ -1202,15 +1210,53 @@ function saveGames() {
         return copia;
       } else {
         // Jogo antigo: só dados essenciais
-        return {
-          ts: g.ts, nome: g.nome, comp: g.comp, stake: g.stake,
-          horario: g.horario, data: g.data, resultado: g.resultado,
-          placarFinal: g.placarFinal, lucro: g.lucro,
+        //
+        // BUG DE PERDA DE DADOS CORRIGIDO: este ramo gravava `nome` e
+        // `placarFinal`, mas o resto do código inteiro lê `name` e `placar`.
+        // Resultado: todo jogo além dos 30 mais recentes voltava do
+        // localStorage sem nome — e renderSidebar filtra por
+        // `g.name && g.name.trim() !== ''`, então eles simplesmente sumiam
+        // da lista. Os campos certos agora são gravados (com fallback para
+        // os antigos, para não perder o que já está salvo).
+        var compacto = {
+          id: g.id, ts: g.ts,
+          name: g.name || g.nome, nome: g.name || g.nome,
+          comp: g.comp, stake: g.stake,
+          horario: g.horario, data: g.data, status: g.status,
+          resultado: g.resultado, lucro: g.lucro,
+          placar: g.placar || g.placarFinal, placarFinal: g.placar || g.placarFinal,
           oddsMercado: g.oddsMercado, placarNoCluster: g.placarNoCluster,
+          genioStatus: g.genioStatus, genioApproved: g.genioApproved,
+          genioBase: g.genioBase, evCluster: g.evCluster, roiCluster: g.roiCluster,
           cluster: g.cluster ? g.cluster.map(function(s){
             return {score:s.score, odd:s.odd, tipo:s.tipo, stake:s.stake, lucro:s.lucro};
           }) : []
         };
+        // ── PRESERVAR O SNAPSHOT DE MEDIÇÃO DE EDGE ──────────────────
+        // Este é o dado que precisa acumular por centenas de jogos para
+        // responder se o robô tem edge. Truncá-lo junto com o resto
+        // inviabilizaria a medição justamente quando a amostra fica útil.
+        // Guardado em forma compacta: grade como [odd, pModelo] por placar.
+        if(g.snapshotModelo) {
+          var sm = g.snapshotModelo, tabComp = {};
+          Object.keys(sm.tabela || {}).forEach(function(sc){
+            var t = sm.tabela[sc];
+            tabComp[sc] = [t.odd, t.pModelo];
+          });
+          compacto.snapshotModelo = {
+            ts: sm.ts, lamFav: sm.lamFav, lamZeb: sm.lamZeb, rho: sm.rho,
+            modelErroMax: sm.modelErroMax, splitDegradado: sm.splitDegradado,
+            percalco: sm.percalco, gate: sm.gate,
+            placarFinal: sm.placarFinal,
+            oddsFechamento: sm.oddsFechamento,
+            cluster: (sm.cluster||[]).map(function(c){
+              return { score:c.score, oddEntrada:c.oddEntrada, stake:c.stake,
+                       pModelo:c.pModelo, edge:c.edge };
+            }),
+            tabelaCompacta: tabComp
+          };
+        }
+        return compacto;
       }
     });
 
@@ -1340,6 +1386,9 @@ async function loadGamesServer() {
 
 // ── EXPORTAR — salva todos os dados num arquivo JSON ──────
 function exportarDados() {
+  // inclui as métricas de edge no export — é o dado que responde se o robô
+  // tem valor real, e precisa sair do navegador para ser analisado a sério
+  try { console.log('[EDGE] métricas no momento do export:', JSON.stringify(calcMetricasEdge())); } catch(e){}
   try {
     var data = {
       version: '1.0',
@@ -1355,6 +1404,8 @@ function exportarDados() {
       if(an) analises[g.id] = JSON.parse(an);
     });
     data.analises = analises;
+    // métricas de edge — CLV e calibração do modelo contra as odds CS
+    try { data.metricasEdge = calcMetricasEdge(); } catch(e) { data.metricasEdge = {erro:e.message}; }
 
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -1808,6 +1859,13 @@ function confirmarEncerrar(id) {
   g.status = 'enc';
   g.placar = placarReal; // atualiza placar real do jogo
   g.resultado = isNaN(val) ? 0 : val;
+  // ── fecha o snapshot de medição de edge com o placar real ──
+  if(g.snapshotModelo && /^\d-\d$/.test(placarReal)) {
+    g.snapshotModelo.placarFinal = placarReal;
+    var _clv = calcCLVJogo(g);
+    console.log('[EDGE] '+g.name+' terminou '+placarReal+
+      (_clv ? ' | CLV '+(_clv.clvMedio>=0?'+':'')+_clv.clvMedio+'%' : ' | sem linha de fechamento capturada'));
+  }
   if(!isNaN(val) && val !== 0) {
     // Verificar se placar final estava no cluster gerado
     var clusterSalvo = g.cluster || [];
@@ -1996,6 +2054,18 @@ function selectSbGame(id) {
   S.csOdds = {};
   S.csOddsLiq = {};
   S.chatHistory = [];
+  // ── ESTADO DO MODELO POR JOGO ─────────────────────────────────────
+  // Sem isto, o lado do favorito e a forma dos times do jogo ANTERIOR
+  // vazavam para o próximo: calcPoisson() roda no oninput das odds (bem
+  // antes da detecção de favorito visitante do jogo novo) e lê exatamente
+  // estas variáveis para escolher de quem é "a forma do favorito".
+  S._favEhVisitante = false;
+  S._formCasa = null; S._formFora = null; S._h2hData = null;
+  S._sugestaoEditor = null;
+  S._lamFav = null; S._lamZeb = null; S._dcRho = null;
+  S._poisson = null; S._modelCheck = null; S._modelErroMax = null;
+  S._splitDegradado = false; S._lastGate = null;
+  S._gols76_90 = 0; S._scoreVolumeCamada8b = null; S._volumePrecoce = false;
 
   // Clear UI
   const clCard = document.getElementById('cluster-card');
@@ -2121,17 +2191,38 @@ function avaliarAprovacaoGenio(ctx) {
     else motivos.push('validação cruzada abaixo do ideal');
   }
 
-  // Regra final:
-  // Aprova quando o mercado está legível, odds estão majoritariamente no range,
-  // e não há contexto de alto ruído.
-  // Favorito muito forte (≤ 1.65) — aprovar sempre independente de BTTS/Over
-  // Mercado está dizendo que o favorito vai marcar — cluster ofensivo tem valor
-  const favMuitoForte = fav <= 1.65;
-  // csPouco não bloqueia — só avisa
-  // Bloqueia apenas: amistoso, rotação, sem objetivo, ou 2+ odds fora (exceto fav forte)
-  const hardBlock = (amistoso || rotacao || semObjetivo) || (!favMuitoForte && rangeFails >= 2);
-  // favMuitoForte (fav <= 1.65): aprova sempre independente de BTTS/Over
-  const aprovado = favMuitoForte || (!hardBlock && rangeFails <= 1 && (crossScore === null || crossScore >= 3.0));
+  // ── REGRA FINAL — agora ancorada em EV, não em semelhança de odd ──────
+  // Esta variável `aprovado` é gravada em S.currentGame.genioApproved, vai
+  // para o histórico como `status` e estratifica TODO o painel de performance,
+  // que a descreve como "jogos onde o Gênio encontrou edge operacional claro".
+  // Mas ela nunca mediu edge: era só uma checagem de faixa de odd. Por isso
+  // as estatísticas históricas do método ("zona dourada EV+111 em 9 jogos")
+  // descrevem uma FAIXA DE ODDS, não uma fonte de valor.
+  //
+  // Também foi removido o atalho `favMuitoForte = fav <= 1.65` que aprovava
+  // SEMPRE, passando por cima de amistoso, rotação, liquidez zero e odds
+  // absurdas — um fav 1.60 com over 2.5 @3.20 (jogo travadíssimo, perfil
+  // errado para o método) saía aprovado.
+  const gateEV = ctx.gate || S._lastGate || null;
+
+  // Contexto de alto ruído continua bloqueando, seja qual for o EV.
+  const hardBlock = (amistoso || rotacao || semObjetivo);
+
+  let aprovado, baseAprovacao;
+  if(gateEV && gateEV.r && (gateEV.veredito === 'edge_real' || gateEV.veredito === 'edge_marginal'
+                            || gateEV.veredito === 'sem_edge')) {
+    // Temos leitura de EV confiável — ela decide.
+    aprovado = !hardBlock && gateEV.veredito === 'edge_real';
+    baseAprovacao = 'ev';
+    if(gateEV.veredito === 'edge_marginal') motivos.push('EV positivo mas dentro da margem de erro do modelo');
+    if(gateEV.veredito === 'sem_edge')      motivos.push('EV do cluster não positivo após comissão');
+  } else {
+    // Sem leitura de EV (modelo incoerente, sem odds CS, etc): NÃO afirmamos
+    // que há edge. Cai para o critério antigo de faixa, mas marcado como tal.
+    aprovado = !hardBlock && rangeFails <= 1 && (crossScore === null || crossScore >= 3.0);
+    baseAprovacao = 'faixa';
+    motivos.push('sem leitura de EV — veredito baseado apenas na faixa de odds');
+  }
 
   // Montar mensagem contextual de não aprovado
   var motivoPrincipal = '';
@@ -2202,11 +2293,18 @@ function avaliarAprovacaoGenio(ctx) {
 
   return {
     aprovado,
+    baseAprovacao,
     status: aprovado ? 'aprovado' : 'nao_aprovado',
-    label: aprovado ? '📊 PERFIL PADRÃO' : '📊 PERFIL ATÍPICO',
+    label: aprovado
+      ? (baseAprovacao === 'ev' ? '🟢 EDGE OPERACIONAL' : '📊 PERFIL PADRÃO')
+      : (baseAprovacao === 'ev' ? '🔴 SEM EDGE OPERACIONAL' : '📊 PERFIL ATÍPICO'),
     resumo: aprovado
-      ? 'Odds dentro do range estatístico mais comum analisado pelo motor.'
-      : motivoPrincipal,
+      ? (baseAprovacao === 'ev'
+          ? 'EV do cluster positivo acima da margem de erro do modelo, líquido de comissão.'
+          : 'Odds dentro do range estatístico mais comum — sem leitura de EV disponível.')
+      : (baseAprovacao === 'ev'
+          ? 'O modelo não encontra valor nos placares deste cluster aos preços atuais.'
+          : motivoPrincipal),
     submensagem: '',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
     fav, btts, over,
@@ -2273,6 +2371,356 @@ function updatePkStatusFromApproval() {
   el.innerHTML = renderIndiceConfianca(ap) + renderGenioApprovalBox(ap);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// MOTOR DE PERCALÇO — qual é o OBSTÁCULO real desta partida
+// ═══════════════════════════════════════════════════════════════════
+// O Plano B era uma lista fixa por perfil (['1-1','0-1'], ['1-1','0-1','1-2'])
+// com um ajuste por marca_pct da zebra. Isso é proteção genérica: o mesmo
+// Plano B para um jogo em que a zebra abre o placar em 60% das vezes e para
+// um em que ela quase nunca marca.
+//
+// Um cluster não deve cobrir só o caminho mais provável — deve cobrir o
+// CAMINHO e o PERCALÇO. E o percalço não é o mesmo em todo jogo: em um é o
+// favorito sofrer cedo e ter que correr atrás; em outro é o jogo travar em
+// 1-0 e levar o empate no fim; em outro é a troca de gols que foge do script.
+// Cada um desses tem uma ROTA DE PLACARES diferente.
+//
+// Esta função lê os dados daquele confronto específico (H2H, últimos jogos de
+// cada time separados por casa/fora, quem abre o placar, quem vira quando
+// está atrás, clean sheet, timing dos gols, momento) e decide qual obstáculo
+// é o mais provável — devolvendo a rota dele.
+//
+// Convenção: placares na perspectiva do FAVORITO (h = gols do favorito).
+// A inversão para o board acontece no fim de analyzeCSGame, como sempre.
+function detectarPercalco(ctx) {
+  ctx = ctx || {};
+  var fav = +ctx.fav || 0, over = +ctx.over || 0, btts = +ctx.btts || 0;
+  var fFav = ctx.formFav || null;      // forma do favorito (já no lado certo)
+  var fZeb = ctx.formZeb || null;      // forma da zebra
+  var h2h  = ctx.h2h || null;
+  var zebraEhVisitante = !!ctx.zebraEhVisitante;
+
+  // Sem dado nenhum não inventamos obstáculo — dizemos que não sabemos.
+  var amostraFav = fFav ? (fFav.amostra || 0) : 0;
+  var amostraZeb = fZeb ? (fZeb.amostra || 0) : 0;
+  var temH2H = !!(h2h && h2h.amostra >= 4);
+  if(amostraFav < 3 && amostraZeb < 3 && !temH2H) {
+    return { tipo:'INDETERMINADO', confianca:0, rota:[], evidencias:[],
+             resumo:'Sem dados suficientes de H2H ou de forma para ler o obstáculo desta partida. '+
+                    'Plano B fica no padrão do perfil.' };
+  }
+
+  var g = function(o, k, d){ return (o && typeof o[k] === 'number') ? o[k] : (d||0); };
+  var sFav = function(o){ return o ? (o.momento || 'neutro') : 'neutro'; };
+
+  // "a zebra marca no H2H": visitante_marca_pct refere-se ao VISITANTE do
+  // confronto. Só vale como sinal da zebra quando a zebra é a visitante.
+  var h2hZebraMarca = (temH2H && zebraEhVisitante) ? g(h2h,'visitante_marca_pct') : 0;
+
+  // gols do favorito no placar mais frequente dele
+  function golsNoPlacar(p, ladoFav) {
+    if(!p || p.indexOf('-') < 0) return null;
+    var x = p.split('-').map(Number);
+    if(x.length !== 2 || isNaN(x[0]) || isNaN(x[1])) return null;
+    return ladoFav ? x[0] : x[1];
+  }
+
+  var C = [];   // candidatos a obstáculo
+
+  // ── 1) ZEBRA ABRE O PLACAR — favorito sofre cedo e corre atrás ──────
+  (function(){
+    var pts = 0, ev = [];
+    var abreZeb = g(fZeb,'abre_placar_pct'), abreFav = g(fFav,'abre_placar_pct');
+    if(abreZeb >= 45) { pts += 2; ev.push('zebra abre o placar em '+abreZeb+'% dos jogos'); }
+    if(abreZeb >= 58) { pts += 1; ev.push('e abre com frequência bem acima do normal'); }
+    if(abreFav > 0 && abreFav <= 45) { pts += 1; ev.push('favorito só abre o placar em '+abreFav+'%'); }
+    if(g(fZeb,'marca_pct') >= 60) { pts += 1; ev.push('zebra marca em '+g(fZeb,'marca_pct')+'% dos jogos'); }
+    if(sFav(fZeb) === 'positivo') { pts += 1; ev.push('zebra em momento positivo'); }
+    if(h2hZebraMarca >= 55) { pts += 1; ev.push('no H2H a zebra marcou em '+h2hZebraMarca+'% dos confrontos'); }
+    if(g(fFav,'clean_sheet_pct') > 0 && g(fFav,'clean_sheet_pct') <= 25) {
+      pts += 1; ev.push('favorito só fica sem sofrer em '+g(fFav,'clean_sheet_pct')+'% dos jogos'); }
+    C.push({ tipo:'ZEBRA_ABRE', pts:pts, max:8, evidencias:ev,
+      rota:['0-1','1-1','2-1'],
+      titulo:'Favorito sofre primeiro e tem que correr atrás',
+      leitura:'O obstáculo mais provável aqui não é o favorito não marcar — é ele levar o gol antes. '+
+              'O Plano B cobre a rota da virada: 0-1 → 1-1 → 2-1.' });
+  })();
+
+  // ── 2) ZEBRA VIRA / REAGE — ela não aceita ficar atrás ──────────────
+  (function(){
+    var pts = 0, ev = [];
+    var vira = g(fZeb,'vira_quando_atras');
+    if(vira >= 25) { pts += 2; ev.push('zebra reverte '+vira+'% das vezes em que fica atrás'); }
+    if(vira >= 38) { pts += 1; ev.push('taxa de reação muito alta para o nível dela'); }
+    if(g(fZeb,'marca_pct') >= 60) { pts += 1; ev.push('zebra marca em '+g(fZeb,'marca_pct')+'% dos jogos'); }
+    if(temH2H && g(h2h,'empates_pct') >= 33) { pts += 1; ev.push('H2H termina empatado em '+g(h2h,'empates_pct')+'% das vezes'); }
+    if(sFav(fZeb) === 'positivo') { pts += 1; ev.push('zebra em momento positivo'); }
+    if(btts > 0 && btts <= 1.90) { pts += 1; ev.push('mercado de ambas marcam em @'+btts); }
+    C.push({ tipo:'ZEBRA_REAGE', pts:pts, max:7, evidencias:ev,
+      rota:['1-1','1-2','2-1'],
+      titulo:'Zebra empata ou vira depois de estar atrás',
+      leitura:'O favorito pode abrir e não segurar. O Plano B cobre o empate e a virada da zebra '+
+              '(1-1 e 1-2), que é para onde esse jogo escapa quando foge do script.' });
+  })();
+
+  // ── 3) JOGO TRAVA — poucos gols, decisão tardia ────────────────────
+  (function(){
+    var pts = 0, ev = [];
+    var pfFav = golsNoPlacar(fFav ? fFav.placar_mais_freq : '', true);
+    if(g(fFav,'clean_sheet_pct') >= 45) { pts += 1; ev.push('favorito fecha o gol em '+g(fFav,'clean_sheet_pct')+'% dos jogos'); }
+    if(pfFav !== null && pfFav <= 1) { pts += 1; ev.push('placar mais frequente do favorito tem só '+pfFav+' gol dele'); }
+    if(g(fFav,'over25_pct') > 0 && g(fFav,'over25_pct') <= 40) { pts += 1; ev.push('favorito passa de 2.5 gols em só '+g(fFav,'over25_pct')+'%'); }
+    if(g(fZeb,'over25_pct') > 0 && g(fZeb,'over25_pct') <= 40) { pts += 1; ev.push('zebra passa de 2.5 gols em só '+g(fZeb,'over25_pct')+'%'); }
+    if(over >= 2.10) { pts += 1; ev.push('mercado precifica over 2.5 em @'+over); }
+    if(temH2H && g(h2h,'media_gols') > 0 && g(h2h,'media_gols') <= 2.2) { pts += 1; ev.push('H2H com média de só '+g(h2h,'media_gols')+' gols'); }
+    var tardios = Math.max(g(fFav,'gols_76_90_pct'), g(fZeb,'gols_76_90_pct'));
+    if(tardios >= 32) { pts += 1; ev.push(tardios+'% dos gols saem entre 76-90\''); }
+    C.push({ tipo:'JOGO_TRAVA', pts:pts, max:7, evidencias:ev,
+      rota:['1-0','1-1','0-0'],
+      titulo:'Jogo trava em placar curto e pode escorregar no fim',
+      leitura:'O obstáculo é o jogo não abrir. O favorito vence por pouco ou leva o empate tardio — '+
+              'Plano B fica em 1-1, com 0-0 só se o mercado confirmar que é under de verdade.' });
+  })();
+
+  // ── 4) TROCA DE GOLS — os dois marcam, o jogo abre ─────────────────
+  (function(){
+    var pts = 0, ev = [];
+    if(temH2H && g(h2h,'btts_pct') >= 60) { pts += 2; ev.push('H2H com ambas marcando em '+g(h2h,'btts_pct')+'% dos confrontos'); }
+    if(g(fFav,'btts_pct') >= 58 && g(fZeb,'btts_pct') >= 58) { pts += 1; ev.push('os dois times têm BTTS acima de 58% na forma recente'); }
+    if(temH2H && g(h2h,'media_gols') >= 3.0) { pts += 1; ev.push('H2H com média de '+g(h2h,'media_gols')+' gols'); }
+    if(btts > 0 && btts <= 1.85) { pts += 1; ev.push('mercado de ambas marcam em @'+btts); }
+    if(over > 0 && over <= 1.85) { pts += 1; ev.push('mercado de over 2.5 em @'+over); }
+    var pfH2H = temH2H ? h2h.placar_mais_freq : '';
+    if(pfH2H && /^[1-9]-[1-9]$/.test(pfH2H)) { pts += 1; ev.push('placar mais frequente do H2H é '+pfH2H+' (ambos marcam)'); }
+    C.push({ tipo:'TROCA_DE_GOLS', pts:pts, max:7, evidencias:ev,
+      rota:['1-1','2-1','2-2','1-2'],
+      titulo:'Os dois marcam — o jogo abre em vez de travar',
+      leitura:'O obstáculo não é o favorito não vencer, é o jogo virar troca de gols. '+
+              'O Plano B cobre 2-2 e 1-2, que aqui não são caos e sim equilíbrio ofensivo.' });
+  })();
+
+  // ── 5) ZEBRA RESISTE — ela segura e o favorito não passa ───────────
+  (function(){
+    var pts = 0, ev = [];
+    if(g(fZeb,'clean_sheet_pct') >= 38) { pts += 2; ev.push('zebra fica sem sofrer em '+g(fZeb,'clean_sheet_pct')+'% dos jogos'); }
+    if(g(fZeb,'marca_pct') > 0 && g(fZeb,'marca_pct') <= 40) { pts += 1; ev.push('zebra marca em só '+g(fZeb,'marca_pct')+'% — ela segura, não ataca'); }
+    if(g(fFav,'media_gols_marcados') > 0 && g(fFav,'media_gols_marcados') <= 1.4) { pts += 1; ev.push('favorito marca só '+g(fFav,'media_gols_marcados')+' gol por jogo'); }
+    if(temH2H && g(h2h,'empates_pct') >= 30) { pts += 1; ev.push('H2H empata em '+g(h2h,'empates_pct')+'%'); }
+    if(sFav(fFav) === 'negativo') { pts += 1; ev.push('favorito em momento negativo'); }
+    if(over >= 2.15) { pts += 1; ev.push('mercado não acredita em volume (over @'+over+')'); }
+    C.push({ tipo:'ZEBRA_RESISTE', pts:pts, max:7, evidencias:ev,
+      rota:['1-0','1-1','0-0'],
+      titulo:'Zebra se fecha e o favorito não consegue romper',
+      leitura:'O obstáculo é o placar não sair. Favorito vence por 1 ou fica no empate seco — '+
+              'Plano B em 1-1, e 0-0 só com confirmação de under real.' });
+  })();
+
+  // escolher o obstáculo dominante
+  C.sort(function(a,b){ return (b.pts/b.max) - (a.pts/a.max); });
+  var top = C[0], segundo = C[1];
+  var conf = top ? top.pts / top.max : 0;
+
+  // Confiança mínima: abaixo disso não afirmamos obstáculo nenhum.
+  if(!top || conf < 0.30) {
+    return { tipo:'INDETERMINADO', confianca:+conf.toFixed(2), rota:[], evidencias:[],
+             candidatos: C.map(function(c){ return c.tipo+' '+(100*c.pts/c.max).toFixed(0)+'%'; }),
+             resumo:'Nenhum obstáculo se destaca nos dados deste confronto. Plano B fica no padrão do perfil.' };
+  }
+
+  // Obstáculo secundário relevante (empate técnico) — a rota pode ser mesclada
+  var segundoRelevante = (segundo && (segundo.pts/segundo.max) >= conf - 0.12 && segundo.pts >= 3)
+    ? segundo : null;
+
+  // Modificador de timing — não é rota, é aviso para a gestão
+  var tardios = Math.max(g(fFav,'gols_76_90_pct'), g(fZeb,'gols_76_90_pct'));
+
+  return {
+    tipo: top.tipo,
+    titulo: top.titulo,
+    leitura: top.leitura,
+    confianca: +conf.toFixed(2),
+    rota: top.rota.slice(),
+    rotaSecundaria: segundoRelevante ? segundoRelevante.rota.slice() : [],
+    tipoSecundario: segundoRelevante ? segundoRelevante.tipo : null,
+    evidencias: top.evidencias,
+    evidenciasSecundarias: segundoRelevante ? segundoRelevante.evidencias : [],
+    decideTarde: tardios >= 32 ? tardios : 0,
+    candidatos: C.map(function(c){ return c.tipo+' '+(100*c.pts/c.max).toFixed(0)+'%'; }),
+    resumo: top.titulo + ' — confiança ' + (100*conf).toFixed(0) + '%. ' + top.leitura
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CLASSIFICADOR DE PERFIL — PONTO ÚNICO
+// ═══════════════════════════════════════════════════════════════════
+// Existiam DOIS classificadores independentes, com tabelas de corte diferentes:
+// um em analyzeCSGame (que decide o cluster) e outro em checkPackball (que
+// decide o que aparece no card). Eles discordavam no mesmo jogo. Medido em
+// UTA x Sepsi (fav 2.16 / over 2.20 / ambas 1.90): checkPackball dizia
+// "CONSERVADOR / pirâmide CONSERVADORA" enquanto o motor dizia "ALTO_RISCO /
+// favorito instável — proteções reforçadas". O mesmo jogo, ao mesmo tempo,
+// com duas leituras opostas — e a do motor muda protection e âncora.
+//
+// A tabela mantida é a do MOTOR (é ela que constrói o cluster; trocá-la
+// mudaria clusters já validados). checkPackball passa a consumir esta.
+function classificarPerfilJogo(fav, over, btts) {
+  var id, label;
+  if     (fav <= 1.64 && over <  1.70) { id='GOLEADA';              label='Favorito dominante — goleada esperada'; }
+  else if(fav <= 1.64 && over <= 1.85) { id='OFENSIVO';             label='Favorito forte com rota ofensiva'; }
+  else if(fav <= 1.64 && over <= 2.00) { id='EQUILIBRADO_OFENSIVO'; label='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.80 && over <= 1.85) { id='EQUILIBRADO_OFENSIVO'; label='Favorito com visitante ainda vivo'; }
+  else if(fav <= 1.80 && over <= 2.20) { id='EQUILIBRADO';          label='Favorito leve — cluster concentrado'; }
+  else if(fav <= 2.00 && over <= 1.85) { id='ABERTO_BTTS';          label='Jogo aberto com troca de gols possível'; }
+  else if(fav <= 2.00)                 { id='CONSERVADOR';          label='Favorito leve — leitura cautelosa'; }
+  else if(fav <= 2.35) {
+    if(over >= 2.50 || btts <= 1.80)   { id='SUPER_EQUILIBRADO';    label='Jogo equilibrado — ambos podem marcar'; }
+    else                               { id='ALTO_RISCO';           label='Favorito instável — proteções reforçadas'; }
+  }
+  else if(fav <= 3.20)                 { id='SUPER_EQUILIBRADO';    label='Jogo sem favorito claro — equilíbrio real'; }
+  else                                 { id='ALTO_RISCO';           label='Favorito instável — proteções reforçadas'; }
+
+  var piramide = (id === 'GOLEADA') ? 'INVERTIDA'
+               : (id === 'CONSERVADOR' || id === 'ALTO_RISCO') ? 'CONSERVADORA'
+               : 'NORMAL';
+  return { id: id, label: label, piramide: piramide,
+           nome: id.replace(/_/g, ' ') };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NÚCLEO PROBABILÍSTICO COMPARTILHADO — Poisson bivariado + Dixon-Coles
+// ═══════════════════════════════════════════════════════════════════
+// Um único lugar definindo a distribuição de placares. Antes existiam duas
+// implementações de Poisson soltas (calcPoisson e poissonScoreProb), ambas
+// assumindo independência entre os gols dos dois times e ambas partindo de
+// um split fixo 0.55/0.45 do λ total. As duas coisas estavam erradas:
+//
+// 1) INDEPENDÊNCIA: gols de casa e fora não são independentes nos placares
+//    baixos. Sem correção, o modelo subestima 0-0 sistematicamente (medido:
+//    8.29% vs 10.02% real no UTA x Sepsi) e erra a massa dos empates.
+//    Correção de Dixon-Coles (1997), parâmetro τ aplicado em 0-0/0-1/1-0/1-1.
+//
+// 2) SPLIT FIXO: lamFav = λ*0.55 e lamZeb = λ*0.45 davam razão 1.22 em TODO
+//    jogo, independente da odd do favorito. Medido em 6 cenários: num jogo
+//    com favorito @1.28 o robô estimava a zebra em 1.45 gols quando o mercado
+//    dizia 0.70 — erro de +107%. Consequência direta: o badge de EDGE ficava
+//    invertido, marcando "EDGE +209%" no 1-2 (zebra vencendo) e "CÉTICO -50%"
+//    no 2-0 do favorito. Agora o split é RESOLVIDO contra a odd do favorito.
+//
+// Convenção: λF = gols esperados do FAVORITO, λZ = gols esperados da ZEBRA.
+// Nada aqui sabe quem é casa ou fora — a tradução é feita por calcModelProb.
+
+var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
+                           // Faixa empírica em futebol europeu: -0.18 a -0.08.
+var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
+
+function _poisPMF(lam, k) {
+  if(!(lam > 0)) return k === 0 ? 1 : 0;
+  var p = 1;
+  for(var i = 1; i <= k; i++) p *= lam / i;
+  return p * Math.exp(-lam);
+}
+
+// τ de Dixon-Coles — corrige a dependência nos 4 placares baixos.
+function _dcTau(x, y, lf, lz, rho) {
+  if(x === 0 && y === 0) return 1 - lf * lz * rho;
+  if(x === 0 && y === 1) return 1 + lf * rho;
+  if(x === 1 && y === 0) return 1 + lz * rho;
+  if(x === 1 && y === 1) return 1 - rho;
+  return 1;
+}
+
+// Grade normalizada de probabilidades [golsFav][golsZeb]. Cacheada porque
+// é chamada uma vez por score no render do cluster.
+var _csGridCache = null;
+function csGrid(lf, lz, rho) {
+  rho = (typeof rho === 'number') ? rho : DC_RHO;
+  var key = lf.toFixed(4) + '|' + lz.toFixed(4) + '|' + rho.toFixed(4);
+  if(_csGridCache && _csGridCache.key === key) return _csGridCache.g;
+  var g = [], tot = 0, N = CS_GRID_MAX;
+  for(var f = 0; f <= N; f++) {
+    g[f] = [];
+    for(var z = 0; z <= N; z++) {
+      var p = _poisPMF(lf, f) * _poisPMF(lz, z) * _dcTau(f, z, lf, lz, rho);
+      if(p < 0) p = 0;              // τ pode ficar negativo com ρ extremo
+      g[f][z] = p; tot += p;
+    }
+  }
+  if(tot > 0) for(var f2 = 0; f2 <= N; f2++) for(var z2 = 0; z2 <= N; z2++) g[f2][z2] /= tot;
+  _csGridCache = { key: key, g: g };
+  return g;
+}
+
+// Mercados derivados da grade — usados para resolver o split e para conferir
+// se o modelo continua reproduzindo as odds que o alimentaram.
+function csMercados(g) {
+  var N = CS_GRID_MAX, pFav = 0, pEmp = 0, pZeb = 0, pOver = 0, pBtts = 0;
+  for(var f = 0; f <= N; f++) for(var z = 0; z <= N; z++) {
+    var p = g[f][z];
+    if(f > z) pFav += p; else if(f === z) pEmp += p; else pZeb += p;
+    if(f + z > 2.5) pOver += p;
+    if(f > 0 && z > 0) pBtts += p;
+  }
+  return { pFav: pFav, pEmp: pEmp, pZeb: pZeb, pOver: pOver, pBtts: pBtts };
+}
+
+// Resolve o SPLIT do λ total E o ρ de Dixon-Coles usando as TRÊS odds que o
+// usuário já cola: favorito, over 2.5 e ambas marcam.
+//   - o over 2.5 fixa o VOLUME  (λTotal, resolvido antes por bissecção)
+//   - a odd do favorito fixa a REPARTIÇÃO  (r = λF / λTotal)
+//   - a odd de ambas fixa a DEPENDÊNCIA    (ρ, que move massa entre 0-0/1-1)
+// Substitui o split fixo 0.55/0.45 e o ρ fixo. Mínimos quadrados em grade com
+// refino — determinístico, sem julgamento narrativo, sem número inventado.
+// Retorna null quando não há odd de favorito utilizável (o chamador decide).
+function resolverSplitLambda(lamTotal, favOdd, bttsOdd, rhoPadrao) {
+  if(!(lamTotal > 0) || !(favOdd > 1.01)) return null;
+  var alvoFav  = 1 / favOdd;                                  // prob implícita crua
+  var alvoBtts = (bttsOdd > 1.01) ? (1 / bttsOdd) : null;
+  // NOTA: não removemos o overround. Na exchange ele é pequeno (~1%) e, como o
+  // volume vem do over e a repartição vem da razão, boa parte do viés se cancela.
+  // Fica registrado como aproximação conhecida, não como certeza.
+
+  var R_MIN = 0.34, R_MAX = 0.92;      // fora disso não é jogo de futebol real
+  var RHO_MIN = -0.22, RHO_MAX = 0.04; // faixa empírica + folga
+
+  function erro(r, rho) {
+    var m = csMercados(csGrid(lamTotal * r, lamTotal * (1 - r), rho));
+    var e = Math.pow(m.pFav - alvoFav, 2);
+    // Peso menor no btts: a odd do favorito é o sinal mais limpo de repartição,
+    // o btts é o mais sujeito a ruído de liquidez em ligas menores.
+    if(alvoBtts !== null) e += 0.6 * Math.pow(m.pBtts - alvoBtts, 2);
+    return e;
+  }
+
+  // varredura grossa
+  var best = null;
+  for(var r = R_MIN; r <= R_MAX + 1e-9; r += 0.01) {
+    for(var rho = RHO_MIN; rho <= RHO_MAX + 1e-9; rho += 0.02) {
+      var e = erro(r, rho);
+      if(!best || e < best.e) best = { e: e, r: r, rho: rho };
+    }
+  }
+  // refino local
+  var passoR = 0.005, passoRho = 0.01;
+  for(var it = 0; it < 4; it++) {
+    var b = best;
+    for(var dr = -2; dr <= 2; dr++) for(var dp = -2; dp <= 2; dp++) {
+      var rr = Math.max(R_MIN, Math.min(R_MAX, b.r + dr * passoR));
+      var pp = Math.max(RHO_MIN, Math.min(RHO_MAX, b.rho + dp * passoRho));
+      var ee = erro(rr, pp);
+      if(ee < best.e) best = { e: ee, r: rr, rho: pp };
+    }
+    passoR /= 2; passoRho /= 2;
+  }
+
+  return {
+    r: best.r,
+    rho: best.rho,
+    lamFav: lamTotal * best.r,
+    lamZeb: lamTotal * (1 - best.r),
+    erro: Math.sqrt(best.e)
+  };
+}
+
 // ===== CÁLCULO POISSON — estima over 3.5/4.5/5.5 internamente =====
 function calcPoisson() {
   var overOdd = parseFloat(document.getElementById('pk-over')?.value);
@@ -2298,30 +2746,87 @@ function calcPoisson() {
   }
   var lam=(lo+hi)/2;
 
-  // ── λ COMBINADO — pondera over de mercado + médias reais dos times ──
-  // Se temos médias dos times extraídas pela IA, usa XG real combinado
-  var lamFavMerc = lam * 0.55; // split padrão pelo over
-  var lamZebMerc = lam * 0.45;
+  // ── SPLIT DO λ — resolvido contra a odd do favorito, não mais fixo ──
+  // O over define o VOLUME total de gols. A odd do favorito define como esse
+  // volume se reparte entre os dois times. Antes o split era a constante
+  // 0.55/0.45, o que fazia todo jogo parecer quase equilibrado.
+  var favOddPk = parseFloat(document.getElementById('pk-fav')?.value) || 0;
+
+  var split = resolverSplitLambda(lam, favOddPk, bttsOdd, DC_RHO);
+  var rhoJogo = split ? split.rho : DC_RHO;
+  var lamFavMerc, lamZebMerc, splitOrigem;
+  if(split) {
+    lamFavMerc = split.lamFav;
+    lamZebMerc = split.lamZeb;
+    splitOrigem = 'fav @' + favOddPk + ' + ambas @' + (bttsOdd || '?') +
+                  ' (r=' + split.r.toFixed(3) + ', ρ=' + split.rho.toFixed(3) + ')';
+  } else {
+    // Sem odd de favorito utilizável — cai no split neutro e AVISA.
+    // Isso não é "o padrão", é modo degradado.
+    lamFavMerc = lam * 0.55;
+    lamZebMerc = lam * 0.45;
+    splitOrigem = 'FALLBACK 0.55/0.45 — sem odd de favorito válida';
+    S._splitDegradado = true;
+  }
+  if(split) S._splitDegradado = false;
+
   var lamFavFinal = lamFavMerc;
   var lamZebFinal = lamZebMerc;
 
   var formFav = !S._favEhVisitante ? S._formCasa : S._formFora;
   var formZeb = !S._favEhVisitante ? S._formFora : S._formCasa;
 
+  // ── BLEND COM A FORMA REAL — só na RAZÃO, nunca no total ──────────
+  // Antes o blend 60/40 era aplicado nos dois λ separadamente, o que fazia
+  // lamFav+lamZeb deixar de somar λ — ou seja, o modelo parava de reproduzir
+  // a odd de over 2.5 que ele mesmo usou como âncora. Agora o mercado mantém
+  // o volume (é nele que confiamos por padrão) e a forma só informa o split.
   if(formFav && formFav.media_gols_marcados > 0 && formZeb && formZeb.media_gols_sofridos > 0) {
     var lamFavReal = (formFav.media_gols_marcados + formZeb.media_gols_sofridos) / 2;
     var lamZebReal = (formZeb.media_gols_marcados + formFav.media_gols_sofridos) / 2;
-    // Pondera: 60% mercado + 40% médias reais
-    lamFavFinal = lamFavMerc * 0.60 + lamFavReal * 0.40;
-    lamZebFinal = lamZebMerc * 0.60 + lamZebReal * 0.40;
-    console.log('[λ COMBINADO] mercado fav='+lamFavMerc.toFixed(2)+' zeb='+lamZebMerc.toFixed(2)+
-      ' | real fav='+lamFavReal.toFixed(2)+' zeb='+lamZebReal.toFixed(2)+
-      ' | final fav='+lamFavFinal.toFixed(2)+' zeb='+lamZebFinal.toFixed(2));
+    var totReal = lamFavReal + lamZebReal;
+    if(totReal > 0) {
+      var rMerc = lamFavMerc / lam;
+      var rReal = lamFavReal / totReal;
+      var rFinal = rMerc * 0.60 + rReal * 0.40;   // 60% mercado, 40% forma
+      rFinal = Math.max(0.34, Math.min(0.92, rFinal));
+      lamFavFinal = lam * rFinal;
+      lamZebFinal = lam * (1 - rFinal);
+      console.log('[λ SPLIT] razão mercado=' + rMerc.toFixed(3) +
+        ' | razão forma=' + rReal.toFixed(3) + ' | final=' + rFinal.toFixed(3) +
+        ' (total λ preservado em ' + lam.toFixed(2) + ')');
+    }
   }
 
   // Salvar λ combinado para uso no motor
-  S._lamFav = parseFloat(lamFavFinal.toFixed(2));
-  S._lamZeb = parseFloat(lamZebFinal.toFixed(2));
+  S._lamFav = parseFloat(lamFavFinal.toFixed(3));
+  S._lamZeb = parseFloat(lamZebFinal.toFixed(3));
+  S._dcRho  = rhoJogo;   // ρ resolvido contra a odd de ambas marcam, não mais fixo
+
+  // ── AUTOCONFERÊNCIA — o modelo reproduz as odds que o alimentaram? ──
+  // Se não reproduzir, qualquer EV calculado em cima dele é fantasia.
+  // Fica em S para o gate de EV decidir se confia ou não no modelo.
+  var bttsOddChk = bttsOdd || 0;
+  var mChk = csMercados(csGrid(S._lamFav, S._lamZeb, rhoJogo));
+  S._modelCheck = {
+    favAlvo:  favOddPk > 1 ? 100/favOddPk : null,
+    favModelo: +(mChk.pFav*100).toFixed(1),
+    overAlvo: +(p25*100).toFixed(1),
+    overModelo: +(mChk.pOver*100).toFixed(1),
+    bttsAlvo: bttsOddChk > 1 ? +(100/bttsOddChk).toFixed(1) : null,
+    bttsModelo: +(mChk.pBtts*100).toFixed(1)
+  };
+  var _mc = S._modelCheck;
+  S._modelErroMax = Math.max(
+    _mc.favAlvo  != null ? Math.abs(_mc.favModelo  - _mc.favAlvo)  : 0,
+    Math.abs(_mc.overModelo - _mc.overAlvo),
+    _mc.bttsAlvo != null ? Math.abs(_mc.bttsModelo - _mc.bttsAlvo) : 0
+  );
+  console.log('[λ FINAL] fav=' + S._lamFav + ' zeb=' + S._lamZeb + ' | split via ' + splitOrigem +
+    ' | confere: fav ' + _mc.favModelo + '% vs ' + (_mc.favAlvo != null ? _mc.favAlvo.toFixed(1) : '?') +
+    '% | over ' + _mc.overModelo + '% vs ' + _mc.overAlvo +
+    '% | btts ' + _mc.bttsModelo + '% vs ' + (_mc.bttsAlvo != null ? _mc.bttsAlvo : '?') +
+    '% | erro máx ' + S._modelErroMax.toFixed(1) + 'pp');
 
   // ── ALERTA DE TIMING — gols concentrados no 76-90 ──
   var gols76Fav = formFav ? (formFav.gols_76_90_pct || 0) : 0;
@@ -2376,26 +2881,11 @@ function checkPackball() {
   const pass = fO && bO && oO;
   const fails = [!fO,!bO,!oO].filter(Boolean).length;
 
-  // Detect profile — lê as 3 odds em conjunto, não só o fav
-  let perfil = '', piramide = '';
-  // Over baixo sempre sinaliza goleada independente do fav
-  if(over<1.70)                                                          { perfil='GOLEADA';              piramide='INVERTIDA'; }
-  // Favorito forte (1.25-1.50)
-  else if(fav<=1.50&&over<=1.85)                                        { perfil='OFENSIVO';             piramide='NORMAL'; }
-  else if(fav<=1.50&&over<=2.20)                                        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
-  // Favorito moderado (1.50-1.80)
-  else if(fav<=1.80&&over<=1.85)                                        { perfil='EQUILIBRADO OFENSIVO'; piramide='NORMAL'; }
-  else if(fav<=1.80&&over<=2.10)                                        { perfil='EQUILIBRADO';          piramide='NORMAL'; }
-  // Zona ABERTO/BTTS — btts baixo + over moderado independente do fav até 2.20
-  else if(btts<=1.85&&over<=2.00)                                       { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
-  else if(btts<=1.90&&over<=2.10&&fav<=2.20)                           { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
-  // Favorito fraco mas jogo aberto — não é alto risco, é equilibrado com ambos marcando
-  else if(fav<=2.20&&btts<=2.00&&over<=2.00)                           { perfil='ABERTO/BTTS';          piramide='NORMAL'; }
-  else if(fav<=2.20&&over<=2.20)                                        { perfil='CONSERVADOR';          piramide='CONSERVADORA'; }
-  // Genuinamente alto risco — fav>2.20 OU odds muito abertas
-  else if(fav>2.20&&fav<=2.35)                                          { perfil='ALTO RISCO';           piramide='CONSERVADORA'; }
-  else if(fav>2.35&&fav<=3.20)                                          { perfil='SUPER EQUILIBRADO';     piramide='NORMAL'; }
-  else                                                                   { perfil='INDEFINIDO';           piramide='NORMAL'; }
+  // Detect profile — MESMO classificador que o motor usa (ponto único).
+  // Esta tabela estava duplicada aqui com cortes próprios e discordava do
+  // motor no mesmo jogo (ex.: UTA x Sepsi = CONSERVADOR aqui, ALTO_RISCO lá).
+  var _pf = classificarPerfilJogo(fav, over, btts);
+  let perfil = _pf.nome, piramide = _pf.piramide;
 
   // Verificar também o texto da análise para detectar amistoso
   const textoAnalise = document.getElementById('an-texto')?.value || '';
@@ -2511,78 +3001,96 @@ function checkPackball() {
     desc = descContextual();
   }
 
-  // ── ALERTAS BASEADOS EM DADOS HISTÓRICOS (203 jogos) ──────────
-  // Estes alertas são calculados a partir do histórico real de operações
+  // ── ALERTAS ──────────────────────────────────────────────────────
+  // REESCRITO. O que havia aqui eram vereditos prescritivos ("Não operar",
+  // "Eliminar completamente da lista de operações", "Reduzir stake para
+  // metade") construídos sobre amostras de 9 a 27 jogos, e listas negras de
+  // ligas e nomes de times hardcoded (Liga MX, qualificações europeias,
+  // Bolívia, Sérvia, Albânia, Kosovo).
+  //
+  // Dois problemas. Primeiro, estatístico: 9 jogos com 78% de acerto têm
+  // intervalo de confiança de 45% a 94% — isso não distingue um método
+  // excelente de um método ruim, é ruído com aparência de regra. Segundo, e
+  // mais grave: listas negras de liga contradizem a exigência central do
+  // projeto, que é funcionar para QUALQUER liga e QUALQUER combinação de
+  // odds. "Essa liga está fora do escopo" é exatamente o que o robô não pode
+  // dizer.
+  //
+  // Esses alertas nunca chegaram à tela porque checkPackball estourava antes
+  // de renderizá-los. Ao corrigir o crash eles voltariam a aparecer — daí a
+  // reescrita.
+  //
+  // O que fica: alertas derivados dos DADOS DAQUELE JOGO (timing dos gols,
+  // amostra dos times, perfil da zebra, dado de temporada anterior) e um
+  // aviso honesto de amostra quando existe histórico registrado da liga.
   var alertasEv = [];
 
-  // ════════════════════════════════════════════════════
-  // ALERTAS BASEADOS EM 230+ JOGOS REAIS (jul/2026)
-  // ════════════════════════════════════════════════════
-
-  // ✅ ZONA DOURADA — melhor combinação histórica
-  if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95 && fav >= 1.66 && fav <= 1.80) {
-    alertasEv.push({ tipo:'positivo',
-      msg:'✅ Zona dourada premium — fav 1.66-1.80 + over 1.75-2.10 + ambas 1.70-1.95 — EV+111 em 9 jogos com 78% WR. Melhor combinação histórica do método. Prioridade máxima.'
-    });
-  } else if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95 && fav >= 2.01 && fav <= 2.20) {
-    alertasEv.push({ tipo:'positivo',
-      msg:'✅ Perfil favorável — fav 2.01-2.20 + over 1.75-2.10 + ambas 1.70-1.95 — EV+34 em 27 jogos com 59% WR. Boa faixa histórica, operar normalmente.'
-    });
-  } else if(over >= 1.75 && over <= 2.10 && btts >= 1.70 && btts <= 1.95) {
-    alertasEv.push({ tipo:'positivo',
-      msg:'✅ Odds na zona favorável — over 1.75-2.10 + ambas 1.70-1.95. EV positivo histórico nessa faixa. Avaliar a liga antes de entrar.'
-    });
+  // Intervalo de Wilson — para não afirmar mais do que a amostra permite.
+  function wilson(acertos, n) {
+    if(!n) return null;
+    var z = 1.96, p = acertos / n;
+    var d = 1 + z*z/n;
+    var c = p + z*z/(2*n);
+    var e = z * Math.sqrt(p*(1-p)/n + z*z/(4*n*n));
+    return { lo: Math.max(0, (c - e)/d), hi: Math.min(1, (c + e)/d), p: p };
   }
 
-  // 🔴 EV NEGATIVO CONFIRMADO — fav menor que 1.50 + btts maior que 2.30
-  // 26 jogos, R$-640, EV-25
+  // Amostra mínima para o histórico virar afirmação em vez de observação.
+  var N_MIN_AFIRMACAO = 30;
+
+  // ── HISTÓRICO DA PRÓPRIA LIGA — observação, nunca veredito ──────────
+  // Lê o histórico real registrado em vez de usar lista hardcoded. Se a liga
+  // tem poucos jogos, o alerta diz isso em vez de recomendar evitar.
+  (function alertaLiga(){
+    var compSel = document.getElementById('nj-comp')?.value || '';
+    if(!compSel || !S.hist || !S.hist.length) return;
+    var norm = function(c){ return String(c||'').toLowerCase().trim(); };
+    var alvo = norm(compSel);
+    var daLiga = S.hist.filter(function(r){ return norm(r.comp) === alvo; });
+    if(!daLiga.length) return;
+    var n = daLiga.length;
+    var greens = daLiga.filter(function(r){ return (r.resultado||0) > 0; }).length;
+    var saldo = daLiga.reduce(function(a,r){ return a + (r.resultado||0); }, 0);
+    var w = wilson(greens, n);
+    if(n < N_MIN_AFIRMACAO) {
+      alertasEv.push({ tipo:'atencao',
+        msg: '📊 ' + compSel + ' — ' + n + ' jogo(s) registrado(s), saldo R$' + saldo.toFixed(2) +
+             ', acerto ' + (100*w.p).toFixed(0) + '%. Amostra pequena demais para conclusão: ' +
+             'o intervalo de confiança do acerto vai de ' + (100*w.lo).toFixed(0) + '% a ' +
+             (100*w.hi).toFixed(0) + '%. Observação, não recomendação — quem decide o jogo é o EV do cluster.'
+      });
+    } else {
+      alertasEv.push({ tipo: saldo >= 0 ? 'positivo' : 'atencao',
+        msg: '📊 ' + compSel + ' — ' + n + ' jogos registrados, saldo R$' + saldo.toFixed(2) +
+             ', acerto ' + (100*w.p).toFixed(0) + '% (IC 95%: ' + (100*w.lo).toFixed(0) + '–' +
+             (100*w.hi).toFixed(0) + '%). Amostra já relevante, mas o veredito do jogo continua sendo o EV do cluster.'
+      });
+    }
+  })();
+
+  // ── PERFIL DE ODDS ATÍPICO — descrição, não proibição ───────────────
+  // Antes eram cinco regras prescritivas por faixa de odd. Faixa de odd não
+  // é fonte de edge; ela só descreve o tipo de jogo. Fica uma leitura do
+  // perfil, sem mandar operar ou não operar.
+  if(over > 2.30) {
+    alertasEv.push({ tipo:'atencao',
+      msg:'🔒 Jogo fechado (over ' + over + ') — o mercado não acredita em volume de gols. ' +
+          'O cluster tende a ficar compacto e o caminho tem menos degraus para a gestão ao vivo. ' +
+          'Não é motivo para pular o jogo; é motivo para esperar menos placares no caminho.'
+    });
+  }
   if(fav > 0 && fav < 1.50 && btts > 2.30) {
-    alertasEv.push({ tipo:'negativo',
-      msg:'🔴 EV negativo confirmado — favorito abaixo de 1.50 com ambas acima de 2.30. Em 26 jogos: R$-640. O mercado diz que a zebra vai marcar mesmo com favorito forte — conflito que cria scripts imprevisíveis. Não operar.'
+    alertasEv.push({ tipo:'atencao',
+      msg:'⚠️ Sinal conflitante — favorito curto (' + fav + ') com ambas alta (' + btts + '). ' +
+          'O mercado diz ao mesmo tempo "o favorito domina" e "a zebra não marca". ' +
+          'Os placares limpos do favorito concentram a probabilidade; confira se o cluster reflete isso.'
     });
   }
-
-  // 🔴 FAV ACIMA DE 2.20 sem over baixo — EV quase zero
   if(fav > 2.20 && over > 1.80 && btts > 1.85) {
     alertasEv.push({ tipo:'atencao',
-      msg:'⚠️ Equilíbrio extremo (fav acima de 2.20) — WR 45%, EV quase zero historicamente. Só operar se over abaixo de 1.80 e ambas abaixo de 1.85. Reduzir stake ou evitar.'
-    });
-  }
-
-  // ⚠️ OVER ACIMA DE 2.30 — jogo fechado, alta variância
-  if(over > 2.30 && over > 0) {
-    alertasEv.push({ tipo:'atencao',
-      msg:'⚠️ Jogo muito fechado (over acima de 2.30) — alta variância histórica. Scripts menos previsíveis quando o mercado não acredita em volume. Cluster mais compacto, red quando sair placar inesperado.'
-    });
-  }
-
-  // ⚠️ FAV MENOR QUE 1.50 sem btts problemático — só atenção
-  if(fav > 0 && fav < 1.50 && btts <= 2.30) {
-    alertasEv.push({ tipo:'atencao',
-      msg:'⚠️ Favorito forte (abaixo de 1.50) — EV ligeiramente negativo nessa faixa (-R$8/jogo). Funciona quando btts está abaixo de 2.10. Verifique a liga antes de entrar.'
-    });
-  }
-
-  // 🔴 LIGA MX — padrão negativo confirmado
-  var compSel = document.getElementById('nj-comp')?.value || '';
-  var textoLower = (textoAnalise||'').toLowerCase();
-  if(/liga mx/i.test(compSel) || /pumas|pachuca|monterrey|guadalajara|toluca|necaxa|cruz azul|chivas|santos laguna|atlas fc|tigres uanl|leon fc|juarez|mazatlan/i.test(textoLower)) {
-    alertasEv.push({ tipo:'negativo',
-      msg:'🔴 Liga MX — histórico de R$-1.868 em 12 jogos registrados, WR 25%, EV-155. Padrão negativo consistente ao longo de meses. Eliminar completamente da lista de operações.'
-    });
-  }
-
-  // 🔴 QUALIFICAÇÕES EUROPEIAS — times desconhecidos
-  if(/qualif|classificat|sheriff|vardar|floriana|dynamo kyiv|astana|dinamo tirana|pancevo|goteborg vs levadia|derry vs|bohemians vs ballkani/i.test(textoLower)) {
-    alertasEv.push({ tipo:'negativo',
-      msg:'🔴 Qualificação Europeia — jogo único com times de ligas menores. Scripts defensivos que as odds não capturam. R$-534 em 9 jogos registrados. Reduzir stake para metade ou evitar.'
-    });
-  }
-
-  // 🔴 LIGAS PROBLEMÁTICAS — Bolívia, Sérvia, Albania, Kosovo
-  if(/blooming|tamayapo|bolivar|potosi|aurora vs|real oruro|vojvodina|beogard|radnick|partizan|crvena zvezda|skenderbeu|kukesi|flamurtari/i.test(textoLower)) {
-    alertasEv.push({ tipo:'negativo',
-      msg:'🔴 Liga com mercado ineficiente — Bolívia, Sérvia ou ligas de baixa liquidez CS. Odds podem estar na faixa certa mas o oddmaker tem menos informação. Alta variância, EV incerto. Reduzir stake ou evitar.'
+      msg:'⚖️ Equilíbrio real (favorito ' + fav + ') — sem lado dominante e sem volume esperado. ' +
+          'A probabilidade fica espalhada por muitos placares, o que naturalmente reduz o retorno por acerto. ' +
+          'Vale conferir se o EV do cluster sobrevive a essa dispersão.'
     });
   }
 
@@ -2628,7 +3136,16 @@ function checkPackball() {
   }
 
   // ── ALERTA SINAL DE VOLUME COM AMOSTRA MÍNIMA ─────────────
-  var favFormVolAlert = !favEhVisitante ? S._formCasa : S._formFora;
+  // BUG CRÍTICO (corrigido): aqui usava `favEhVisitante` cru — variável que não
+  // existe neste escopo (não é parâmetro de checkPackball, não é global). Isso
+  // lançava ReferenceError em TODA chamada, matando a renderização dos alertas
+  // (linha ~2706) e do próprio card de status (linha ~2732). O nome correto é
+  // S._favEhVisitante, usado por calcPoisson/calcModelProb.
+  // Obs: no momento em que o usuário digita as odds, S._favEhVisitante ainda pode
+  // estar undefined (só é definido em analisarJogo) — !undefined === true, ou seja
+  // assume favorito em casa, que é exatamente o default antigo da função.
+  var favEhVisitanteCP = !!S._favEhVisitante;
+  var favFormVolAlert = !favEhVisitanteCP ? S._formCasa : S._formFora;
   if(favFormVolAlert && favFormVolAlert.amostra >= 1 && favFormVolAlert.amostra <= 2 &&
      (favFormVolAlert.media_total || 0) >= 4.0) {
     alertasEv.push({ tipo:'atencao',
@@ -2655,7 +3172,7 @@ function checkPackball() {
 
   // ── ALERTA PERFIL DA ZEBRA ────────────────────────────────
   // Usa form_fora (visitante) para classificar a zebra
-  var zebraForm = !favEhVisitante ? S._formFora : S._formCasa;
+  var zebraForm = !favEhVisitanteCP ? S._formFora : S._formCasa;
   if(zebraForm && zebraForm.amostra >= 3) {
     var zebraMarcaPct    = zebraForm.marca_pct || 0;
     var zebraViraPct     = zebraForm.vira_quando_atras || 0;
@@ -2930,14 +3447,12 @@ function calcProb(odd) { return odd>0 ? parseFloat(((1/odd)*100).toFixed(1)) : 0
 // usados em lugar nenhum do código — essa função ativa esse dado.
 function poissonScoreProb(golsFav, golsZeb) {
   if(!S._lamFav || !S._lamZeb || S._lamFav <= 0 || S._lamZeb <= 0) return null;
-  function poissonPMF(lam, k) {
-    var p = 1;
-    for(var i=1; i<=k; i++) p *= lam/i;
-    return p * Math.exp(-lam);
-  }
-  var pFav = poissonPMF(S._lamFav, golsFav);
-  var pZeb = poissonPMF(S._lamZeb, golsZeb);
-  return parseFloat((pFav * pZeb * 100).toFixed(2));
+  if(golsFav > CS_GRID_MAX || golsZeb > CS_GRID_MAX) return null;
+  // Usa a grade Dixon-Coles normalizada (núcleo compartilhado no topo do arquivo)
+  // em vez de multiplicar dois Poisson independentes. A independência subestimava
+  // o 0-0 em todos os cenários testados e deslocava a massa dos empates.
+  var g = csGrid(S._lamFav, S._lamZeb, S._dcRho);
+  return parseFloat((g[golsFav][golsZeb] * 100).toFixed(3));
 }
 
 // Recebe um score no formato absoluto do board ("2-1" = casa 2, fora 1)
@@ -2951,6 +3466,382 @@ function calcModelProb(scoreAbsoluto) {
   var golsFav = S._favEhVisitante ? golsFora : golsCasa;
   var golsZeb = S._favEhVisitante ? golsCasa : golsFora;
   return poissonScoreProb(golsFav, golsZeb);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAMADA DE EV — valor real, não threshold de probabilidade de mercado
+// ═══════════════════════════════════════════════════════════════════
+// O motor selecionava e dimensionava placares por PROBABILIDADE DE MERCADO
+// (prob >= threshold; stake proporcional a 1/odd). Isso é o critério ORTOGONAL
+// ao edge: prob de mercado alta significa "o mercado acha provável", não
+// "está barato". E como o Dutch de lucro igual tem
+//
+//        EV = stake × ( Σ p_modelo / Σ p_mercado − 1 )
+//
+// todo placar com p_modelo < p_mercado DERRUBA o EV do cluster inteiro,
+// inclusive dos placares bons. Selecionar por prob de mercado e depois
+// distribuir stake por prob de mercado é decidir duas vezes pelo mesmo número
+// que se quer bater.
+
+var COMISSAO_BETFAIR = 0.065;   // comissão sobre lucro LÍQUIDO do mercado.
+                                // Ajuste aqui se sua taxa for diferente.
+var EDGE_TILT_K   = 3.0;        // sensibilidade da stake ao edge
+var EDGE_TILT_MIN = 0.55;       // nenhuma perna morre — a gestão ao vivo
+var EDGE_TILT_MAX = 1.80;       // precisa de todos os degraus do caminho
+
+// Distribuição de stake do Dutch — PONTO ÚNICO.
+// Antes o cálculo `stake_i ∝ 1/odd_i` estava copiado em 5 lugares de
+// calcStakes (o STEP 3 e mais 4 re-dutches disparados por "mínimo de scores",
+// "remover candidato" etc). Qualquer ponderação aplicada no STEP 3 era
+// sobrescrita silenciosamente por um desses. Agora todos chamam esta função.
+//
+// Espinha dorsal = 1/odd (lucro igual, cobre a banda e mantém TODA perna viva
+// para a gestão ao vivo). Inclinação = edge do modelo, com teto e piso —
+// nenhum placar vai a zero, nenhum concentra o cluster inteiro.
+function aplicarDutch(valid, stake) {
+  if(!valid || !valid.length || !(stake > 0)) return false;
+  var usouEdge = false;
+  var pesos = valid.map(function(s){
+    var base = 1 / s.odd;
+    var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+      ? s._modelProb
+      : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+    var e = edgeDoScore(pm, s.odd);
+    if(e === null) return { s: s, w: base, tilt: null, edge: null };
+    usouEdge = true;
+    var tilt = Math.max(EDGE_TILT_MIN, Math.min(EDGE_TILT_MAX, 1 + EDGE_TILT_K * e));
+    return { s: s, w: base * tilt, tilt: tilt, edge: e };
+  });
+  var sumW = pesos.reduce(function(a,p){ return a + p.w; }, 0);
+  if(!(sumW > 0)) return false;
+  pesos.forEach(function(p){
+    p.s.stake = parseFloat((p.w / sumW * stake).toFixed(2));
+    p.s._edge = p.edge;
+    p.s._tilt = p.tilt;
+  });
+  // fechar a stake total (arredondamento) na perna de maior stake
+  var somaReal = pesos.reduce(function(a,p){ return a + p.s.stake; }, 0);
+  if(Math.abs(somaReal - stake) >= 0.01) {
+    var maior = pesos.reduce(function(a,p){ return p.s.stake > a.s.stake ? p : a; }, pesos[0]);
+    maior.s.stake = parseFloat((maior.s.stake + (stake - somaReal)).toFixed(2));
+  }
+  return usouEdge;
+}
+
+// edge de um placar = quanto o modelo ganha bancando aquela odd.
+// probModelo em %, odd decimal. Retorna fração (0.027 = +2.7%).
+function edgeDoScore(probModelo, odd) {
+  if(!(probModelo > 0) || !(odd > 1)) return null;
+  return (probModelo / 100) * odd - 1;
+}
+
+// EV do cluster inteiro, líquido de comissão, com as stakes que ele realmente
+// tem. Aceita stakes desiguais (Dutch ponderado) — não assume lucro igual.
+function calcEdgeCluster(cluster, stakeTotal) {
+  if(!cluster || !cluster.length) return null;
+  var itens = cluster.filter(function(s){
+    return s && s.score && !String(s.score).startsWith('any_other')
+           && s.odd > 1 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+  });
+  if(!itens.length) return null;
+
+  var somaStake = itens.reduce(function(a,s){ return a + (s.stake || 0); }, 0);
+  if(!(somaStake > 0)) somaStake = stakeTotal || 0;
+  if(!(somaStake > 0)) return null;
+
+  var pModelo = 0, pMercado = 0, evBruto = 0, evLiquido = 0, semModelo = 0;
+  var detalhe = [];
+
+  var semStake = 0;
+  itens.forEach(function(s){
+    var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+      ? s._modelProb : calcModelProb(s.score);
+    if(!(pm > 0)) { semModelo++; return; }
+    var st = s.stake || 0;
+    // Perna com stake zero NÃO está coberta — contar a probabilidade dela como
+    // cobertura seria mentir sobre o risco. Ela entra no relatório marcada.
+    if(!(st > 0)) { semStake++; return; }
+    var retorno = st * s.odd;
+    var lucroLiq = retorno - somaStake;                 // lucro do MERCADO se esse placar sair
+    var lucroPosCom = lucroLiq > 0 ? lucroLiq * (1 - COMISSAO_BETFAIR) : lucroLiq;
+    pModelo  += pm;
+    pMercado += 100 / s.odd;
+    evBruto   += (pm/100) * lucroLiq;
+    evLiquido += (pm/100) * lucroPosCom;
+    detalhe.push({ score: s.score, odd: s.odd, stake: st,
+                   pModelo: pm, pMercado: +(100/s.odd).toFixed(2),
+                   edge: edgeDoScore(pm, s.odd), retorno: retorno });
+  });
+
+  // ramo do "nenhum placar do cluster sai"
+  var pMiss = Math.max(0, 1 - pModelo/100);
+  evBruto   -= pMiss * somaStake;
+  evLiquido -= pMiss * somaStake;
+
+  return {
+    stakeTotal: somaStake,
+    pModelo: +pModelo.toFixed(2),      // cobertura segundo o MEU modelo
+    pMercado: +pMercado.toFixed(2),    // cobertura segundo o mercado (com overround)
+    razao: pMercado > 0 ? +(pModelo/pMercado).toFixed(4) : null,
+    evBruto: +evBruto.toFixed(2),
+    ev: +evLiquido.toFixed(2),
+    roi: +(evLiquido/somaStake*100).toFixed(2),
+    semModelo: semModelo,
+    semStake: semStake,
+    detalhe: detalhe.sort(function(a,b){ return (b.edge||-9) - (a.edge||-9); })
+  };
+}
+
+// GATE — "esse jogo tem edge real?". Responde sobre VALOR, não sobre
+// semelhança com a faixa de odds habitual (que é o que os índices antigos
+// mediam). Também recusa a responder quando o próprio modelo não é confiável.
+function avaliarEdgeOperacional(cluster, stakeTotal) {
+  var r = calcEdgeCluster(cluster, stakeTotal);
+  if(!r) {
+    return { veredito:'sem_modelo', cor:'var(--txt3)', titulo:'⚪ SEM LEITURA DE EV',
+             resumo:'Sem odds CS suficientes ou sem modelo — não dá para afirmar nada sobre valor.',
+             motivos:[], r:null };
+  }
+  var motivos = [];
+
+  // 1) o modelo reproduz as odds que o alimentaram? se não, o EV é fantasia.
+  var erroModelo = (typeof S._modelErroMax === 'number') ? S._modelErroMax : null;
+  if(S._splitDegradado) motivos.push('split do λ em modo degradado — odd do favorito ausente ou inválida');
+  if(erroModelo !== null && erroModelo > 5.0) {
+    return { veredito:'modelo_incoerente', cor:'var(--ylw)', titulo:'⚠️ MODELO NÃO FECHA COM O MERCADO',
+      resumo:'O modelo erra '+erroModelo.toFixed(1)+'pp ao reproduzir as próprias odds de entrada (fav/over/ambas). '+
+             'As três odds coladas provavelmente são incoerentes entre si — confira antes de operar. '+
+             'Qualquer EV calculado em cima disso não vale.',
+      motivos: motivos, r: r };
+  }
+
+  // 2) placares sem probabilidade de modelo
+  if(r.semModelo > 0) motivos.push(r.semModelo+' placar(es) do cluster sem prob de modelo — fora da leitura de EV');
+  if(r.semStake > 0)  motivos.push('⚠️ '+r.semStake+' placar(es) do cluster com stake R$0 — aparecem no card mas NÃO estão cobertos');
+
+  // 3) o veredito de valor
+  var roi = r.roi;
+  var negativos = r.detalhe.filter(function(d){ return d.edge !== null && d.edge < 0; });
+  var positivos = r.detalhe.filter(function(d){ return d.edge !== null && d.edge > 0; });
+  motivos.push(positivos.length+' placar(es) com edge positivo, '+negativos.length+' negativo(s)');
+  motivos.push('cobertura modelo '+r.pModelo.toFixed(1)+'% vs mercado '+r.pMercado.toFixed(1)+'%');
+  if(negativos.length) {
+    var pior = negativos[negativos.length-1];
+    motivos.push('pior perna: '+pior.score+' @'+pior.odd+' com edge '+(pior.edge*100).toFixed(1)+'%');
+  }
+
+  if(roi <= 0) {
+    return { veredito:'sem_edge', cor:'var(--red)', titulo:'🔴 SEM EDGE REAL',
+      resumo:'EV do cluster '+(r.ev>=0?'+':'')+'R$'+r.ev.toFixed(2)+' ('+roi.toFixed(2)+'% do capital), '+
+             'já descontada a comissão de '+(COMISSAO_BETFAIR*100).toFixed(1)+'%. '+
+             'O mercado está cobrando mais do que o modelo acha que esses placares valem. '+
+             'Cobrir mais placares não resolve — piora.',
+      motivos: motivos, r: r };
+  }
+  if(roi <= 1.5) {
+    return { veredito:'edge_marginal', cor:'var(--ylw)', titulo:'🟡 EDGE MARGINAL',
+      resumo:'EV +R$'+r.ev.toFixed(2)+' ('+roi.toFixed(2)+'%) líquido de comissão. Positivo, mas dentro da '+
+             'margem de erro do próprio modelo — não é um jogo para stake cheia.',
+      motivos: motivos, r: r };
+  }
+  return { veredito:'edge_real', cor:'var(--grn)', titulo:'🟢 EDGE REAL',
+    resumo:'EV +R$'+r.ev.toFixed(2)+' ('+roi.toFixed(2)+'%) líquido de comissão. O modelo diverge do mercado '+
+           'a favor nos placares do cluster.',
+    motivos: motivos, r: r };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INSTRUMENTAÇÃO DE EDGE — CLV e calibração
+// ═══════════════════════════════════════════════════════════════════
+// Nada aqui muda uma decisão do robô. É coleta, e só coleta.
+//
+// O motivo: tudo que foi validado até agora é CONSISTÊNCIA — o modelo bate
+// com as próprias odds que o alimentam, e bate com um ajuste independente às
+// mesmas odds. Nenhum resultado real de partida foi usado em nenhum teste.
+// Consistência não é acurácia: um modelo pode ser perfeitamente coerente e
+// sistematicamente errado.
+//
+// Só duas coisas respondem "esse robô tem edge?":
+//
+//   CLV (closing line value) — a odd CS do placar no momento da entrada
+//   contra a odd perto do kickoff. Se os placares bancados encurtam
+//   sistematicamente até a bola rolar, o modelo está na frente do mercado.
+//   Converge em algumas centenas de jogos.
+//
+//   CALIBRAÇÃO — a probabilidade que o modelo deu a cada placar contra o
+//   placar que realmente saiu, medida por Brier e log-loss, comparada com a
+//   mesma métrica calculada sobre as próprias odds CS. Se o modelo não vence
+//   a odd CS fora da amostra, não há edge.
+//
+// ROI direto não serve de termômetro aqui: com acerto ~55% e retorno ~1.8x o
+// desvio padrão por operação é ~0.885, então distinguir +3% de ROI de zero a
+// 95% de confiança exige da ordem de 3.300 operações. Por isso CLV primeiro.
+
+function registrarSnapshotModelo(game, cluster) {
+  if(!game || !cluster || !cluster.length) return;
+  try {
+    var tabelaCompleta = {};
+    Object.keys(S.csOdds || {}).forEach(function(sc){
+      if(!/^\d-\d$/.test(sc)) return;
+      var odd = S.csOdds[sc];
+      if(!(odd > 1)) return;
+      tabelaCompleta[sc] = {
+        odd: odd,
+        pMercado: +(100/odd).toFixed(3),
+        pModelo: calcModelProb(sc),
+        liq: (S.csOddsLiq && S.csOddsLiq[sc]) || 0
+      };
+    });
+
+    game.snapshotModelo = {
+      ts: Date.now(),
+      lamFav: S._lamFav, lamZeb: S._lamZeb, rho: S._dcRho,
+      modelCheck: S._modelCheck, modelErroMax: S._modelErroMax,
+      splitDegradado: !!S._splitDegradado,
+      percalco: S._percalco ? { tipo:S._percalco.tipo, confianca:S._percalco.confianca } : null,
+      gate: S._lastGate ? { veredito:S._lastGate.veredito,
+                            ev: S._lastGate.r ? S._lastGate.r.ev : null,
+                            roi: S._lastGate.r ? S._lastGate.r.roi : null } : null,
+      // o cluster operado, com o preço de ENTRADA
+      cluster: cluster.filter(function(s){ return s.score && !String(s.score).startsWith('any_other'); })
+        .map(function(s){
+          return { score:s.score, oddEntrada:s.odd, stake:s.stake,
+                   pModelo:(typeof s._modelProb==='number'?s._modelProb:calcModelProb(s.score)),
+                   edge:(typeof s._edge==='number'?s._edge:null), tipo:s.tipo };
+        }),
+      // a grade inteira, para medir calibração em todos os placares e não só
+      // nos que entraram no cluster (senão a medida fica enviesada)
+      tabela: tabelaCompleta,
+      oddsFechamento: null,   // preenchido por capturarLinhaFechamento()
+      placarFinal: null       // preenchido no registro do resultado
+    };
+    console.log('[SNAPSHOT] gravado para medição de edge — '+
+      Object.keys(tabelaCompleta).length+' placares na grade, '+
+      game.snapshotModelo.cluster.length+' no cluster.');
+  } catch(e) {
+    console.warn('[SNAPSHOT] falhou:', e.message);
+  }
+}
+
+// Chamar perto do kickoff, com as odds CS atualizadas coladas. Guarda a
+// linha de fechamento para o cálculo de CLV.
+function capturarLinhaFechamento(gameId) {
+  var g = gameId ? (S.games||[]).find(function(x){ return x.id === gameId; }) : S.currentGame;
+  if(!g || !g.snapshotModelo) { notify('CLV', 'Sem snapshot deste jogo', 'var(--ylw)'); return false; }
+  var fech = {};
+  Object.keys(S.csOdds || {}).forEach(function(sc){
+    if(/^\d-\d$/.test(sc) && S.csOdds[sc] > 1) fech[sc] = S.csOdds[sc];
+  });
+  if(!Object.keys(fech).length) { notify('CLV', 'Cole as odds CS atuais primeiro', 'var(--ylw)'); return false; }
+  g.snapshotModelo.oddsFechamento = { ts: Date.now(), odds: fech };
+  try { saveGames(); } catch(e) {}
+  var clv = calcCLVJogo(g);
+  notify('LINHA DE FECHAMENTO', clv ? ('CLV ' + (clv.clvMedio>=0?'+':'') + clv.clvMedio.toFixed(2) + '%') : 'gravada',
+    clv && clv.clvMedio > 0 ? 'var(--grn)' : 'var(--ylw)');
+  console.log('[CLV] ' + g.name + ': ' + JSON.stringify(clv));
+  return true;
+}
+
+// CLV de um jogo: quanto a odd dos placares BANCADOS se moveu até o kickoff.
+// Odd que ENCURTA = o mercado veio na sua direção = você entrou barato.
+function calcCLVJogo(g) {
+  var s = g && g.snapshotModelo;
+  if(!s || !s.oddsFechamento) return null;
+  var linhas = [], somaPeso = 0, somaCLV = 0;
+  s.cluster.forEach(function(c){
+    var of = s.oddsFechamento.odds[c.score];
+    if(!(of > 1) || !(c.oddEntrada > 1)) return;
+    // CLV em pontos percentuais de probabilidade relativa
+    var clv = (c.oddEntrada / of - 1) * 100;   // >0 = entrou com odd maior que o fechamento
+    var peso = c.stake || 0;
+    linhas.push({ score:c.score, entrada:c.oddEntrada, fechamento:of, clv:+clv.toFixed(2), stake:peso });
+    somaCLV += clv * peso; somaPeso += peso;
+  });
+  if(!linhas.length) return null;
+  return { clvMedio: somaPeso > 0 ? +(somaCLV/somaPeso).toFixed(2)
+                                  : +(linhas.reduce(function(a,l){return a+l.clv;},0)/linhas.length).toFixed(2),
+           linhas: linhas };
+}
+
+// Métricas agregadas sobre todos os jogos com snapshot + placar final.
+// Compara o modelo contra as PRÓPRIAS odds CS — que é o benchmark honesto.
+function calcMetricasEdge() {
+  var jogos = (S.games || []).filter(function(g){
+    return g.snapshotModelo && g.snapshotModelo.placarFinal;
+  });
+  if(!jogos.length) return { n:0 };
+
+  var brierModelo = 0, brierMercado = 0, llModelo = 0, llMercado = 0, nObs = 0;
+  var clvs = [], nClv = 0;
+
+  jogos.forEach(function(g){
+    var s = g.snapshotModelo, final = s.placarFinal;
+    // jogos antigos vêm do localStorage com a grade compacta [odd, pModelo]
+    var tab = s.tabela;
+    if(!tab && s.tabelaCompacta) {
+      tab = {};
+      Object.keys(s.tabelaCompacta).forEach(function(sc){
+        var v = s.tabelaCompacta[sc];
+        tab[sc] = { odd: v[0], pModelo: v[1], pMercado: v[0] > 1 ? 100/v[0] : 0 };
+      });
+    }
+    tab = tab || {};
+    var scores = Object.keys(tab);
+    if(!scores.length) return;
+
+    // normalizar as duas distribuições sobre a mesma grade
+    var somaM = 0, somaK = 0;
+    scores.forEach(function(sc){
+      somaM += (tab[sc].pModelo || 0);
+      somaK += (tab[sc].pMercado || 0);
+    });
+    if(!(somaM > 0) || !(somaK > 0)) return;
+
+    scores.forEach(function(sc){
+      var y  = (sc === final) ? 1 : 0;
+      var pm = (tab[sc].pModelo  || 0) / somaM;
+      var pk = (tab[sc].pMercado || 0) / somaK;
+      brierModelo  += Math.pow(pm - y, 2);
+      brierMercado += Math.pow(pk - y, 2);
+      if(y === 1) {
+        llModelo  += -Math.log(Math.max(pm, 1e-6));
+        llMercado += -Math.log(Math.max(pk, 1e-6));
+      }
+      nObs++;
+    });
+
+    var c = calcCLVJogo(g);
+    if(c) { clvs.push(c.clvMedio); nClv++; }
+  });
+
+  var mediaClv = clvs.length ? clvs.reduce(function(a,b){return a+b;},0)/clvs.length : null;
+  // erro padrão do CLV médio — para não ler ruído como sinal
+  var sdClv = null, tClv = null;
+  if(clvs.length > 1) {
+    var m = mediaClv;
+    sdClv = Math.sqrt(clvs.reduce(function(a,x){ return a + Math.pow(x-m,2); },0) / (clvs.length-1));
+    tClv = sdClv > 0 ? m / (sdClv/Math.sqrt(clvs.length)) : null;
+  }
+
+  return {
+    n: jogos.length, nObs: nObs, nClv: nClv,
+    brierModelo:  nObs ? +(brierModelo/nObs).toFixed(6) : null,
+    brierMercado: nObs ? +(brierMercado/nObs).toFixed(6) : null,
+    logLossModelo:  jogos.length ? +(llModelo/jogos.length).toFixed(4) : null,
+    logLossMercado: jogos.length ? +(llMercado/jogos.length).toFixed(4) : null,
+    clvMedio: mediaClv !== null ? +mediaClv.toFixed(3) : null,
+    clvDesvio: sdClv !== null ? +sdClv.toFixed(3) : null,
+    clvT: tClv !== null ? +tClv.toFixed(2) : null,
+    // veredito honesto sobre a amostra
+    veredito: (function(){
+      if(nClv < 50) return 'Amostra de CLV pequena ('+nClv+' jogos). Nada de conclusivo — continue coletando; '+
+                           'a partir de ~150-200 jogos o sinal começa a aparecer.';
+      if(tClv === null) return 'CLV sem variância calculável.';
+      if(tClv > 2)  return 'CLV médio de '+mediaClv.toFixed(2)+'% com t='+tClv.toFixed(2)+' — o mercado vem na sua direção de forma consistente. É o sinal mais forte de edge que existe em prazo curto.';
+      if(tClv < -2) return 'CLV médio de '+mediaClv.toFixed(2)+'% com t='+tClv.toFixed(2)+' — o mercado se move CONTRA suas entradas de forma consistente. Isso é evidência de edge negativo.';
+      return 'CLV médio de '+mediaClv.toFixed(2)+'% com t='+tClv.toFixed(2)+' — indistinguível de zero nesta amostra.';
+    })()
+  };
 }
 
 // Validates a score string — rejects timing strings like "31-45", "76-90"
@@ -3594,25 +4485,11 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   // ── PERFIL ──────────────────────────────────────────────
   // Fiel ao PDF: tabela de perfis por fav + over
-  let profileId, profileLabel;
-  if     (fav <= 1.64 && over < 1.70)  { profileId='GOLEADA';              profileLabel='Favorito dominante — goleada esperada'; }
-  else if(fav <= 1.64 && over <= 1.85) { profileId='OFENSIVO';             profileLabel='Favorito forte com rota ofensiva'; }
-  else if(fav <= 1.64 && over <= 2.00) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
-  else if(fav <= 1.80 && over <= 1.85) { profileId='EQUILIBRADO_OFENSIVO'; profileLabel='Favorito com visitante ainda vivo'; }
-  else if(fav <= 1.80 && over <= 2.20) { profileId='EQUILIBRADO';          profileLabel='Favorito leve — cluster concentrado'; }
-  else if(fav <= 2.00 && over <= 1.85) { profileId='ABERTO_BTTS';          profileLabel='Jogo aberto com troca de gols possível'; }
-  else if(fav <= 2.00)                 { profileId='CONSERVADOR';           profileLabel='Favorito leve — leitura cautelosa'; }
-  else if(fav <= 2.35) {
-    // Se over alto (≥2.50) OU btts baixo (≤1.80) → SUPER_EQUILIBRADO
-    // Jogo equilibrado com ambos marcando — não é ALTO_RISCO
-    if(over >= 2.50 || btts <= 1.80) {
-      profileId='SUPER_EQUILIBRADO'; profileLabel='Jogo equilibrado — ambos podem marcar';
-    } else {
-      profileId='ALTO_RISCO'; profileLabel='Favorito instável — proteções reforçadas';
-    }
-  }
-  else if(fav <= 3.20)                 { profileId='SUPER_EQUILIBRADO';     profileLabel='Jogo sem favorito claro — equilíbrio real'; }
-  else                                 { profileId='ALTO_RISCO';            profileLabel='Favorito instável — proteções reforçadas'; }
+  // Classificador ÚNICO (definido no topo do arquivo). Antes esta tabela
+  // estava duplicada em checkPackball com cortes diferentes, e as duas
+  // discordavam no mesmo jogo.
+  var _perfil = classificarPerfilJogo(fav, over, btts);
+  let profileId = _perfil.id, profileLabel = _perfil.label;
 
   // ── SCORES PLANO A — fiel ao PDF por perfil ───────────────
   let mainScores = [];
@@ -3703,8 +4580,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     if(zebraClaramenteNaoMarca) return ['3-0'];
     if(zebraProvavelmenteMarca) return ['3-1'];
     // Zona de indecisão (44-52%): odds CS decidem
-    var odd30 = csOdds && csOdds['3-0'] ? 100/csOdds['3-0'] : 0;
-    var odd31 = csOdds && csOdds['3-1'] ? 100/csOdds['3-1'] : 0;
+    // BUG CORRIGIDO: lia csOdds['3-0'] direto. '3-0'/'3-1' aqui são a perspectiva
+    // do FAVORITO — com favorito visitante moram em 0-3/1-3 no board.
+    var odd30 = oddScoreMotor('3-0') > 0 ? 100/oddScoreMotor('3-0') : 0;
+    var odd31 = oddScoreMotor('3-1') > 0 ? 100/oddScoreMotor('3-1') : 0;
     if(odd31 > odd30) return ['3-1','3-0']; // mercado acredita mais no 3-1
     if(odd30 > 0) return ['3-0','3-1'];
     return ['3-0']; // fallback
@@ -3915,6 +4794,71 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     } else {
       protection = ['1-1','0-1']; // 2 PB padrão
     }
+  }
+
+  // ── PLANO B PELO PERCALÇO REAL DA PARTIDA ────────────────────────
+  // Até aqui `protection` veio da lista fixa do perfil. Agora o motor de
+  // percalço lê os dados DESTE confronto e, quando consegue identificar o
+  // obstáculo dominante com confiança, o Plano B passa a ser a ROTA daquele
+  // obstáculo em vez de proteção genérica.
+  //
+  // A lista do perfil não é descartada: ela vira a base, e a rota do percalço
+  // entra na frente dela. Se o motor não identifica obstáculo (dados
+  // insuficientes ou nenhum se destaca), nada muda — e isso fica registrado,
+  // em vez de fingir uma leitura que não existe.
+  var percalco = null;
+  try {
+    percalco = detectarPercalco({
+      fav: fav, over: over, btts: btts,
+      formFav: favEhVisitante ? S._formFora : S._formCasa,
+      formZeb: favEhVisitante ? S._formCasa : S._formFora,
+      h2h: S._h2hData,
+      zebraEhVisitante: !favEhVisitante   // zebra é visitante quando o favorito é da casa
+    });
+    S._percalco = percalco;
+
+    if(percalco && percalco.tipo !== 'INDETERMINADO' && percalco.rota.length) {
+      var antesPB = protection.slice();
+
+      // A rota do percalço são placares de Plano B por natureza (empate,
+      // gol/vitória da zebra). Os que forem vitória do favorito pertencem ao
+      // Plano A — é o caso do 2-1 na rota da virada, que é destino, não seguro.
+      var rotaPB = [], rotaPA = [];
+      percalco.rota.concat(percalco.rotaSecundaria || []).forEach(function(sc){
+        if(rotaPB.includes(sc) || rotaPA.includes(sc)) return;
+        var p = sc.split('-').map(Number);
+        if(p.length !== 2 || isNaN(p[0]) || isNaN(p[1])) return;
+        // 0-0 só entra se o mercado confirmar under de verdade (mesma regra
+        // que vale em todo o resto do motor — o percalço não a contorna)
+        if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) return;
+        // placar sem odd real não vira proteção
+        if(!(oddScoreMotor(sc) > 0)) return;
+        if(p[0] > p[1]) rotaPA.push(sc); else rotaPB.push(sc);
+      });
+
+      if(rotaPB.length) {
+        // rota do percalço primeiro, depois o que sobrou da lista do perfil
+        protection = rotaPB.concat(antesPB.filter(function(s){ return !rotaPB.includes(s); }));
+        // marcar as pernas estruturais para o corte por EV não removê-las
+        S._percalcoRota = rotaPB.slice();
+      }
+      rotaPA.forEach(function(sc){
+        if(!mainScores.includes(sc)) mainScores.push(sc);
+      });
+
+      console.log('[PERCALÇO] '+percalco.tipo+' ('+(100*percalco.confianca).toFixed(0)+'% confiança) — '+
+        percalco.titulo+'\n  evidências: '+percalco.evidencias.join(' | ')+
+        '\n  Plano B: ['+antesPB.join(',')+'] → ['+protection.join(',')+']'+
+        (rotaPA.length ? '\n  ao Plano A: '+rotaPA.join(',') : '')+
+        '\n  ranking: '+percalco.candidatos.join('  '));
+    } else if(percalco) {
+      S._percalcoRota = null;
+      console.log('[PERCALÇO] '+percalco.tipo+' — '+percalco.resumo+
+        (percalco.candidatos ? '\n  ranking: '+percalco.candidatos.join('  ') : ''));
+    }
+  } catch(ePerc) {
+    console.warn('[PERCALÇO] falhou, mantendo Plano B do perfil:', ePerc.message);
+    S._percalco = null; S._percalcoRota = null;
   }
 
   // ── 0-0 COMO PROTEÇÃO EXTRA ─────────────────────────────
@@ -4200,16 +5144,17 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
 
   // SINAL 4: Odds CS reais — remover scores de baixíssima probabilidade do Plano A
   // Um score com prob muito abaixo da média do cluster não deve estar no Plano A
+  //
+  // BUG CORRIGIDO: este bloco lia csOdds[s] DIRETO, com `s` ainda na perspectiva
+  // pré-inversão (ponto de vista do favorito). Quando o favorito é visitante, o
+  // "2-0 do favorito" mora no 0-2 do board — então o filtro lia a odd do 2-0 do
+  // MANDANTE, que num jogo desses é altíssima. Medido: @53.19 em vez de @8.90,
+  // fator de erro 0.17x. O helper correto (oddScoreMotor) já existia e já era
+  // usado logo abaixo no SINAL 4b — aqui não era.
   if(csOdds && Object.keys(csOdds).length > 0) {
-    // Calcular probabilidade implícita de cada score do Plano A
-    var probsA = mainScores.map(function(s){
-      var odd = csOdds[s] || 0;
-      return { score: s, prob: odd > 0 ? 100/odd : 0, odd: odd };
-    });
-
     // Probabilidade média do cluster completo
     var allProbs = [...mainScores, ...protection].map(function(s){
-      var odd = csOdds[s] || 0;
+      var odd = oddScoreMotor(s);
       return odd > 0 ? 100/odd : 0;
     }).filter(function(p){ return p > 0; });
     var probMedia = allProbs.length > 0 ? allProbs.reduce(function(a,b){return a+b;},0)/allProbs.length : 0;
@@ -4218,12 +5163,13 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       // Remover do Plano A scores com probabilidade menor que 40% da média
       // Ex: se média é 8%, remover scores abaixo de 3.2%
       var threshold = probMedia * 0.50; // remove scores abaixo de 50% da média
+      var probAncoraS4 = oddScoreMotor(ancora) > 0 ? 100/oddScoreMotor(ancora) : 0;
       var mainFiltrado = mainScores.filter(function(s){
-        var odd = csOdds[s] || 0;
+        var odd = oddScoreMotor(s);
         var prob = odd > 0 ? 100/odd : 0;
         // Remove scores claramente fracos com 3 critérios:
         var e10 = (s === '1-0' || s === '0-1'); // 1-0 e 0-1: sempre protegidos (caminho operacional)
-        var probAncora = csOdds[ancora] ? 100/csOdds[ancora] : 0;
+        var probAncora = probAncoraS4;
         // Regra 1: prob abaixo do threshold geral
         var fracoGeral = prob > 0 && prob < threshold;
         // Regra 2: prob menos de 35% da âncora (ex: âncora 12.8%, score 4.2% = 33% → remove)
@@ -4299,7 +5245,13 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     var favEhCasaCS = !favEhVisitante;
 
     Object.keys(csOdds).forEach(function(sc) {
-      if(clusterScores.includes(sc)) return;
+      // BUG DE COORDENADA CORRIGIDO: `sc` vem do BOARD (casa-fora) mas
+      // clusterScores guarda placares na perspectiva do FAVORITO (pré-inversão).
+      // Comparar e empurrar sem converter misturava os dois sistemas de
+      // coordenadas sempre que o favorito era visitante. Antes isso passava
+      // despercebido porque clusterScores era descartado; agora ele é o cluster.
+      var scMotor = favEhVisitante ? inv(sc) : sc;
+      if(clusterScores.includes(scMotor)) return;
       if(sc.startsWith('any_other')) return;
       var odd = csOdds[sc];
       if(!odd || odd <= 0) return;
@@ -4309,6 +5261,18 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       var pts = sc.split('-');
       if(pts.length !== 2) return;
       var h = parseInt(pts[0]), a = parseInt(pts[1]);
+
+      // ── REGRA DO 0-0 — não é "passou no threshold, entra" ──────────────
+      // Mesma regra que a REDE DE SEGURANÇA já aplicava: 0-0 só faz sentido
+      // quando o jogo é GENUINAMENTE under dos dois lados, não porque a odd
+      // isolada bateu um número. Esta checagem faltava aqui — com as camadas
+      // reativadas, o 0-0 passou a entrar em jogos de over 1.70 (volume alto),
+      // que é o oposto do cenário onde ele pertence.
+      if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) {
+        console.log('[CS COMPLEMENTO] 0-0 qualifica pelo threshold ('+prob.toFixed(1)+
+          '%) mas o jogo não é genuinamente under (over@'+over+', btts@'+btts+') — ignorado');
+        return;
+      }
 
       // ── PLACAR DE VITÓRIA DA ZEBRA — analisar dados reais, não bloquear cego ──
       // Antes: qualquer placar onde a zebra vence de verdade (não empata) era
@@ -4341,9 +5305,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       var temAmbos = h > 0 && a > 0;
       if(temAmbos && btts >= 2.15 && prob < 10.0) return;
 
-      // Adicionar ao cluster
-      clusterScores.push(sc);
-      console.log('[CS COMPLEMENTO] '+sc+' prob='+prob.toFixed(1)+'% >= '+thresholdCS+'% → adicionado');
+      // Adicionar ao cluster — NA PERSPECTIVA DO MOTOR
+      clusterScores.push(scMotor);
+      console.log('[CS COMPLEMENTO] '+sc+' prob='+prob.toFixed(1)+'% >= '+thresholdCS+'% → adicionado'+
+        (scMotor !== sc ? ' (como '+scMotor+' na perspectiva do favorito)' : ''));
     });
   }
 
@@ -4700,6 +5665,212 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     });
     console.log('[FORM MOMENTO] Favorito em momento negativo — scores de goleada removidos');
   }
+  // ═══════════════════════════════════════════════════════════════════
+  // RECONCILIAÇÃO — devolver clusterScores para mainScores/protection
+  // ═══════════════════════════════════════════════════════════════════
+  // BUG ESTRUTURAL CORRIGIDO. `clusterScores` nasce na linha do
+  // `mainScores.concat(protection)` — e concat cria um ARRAY NOVO. De lá até
+  // aqui, ~420 linhas do motor escrevem nele: COMPLEMENTO CS, PROTEÇÃO
+  // CIRÚRGICA (placar_quando_btts / abre_placar_pct), PERFIL DA ZEBRA
+  // (marca_pct, vira_quando_atrás, over25, btts, momento), CAMADA 8 e 8b
+  // (favorito goleador / compacto / placar mais frequente / sinal de volume)
+  // e o filtro de MOMENTO. Mas o `return` devolvia mainScores/protection —
+  // então NADA disso chegava ao cluster final. Só servia para escolher a
+  // pirâmide.
+  //
+  // Verificado antes da correção: rodando o motor com uma zebra que marca em
+  // 90% dos jogos e vira 45% das vezes que está atrás, contra a mesma chamada
+  // sem dado de forma nenhum, o cluster retornado saía BYTE A BYTE IDÊNTICO —
+  // enquanto o console imprimia "[ZEBRA MUITO OFENSIVA] cluster ajustado".
+  //
+  // Convenção de plano (pré-inversão, ponto de vista do FAVORITO):
+  //   h > a  → favorito vence  → Plano A
+  //   h == a → empate          → Plano B
+  //   h < a  → zebra vence     → Plano B
+  (function reconciliarCluster(){
+    var antesA = mainScores.slice(), antesB = protection.slice();
+
+    function planoDe(sc){
+      var p = sc.split('-');
+      if(p.length !== 2) return 'B';
+      var h = parseInt(p[0]), a = parseInt(p[1]);
+      if(isNaN(h) || isNaN(a)) return 'B';
+      return h > a ? 'A' : 'B';
+    }
+
+    // A rota do percalço é intocável junto com a âncora. Ela não é uma perna
+    // qualquer: é a leitura do obstáculo real daquela partida, derivada do
+    // H2H e da forma. As camadas genéricas (perfil da zebra, camada 8, corte
+    // por probabilidade de mercado) não conhecem essa leitura e estavam
+    // removendo-a — no teste do confronto com 78% de BTTS no H2H, o 2-2 e o
+    // 1-2 sumiam e o Plano B ficava VAZIO, que é o oposto do objetivo.
+    var rotaPerc = (S._percalcoRota || []).filter(function(s){ return oddScoreMotor(s) > 0; });
+    function intocavel(s){ return s === ancora || rotaPerc.includes(s); }
+
+    // 1) o que as camadas REMOVERAM de clusterScores sai dos planos —
+    //    exceto âncora e rota do percalço.
+    mainScores = mainScores.filter(function(s){ return clusterScores.includes(s) || intocavel(s); });
+    protection = protection.filter(function(s){ return clusterScores.includes(s) || intocavel(s); });
+
+    // 1b) reafirmar a rota do percalço: se alguma camada tirou uma perna dela
+    //     dos dois planos, ela volta — desde que tenha odd real.
+    rotaPerc.forEach(function(sc){
+      if(mainScores.includes(sc) || protection.includes(sc)) return;
+      if(planoDe(sc) === 'A') mainScores.push(sc); else protection.push(sc);
+      console.log('[PERCALÇO] '+sc+' foi removido por uma camada genérica e recolocado — é rota do obstáculo identificado.');
+    });
+
+    // 2) o que as camadas ADICIONARAM entra no plano certo
+    clusterScores.forEach(function(sc){
+      if(!sc || sc.startsWith('any_other')) return;
+      if(mainScores.includes(sc) || protection.includes(sc)) return;
+      if(planoDe(sc) === 'A') mainScores.push(sc); else protection.push(sc);
+    });
+
+    // 3) deduplicar — o motor emitia duplicata real: no perfil OFENSIVO,
+    //    mainScores = [...,'3-1'].concat(expansao) com expansao já = ['3-1'],
+    //    produzindo 3-1 duas vezes em 4 de 4 cenários de favorito forte.
+    //    A dedup que existia rodava só em analisarJogo, DEPOIS do prompt ser
+    //    montado — então a IA recebia "Total = 7 scores" para um cluster de 6.
+    mainScores = mainScores.filter(function(s,i,a){ return a.indexOf(s) === i; });
+    protection = protection.filter(function(s,i,a){
+      return a.indexOf(s) === i && !mainScores.includes(s);
+    });
+
+    // 4) âncora sempre no Plano A
+    if(ancora && !mainScores.includes(ancora)) {
+      protection = protection.filter(function(s){ return s !== ancora; });
+      mainScores.unshift(ancora);
+    }
+
+    // 5) piso e teto — 5 a 7 placares. O CORTE É POR EV, não por odd.
+    //    Antes o critério era "remove a maior odd" = remove o menos provável
+    //    segundo o mercado. Mas num Dutch o EV do cluster é
+    //        stake × ( Σ p_modelo / Σ p_mercado − 1 )
+    //    então quem tem que sair é o placar de PIOR EDGE, não o mais longo.
+    //    Um placar longo com edge positivo ajuda; um curto com edge negativo
+    //    derruba o EV de todo o resto. Sem modelo disponível, cai no critério
+    //    antigo (maior odd) — e isso fica explícito no log.
+    var TETO = 7, PISO = 5;
+    function total(){ return mainScores.length + protection.length; }
+    function edgeMotor(s){
+      // s está na perspectiva do favorito; poissonScoreProb também.
+      var p = s.split('-'); if(p.length !== 2) return null;
+      var gf = parseInt(p[0]), gz = parseInt(p[1]);
+      if(isNaN(gf) || isNaN(gz)) return null;
+      var odd = oddScoreMotor(s);
+      if(!(odd > 1)) return null;
+      var pm = (typeof poissonScoreProb === 'function') ? poissonScoreProb(gf, gz) : null;
+      if(!(pm > 0)) return null;
+      return (pm/100) * odd - 1;
+    }
+    var temModeloCorte = edgeMotor(mainScores[0] || '1-0') !== null;
+    while(total() > TETO) {
+      var alvo = protection.length > 2 ? protection : mainScores;
+      if(alvo.length <= 2) break;
+      var pior = null, piorVal = Infinity;
+      // primeira passada: não cortar âncora nem rota do percalço
+      alvo.forEach(function(s){
+        if(intocavel(s)) return;
+        var e = edgeMotor(s);
+        // com modelo: menor edge sai. sem modelo: maior odd sai (critério antigo)
+        var val = (e !== null) ? e : -(oddScoreMotor(s) || 9999);
+        if(val < piorVal) { piorVal = val; pior = s; }
+      });
+      // se sobrou só âncora + rota do percalço, aí sim a rota pode ceder —
+      // o teto de 7 é operacional (o card e a gestão não comportam mais)
+      if(!pior) {
+        alvo.forEach(function(s){
+          if(s === ancora) return;
+          var e2 = edgeMotor(s);
+          var v2 = (e2 !== null) ? e2 : -(oddScoreMotor(s) || 9999);
+          if(v2 < piorVal) { piorVal = v2; pior = s; }
+        });
+        if(pior) console.log('[CORTE] teto de '+TETO+' atingido e só restavam pernas estruturais — '+
+          pior+' cede (edge '+(piorVal*100).toFixed(1)+'%).');
+      }
+      if(!pior) break;
+      console.log('[CORTE] '+pior+' removido — '+(temModeloCorte
+        ? 'pior edge do cluster ('+(piorVal*100).toFixed(1)+'%)'
+        : 'maior odd (sem modelo disponível para EV)'));
+      if(alvo === protection) protection = protection.filter(function(s){ return s !== pior; });
+      else mainScores = mainScores.filter(function(s){ return s !== pior; });
+    }
+    // 5b) com modelo disponível, placares de edge claramente negativo saem
+    //     mesmo dentro do teto — mas a ESTRUTURA do cluster é intocável.
+    //
+    // O limite é -12%, não -8%: o modelo tem erro residual medido de até ~20%
+    // em placares individuais nos cenários de favorito extremo, então cortar
+    // no -8% seria cortar dentro do próprio ruído. E três coisas nunca saem
+    // por EV, porque o método depende delas para a gestão ao vivo:
+    //   • a âncora (placar projetado do card)
+    //   • o caminho (1-0 na perspectiva do favorito) — é o primeiro degrau
+    //   • os dois últimos placares de Plano B — sem proteção o cluster vira
+    //     aposta de variância alta, que é o oposto do objetivo declarado
+    //     ("minimizar reds e variância desnecessária, não só acertar mais").
+    if(temModeloCorte) {
+      var LIMITE_EDGE = -0.12;
+      var MIN_PLANO_B = 2;
+      // A rota do percalço identificado é estrutural: ela é a leitura do
+      // obstáculo real daquela partida, não uma perna qualquer. Só sai do
+      // cluster se o edge for catastrófico (pior que o dobro do limite).
+      var rotaEstrutural = S._percalcoRota || [];
+      var candidatosCorte = protection.concat(mainScores)
+        .filter(function(s){
+          if(s === ancora || s === '1-0') return false;
+          if(rotaEstrutural.includes(s)) {
+            var eR = edgeMotor(s);
+            if(eR === null || eR >= LIMITE_EDGE * 2) {
+              return false;   // protegida
+            }
+            console.log('[CORTE EV] '+s+' é rota do percalço mas tem edge '+(eR*100).toFixed(1)+
+              '% — abaixo do dobro do limite, não dá para segurar.');
+          }
+          return true;
+        })
+        .map(function(s){ return { s: s, e: edgeMotor(s) }; })
+        .filter(function(x){ return x.e !== null && x.e < LIMITE_EDGE; })
+        .sort(function(a,b){ return a.e - b.e; });
+      candidatosCorte.forEach(function(x){
+        if(total() <= PISO) return;
+        var ehPlanoB = protection.includes(x.s);
+        if(ehPlanoB && protection.length <= MIN_PLANO_B) {
+          console.log('[CORTE EV] '+x.s+' tem edge '+(x.e*100).toFixed(1)+
+            '% mas é um dos últimos '+MIN_PLANO_B+' planos B — mantido como proteção.');
+          return;
+        }
+        console.log('[CORTE EV] '+x.s+' removido — edge '+(x.e*100).toFixed(1)+
+          '% abaixo do limite de '+(LIMITE_EDGE*100).toFixed(0)+'%');
+        protection = protection.filter(function(s){ return s !== x.s; });
+        mainScores = mainScores.filter(function(s){ return s !== x.s; });
+      });
+    }
+    if(total() < PISO) {
+      // repõe pelos placares mais prováveis do board que ainda não estão
+      var candidatos = Object.keys(csOdds || {})
+        .filter(function(sc){
+          if(!sc || sc.startsWith('any_other')) return false;
+          if(!/^\d-\d$/.test(sc)) return false;
+          var scMotor = favEhVisitante ? inv(sc) : sc;   // voltar à perspectiva do favorito
+          return !mainScores.includes(scMotor) && !protection.includes(scMotor) && csOdds[sc] > 0;
+        })
+        .sort(function(x,y){ return csOdds[x] - csOdds[y]; });
+      candidatos.forEach(function(sc){
+        if(total() >= PISO) return;
+        var scMotor = favEhVisitante ? inv(sc) : sc;
+        if(planoDe(scMotor) === 'A') mainScores.push(scMotor); else protection.push(scMotor);
+      });
+    }
+
+    var mudouA = JSON.stringify(antesA) !== JSON.stringify(mainScores);
+    var mudouB = JSON.stringify(antesB) !== JSON.stringify(protection);
+    if(mudouA || mudouB) {
+      console.log('[RECONCILIAÇÃO] camadas de forma/odds aplicadas ao cluster final. ' +
+        'A: [' + antesA.join(',') + '] → [' + mainScores.join(',') + '] | ' +
+        'B: [' + antesB.join(',') + '] → [' + protection.join(',') + ']');
+    }
+  })();
+
   var clusterOdds = clusterScores
     .map(function(s){ return oddScoreMotor(s); })
     .filter(function(o){ return o > 0; });
@@ -5010,6 +6181,15 @@ async function analisarJogo() {
   // o cálculo de EV/EDGE pra qualquer jogo com favorito visitante.
   S._favEhVisitante = favEhVisitanteReal;
 
+  // ── BUG DE ORDEM CORRIGIDO ─────────────────────────────────────────
+  // calcPoisson() já tinha rodado lá em cima (antes da detecção de favorito
+  // visitante) e lê S._favEhVisitante para escolher de quem é a "forma do
+  // favorito" no blend do λ. Rodando antes da linha acima, ele usava o valor
+  // da análise ANTERIOR (ou undefined na primeira) — ou seja, misturava a
+  // forma do time errado sempre que o favorito era o visitante. Recalcular
+  // aqui, com o lado já resolvido, antes do motor consumir S._lamFav/_lamZeb.
+  calcPoisson();
+
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal, S.csOddsLiq);
 
@@ -5057,14 +6237,50 @@ async function analisarJogo() {
         return;
       }
 
-      candidatosResgatados.push(sc);
+      // ── CHECAGENS DE COERÊNCIA (antes ausentes aqui) ─────────────────
+      // Esta rede nasceu como versão simplificada do COMPLEMENTO CS que roda
+      // dentro do motor — mas sem as checagens dele. Medido antes da correção:
+      // num jogo de favorito @1.28 ela resgatava "4-0 (7.1%)" direto para o
+      // PLANO B. Plano B é proteção (gol da zebra / empate); goleada do
+      // favorito ali é erro de categoria. Agora aplica as mesmas regras.
+      var hR = parseInt(partsRescan[0]), aR = parseInt(partsRescan[1]);
+      var favCasaR = !favEhVisitanteReal;
+      var zebraVenceR = favCasaR ? (aR > hR) : (hR > aR);
+
+      if(zebraVenceR) {
+        // vitória da zebra é upset — exige margem extra sobre o threshold
+        var zFormR = favCasaR ? S._formFora : S._formCasa;
+        var zMomRuim  = zFormR && zFormR.momento === 'negativo';
+        var zMarcaFrac = zFormR && zFormR.amostra >= 3 && (zFormR.marca_pct || 100) < 40;
+        var margemR = (zMomRuim && zMarcaFrac) ? 3.0 : 1.5;
+        if(probRescan < probMinDinScan + margemR) {
+          console.log('[REDE DE SEGURANÇA] '+sc+' (vitória da zebra) prob='+probRescan.toFixed(1)+
+            '% não atinge a margem de upset ('+(probMinDinScan+margemR).toFixed(1)+'%) — não resgata.');
+          return;
+        }
+      }
+
+      // cruzamento btts: placar com ambos marcando precisa de mais evidência
+      // quando o mercado não acredita que ambos marcam
+      if(hR > 0 && aR > 0 && btts >= 2.15 && probRescan < 10.0) {
+        console.log('[REDE DE SEGURANÇA] '+sc+' (ambos marcam) prob='+probRescan.toFixed(1)+
+          '% com ambas @'+btts+' — mercado não acredita em gol dos dois lados, não resgata.');
+        return;
+      }
+
+      candidatosResgatados.push({ sc: sc, prob: probRescan, favVence: favCasaR ? hR > aR : aR > hR });
     });
 
     if(candidatosResgatados.length > 0) {
+      // Plano A = favorito vence. Plano B = empate ou gol/vitória da zebra.
+      // Antes tudo caía no Plano B indiscriminadamente.
+      var paraA = candidatosResgatados.filter(function(c){ return c.favVence; }).map(function(c){ return c.sc; });
+      var paraB = candidatosResgatados.filter(function(c){ return !c.favVence; }).map(function(c){ return c.sc; });
       console.log('[REDE DE SEGURANÇA] Perfil "'+engine.profileId+'" tinha lista fixa sem '+
-        candidatosResgatados.length+' score(s) que qualificam pelo threshold ('+probMinDinScan+'%): '+
-        candidatosResgatados.join(', ')+' — adicionando ao Plano B.');
-      engine.protection = engine.protection.concat(candidatosResgatados);
+        candidatosResgatados.length+' score(s) acima do threshold ('+probMinDinScan+'%). '+
+        'Plano A: ['+paraA.join(', ')+'] | Plano B: ['+paraB.join(', ')+']');
+      engine.mainScores = engine.mainScores.concat(paraA);
+      engine.protection = engine.protection.concat(paraB);
     }
   } catch(eRedeSeg) {
     console.log('[REDE DE SEGURANÇA] erro ao escanear:', eRedeSeg);
@@ -5148,6 +6364,13 @@ ${texto}
 FONTE 2 — MOTOR MATEMÁTICO:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Cluster proposto: Plano A: ${engine.mainScores.join(', ')} | Plano B: ${engine.protection.join(', ')}
+${S._percalco && S._percalco.tipo !== 'INDETERMINADO'
+  ? 'PERCALÇO IDENTIFICADO NOS DADOS: ' + S._percalco.titulo + ' (confiança ' + Math.round(100*S._percalco.confianca) + '%).\n'
+    + 'Evidências: ' + (S._percalco.evidencias||[]).join('; ') + '.\n'
+    + 'O Plano B acima É a rota desse obstáculo — explique-o assim na narrativa, citando as evidências, '
+    + 'e NÃO o descreva como proteção genérica.'
+  : 'PERCALÇO: não foi possível identificar o obstáculo dominante com os dados disponíveis — '
+    + 'não invente um; descreva o Plano B como cobertura padrão.'}
 Âncora: ${engine.ancora} | Perfil: ${engine.profileId}
 Favorito: ${favEhVisitanteReal ? 'VISITANTE' : 'CASA'}
 fav@${fav} | over@${over} | btts@${btts}
@@ -6043,6 +7266,35 @@ REGRAS ABSOLUTAS:
       }
 
       renderCluster(cluster, stake);
+
+      // ── REAVALIAR A APROVAÇÃO COM BASE EM EV ──────────────────────────
+      // avaliarAprovacaoGenio roda lá em cima, quando o cluster ainda não
+      // existe — então naquele momento só há a checagem de faixa de odd.
+      // O gate de EV só fica disponível depois que renderCluster calculou
+      // probabilidade de modelo e stakes finais. Reavaliar aqui é o que faz
+      // `genioApproved` (que estratifica todo o painel de performance) passar
+      // a significar "tem valor" em vez de "parece com os jogos de sempre".
+      try {
+        if(S._lastGate) {
+          var apEV = avaliarAprovacaoGenio({ fav: fav, btts: btts, over: over,
+            texto: texto, reply: reply, crossScore: crossScore, gate: S._lastGate });
+          S.lastGenioApproval = apEV;
+          if(S.currentGame) {
+            S.currentGame.genioApproval = apEV;
+            S.currentGame.genioStatus   = apEV.status;
+            S.currentGame.genioApproved = !!apEV.aprovado;
+            S.currentGame.genioBase     = apEV.baseAprovacao;
+            S.currentGame.evCluster     = S._lastGate.r ? S._lastGate.r.ev : null;
+            // ── SNAPSHOT PARA MEDIÇÃO DE EDGE ──────────────────────────
+            registrarSnapshotModelo(S.currentGame, cluster);
+            S.currentGame.roiCluster    = S._lastGate.r ? S._lastGate.r.roi : null;
+          }
+          console.log('[APROVAÇÃO] reavaliada por EV: ' + apEV.status +
+            ' (base=' + apEV.baseAprovacao + ', ROI ' +
+            (S._lastGate.r ? S._lastGate.r.roi + '%' : 'n/d') + ')');
+        }
+      } catch(eApEV) { console.warn('[APROVAÇÃO] falha ao reavaliar por EV:', eApEV.message); }
+
       notify('🧠 ANÁLISE DO GÊNIO', cluster.length+' scores prontos para operar', 'var(--grn)');
       // Flash effect no card
       var resCard = document.getElementById('resultado-card');
@@ -6426,11 +7678,22 @@ function calcStakes(cluster, stake, analysisText) {
   const useDutch = !isGoleadaProfile && (allSameTipo || oddSpread <= 2.0);
 
   if(useDutch) {
-    // Dutch: todos os lucros iguais
-    const sumInv = valid.reduce((a,s) => a + 1/s.odd, 0);
-    valid.forEach(s => {
-      s.stake = parseFloat(((1/s.odd) / sumInv * stake).toFixed(2));
-    });
+    // ── DUTCH PONDERADO POR EDGE ────────────────────────────────────────
+    // Antes: stake_i ∝ 1/odd_i (lucro igual puro). O problema não é o lucro
+    // igual em si — é que a alocação ignorava completamente o modelo próprio.
+    // O impliedOdd já era calculado (STEP 7) e usado SÓ para desenhar o badge;
+    // nenhum centavo dependia dele. Resultado prático medido no UTA x Sepsi:
+    // o 1-1 recebia a MAIOR stake do cluster por ser o mais provável, e o 2-0
+    // — único placar com edge verificado pela odd real @11.5 — recebia menos.
+    //
+    // Agora: mantém 1/odd como espinha dorsal (a banda continua coberta e
+    // TODA perna continua viva, que é o que a gestão ao vivo exige) e inclina
+    // a stake pelo edge, com teto e piso. Nenhum placar vai a zero.
+    const usouEdge = aplicarDutch(valid, stake);
+    console.log('[DUTCH] ' + (usouEdge
+      ? 'ponderado por edge (K=' + EDGE_TILT_K + ', tilt ' + EDGE_TILT_MIN + '..' + EDGE_TILT_MAX + '): ' +
+        valid.map(s => s.score + ' R$' + s.stake + (s._edge !== null && s._edge !== undefined ? ' (edge ' + (s._edge*100).toFixed(1) + '%)' : '')).join(' | ')
+      : 'lucro igual — sem modelo disponível para ponderar por edge'));
   } else {
     // Pirâmide determinística por perfil
     const tUp = (analysisText||'').toUpperCase();
@@ -6603,14 +7866,50 @@ function calcStakes(cluster, stake, analysisText) {
         else if(s.tipo==='expansao')s._pp = 7;
         else                        s._pp = 4;
       });
+      // BUG CORRIGIDO: as tabelas de pirâmide têm posições com 0%
+      // (ex.: alto_risco = [35,25,15,0,0,15,10,0] — o 4º e o 5º destino valem
+      // ZERO). Um cluster com 4 destinos colocava duas pernas com stake R$0,
+      // e elas continuavam aparecendo no card como se estivessem cobertas.
+      // O trader vê o placar listado e não tem dinheiro nele. Agora toda perna
+      // do cluster recebe pelo menos PISO_PERNA do total.
+      const PISO_PERNA = 4;   // % mínimo do stake por perna do cluster
       valid.forEach(s => {
-        s.stake = parseFloat((stake * (pcts[Math.min(s._pp,pcts.length-1)]||3) / 100).toFixed(2));
+        var pct = pcts[Math.min(s._pp, pcts.length-1)];
+        if(!(pct > 0)) {
+          pct = PISO_PERNA;
+          console.log('[PIRÂMIDE] '+s.score+' cairia com stake ZERO na posição '+s._pp+
+            ' do perfil '+prof+' — piso de '+PISO_PERNA+'% aplicado (placar no cluster sempre tem dinheiro).');
+        }
+        s.stake = parseFloat((stake * pct / 100).toFixed(2));
         delete s._pp;
       });
     }
+    // ── INCLINAÇÃO POR EDGE TAMBÉM NA PIRÂMIDE ────────────────────────
+    // Em correct score o spread de odds passa de 2.0 quase sempre, então o
+    // ramo que roda de verdade na maioria dos jogos é a PIRÂMIDE, não o Dutch.
+    // Ponderar só o Dutch deixaria a correção sem efeito prático. Aqui a forma
+    // da pirâmide (que é a estrutura do método — caminho pesa mais que plano B)
+    // é preservada e apenas inclinada pelo edge, com o mesmo teto e piso.
+    let usouEdgePir = false;
+    valid.forEach(s => {
+      const pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+        ? s._modelProb : calcModelProb(s.score);
+      const e = edgeDoScore(pm, s.odd);
+      s._edge = e;
+      if(e === null) { s._tilt = null; return; }
+      usouEdgePir = true;
+      s._tilt = Math.max(EDGE_TILT_MIN, Math.min(EDGE_TILT_MAX, 1 + EDGE_TILT_K * e));
+      s.stake = parseFloat((s.stake * s._tilt).toFixed(2));
+    });
+
     // Normalize to exactly stake
     const totP = valid.reduce((a,s) => a+s.stake, 0);
     if(totP > 0) { const scP = stake/totP; valid.forEach(s => { s.stake = parseFloat((s.stake*scP).toFixed(2)); }); }
+    if(usouEdgePir) {
+      console.log('[PIRÂMIDE] perfil ' + prof + ' inclinada por edge: ' +
+        valid.map(s => s.score + ' R$' + s.stake +
+          (s._edge !== null ? ' (edge ' + (s._edge*100).toFixed(1) + '%)' : '')).join(' | '));
+    }
   }
 
   // Set lucro and oddPG for all
@@ -6695,11 +7994,11 @@ function calcStakes(cluster, stake, analysisText) {
     added = true;
   }
   if(added) {
-    // Recalculate Dutch with added scores
+    // Recalculate Dutch with added scores — via aplicarDutch (ponto único),
+    // senão a ponderação por edge do STEP 3 era sobrescrita por lucro igual.
     const v2 = cluster.filter(s => s.odd > 0);
-    const si2 = v2.reduce((a,s) => a + 1/s.odd, 0);
+    aplicarDutch(v2, stake);
     v2.forEach(s => {
-      s.stake = parseFloat(((1/s.odd) / si2 * stake).toFixed(2));
       s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
       s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
     });
@@ -6890,9 +8189,8 @@ function calcStakes(cluster, stake, analysisText) {
     // Recalcular após filtro de probabilidade
     ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
     if(ativos.length > 0) {
-      var si = ativos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      aplicarDutch(ativos, stake);   // ponto único — preserva ponderação por edge
       ativos.forEach(function(s){
-        s.stake = parseFloat(((1/s.odd) / si * stake).toFixed(2));
         s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
         s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
       });
@@ -6987,9 +8285,8 @@ function calcStakes(cluster, stake, analysisText) {
 
       ativos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
       if(ativos.length > 0) {
-        var si2 = ativos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+        aplicarDutch(ativos, stake);   // ponto único — preserva ponderação por edge
         ativos.forEach(function(s){
-          s.stake = parseFloat(((1/s.odd) / si2 * stake).toFixed(2));
           s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
           s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
         });
@@ -7049,9 +8346,8 @@ function calcStakes(cluster, stake, analysisText) {
 
       var novosAtivos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
       if(novosAtivos.length === 0) break;
-      var si3 = novosAtivos.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      aplicarDutch(novosAtivos, stake);   // ponto único — preserva ponderação por edge
       novosAtivos.forEach(function(s){
-        s.stake = parseFloat(((1/s.odd) / si3 * stake).toFixed(2));
         s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
         s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
       });
@@ -7176,8 +8472,18 @@ function renderCluster(cluster, stake) {
   const ts = cluster.reduce((a,s)=>a+(s.stake||0),0);
   const worstCase = -stake;
 
-  const probColor = probTotal>=60?'var(--grn)':probTotal>=50?'var(--ylw)':'var(--org)';
-  const probLabel = probTotal>=60?'FORTE':probTotal>=50?'MODERADO':'FRACO';
+  // ── GATE DE EDGE REAL ───────────────────────────────────────────────
+  // probTotal é a SOMA de 1/odd dos placares do cluster — ou seja, quanto do
+  // mercado você está comprando. Chamar isso de "FORTE" premiava exatamente a
+  // decisão que reduz o retorno: cobrir mais. Um cluster de 7 sempre parecerá
+  // mais "forte" que um de 4, independente de onde está o valor. Agora a
+  // cobertura continua exibida como cobertura, e quem dá o veredito é o EV.
+  const gate = (typeof avaliarEdgeOperacional === 'function')
+    ? avaliarEdgeOperacional(cluster, stake) : null;
+  S._lastGate = gate;
+
+  const probColor = probTotal>=60?'var(--txt2)':probTotal>=50?'var(--txt2)':'var(--txt3)';
+  const probLabel = probTotal>=60?'ampla':probTotal>=50?'média':'concentrada';
 
   // Count by type for explanation
   const nPlanoA = cluster.filter(s=>s.tipo==='caminho'||s.tipo==='destino').length;
@@ -7203,7 +8509,21 @@ function renderCluster(cluster, stake) {
     explWhy = '<strong style="color:var(--acc);">7 SCORES — COBERTURA MÁXIMA:</strong> '+planoAStr+planoBStr+'. Jogo aberto com ambos os lados cobertos.';
   }
 
-  if(statsEl) statsEl.innerHTML = '<span class="bdg bdg-b">'+total+' SCORES</span><span class="bdg" style="color:'+probColor+';border-color:'+probColor+';background:rgba(0,0,0,.3);margin-left:4px;">PROB '+probTotal+'%</span>';
+  if(statsEl) {
+    var gateBdg = '';
+    if(gate && gate.r) {
+      var gc = gate.cor;
+      var gtxt = gate.veredito === 'edge_real'       ? 'EV +'+gate.r.roi.toFixed(1)+'%'
+               : gate.veredito === 'edge_marginal'   ? 'EV +'+gate.r.roi.toFixed(1)+'% marginal'
+               : gate.veredito === 'sem_edge'        ? 'EV '+gate.r.roi.toFixed(1)+'%'
+               : gate.veredito === 'modelo_incoerente' ? 'MODELO NÃO FECHA'
+               : 'SEM EV';
+      gateBdg = '<span class="bdg" style="color:'+gc+';border-color:'+gc+';background:rgba(0,0,0,.3);margin-left:4px;font-weight:900;">'+gtxt+'</span>';
+    }
+    statsEl.innerHTML = '<span class="bdg bdg-b">'+total+' SCORES</span>'
+      + '<span class="bdg" style="color:'+probColor+';border-color:'+probColor+';background:rgba(0,0,0,.3);margin-left:4px;">COBERTURA '+probTotal+'%</span>'
+      + gateBdg;
+  }
 
   const colors = {
     caminho: {bg:'rgba(0,212,255,.12)', border:'var(--acc)', label:'CAMINHO', badge:'bdg-b', bar:'var(--acc)'},
@@ -7383,15 +8703,80 @@ function renderCluster(cluster, stake) {
       '<div style="font-size:11px;color:var(--txt2);line-height:1.65;">'+explWhy+'</div>'+
       '</div>';
 
-    // Prob coverage
-    var probCovTxt = probTotal>=60?' — Cobertura sólida.':probTotal>=50?' — Cobertura aceitável.':' — Baixa, mas EV contextual pode justificar.';
+    // Cobertura — agora descrita como o que ela é: quanto do mercado você
+    // está comprando. Não é veredito. O veredito está no bloco de EV abaixo.
     var probBlock =
-      '<div class="ab '+(probTotal>=60?'ab-g':probTotal>=50?'ab-y':'ab-r')+'" style="margin-top:10px;margin-bottom:0;">'+
-      '<div class="ab-title" style="color:'+probColor+';">COBERTURA DO CLUSTER — '+probLabel+'</div>'+
-      '<div class="ab-text">Prob combinada: <strong style="color:'+probColor+';">'+probTotal+'%</strong>'+probCovTxt+' Pior caso sempre = −R$'+stake+'.</div>'+
+      '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.12);">'+
+      '<div class="ab-title" style="color:var(--txt3);">COBERTURA DO CLUSTER — '+probLabel+'</div>'+
+      '<div class="ab-text">Soma das probabilidades de mercado: <strong>'+probTotal+'%</strong>. '+
+      'Isso mede quanto do mercado o cluster compra, não se ele tem valor — cobrir mais sempre aumenta este número '+
+      'e reduz o retorno por acerto. Pior caso sempre = −R$'+stake+'.</div>'+
       '</div>';
 
-    summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + probBlock;
+    // ── BLOCO DE EDGE REAL — o veredito de valor ─────────────────────────
+    // ── BLOCO DO PERCALÇO — por que o Plano B é esse ────────────────
+    var percBlock = '';
+    var _pc = S._percalco;
+    if(_pc && _pc.tipo !== 'INDETERMINADO') {
+      var evid = (_pc.evidencias||[]).map(function(e){ return '<div style="margin-top:2px;">• '+e+'</div>'; }).join('');
+      var evid2 = (_pc.evidenciasSecundarias||[]).length
+        ? '<div style="margin-top:8px;font-size:9px;color:var(--txt3);">Obstáculo secundário ('+_pc.tipoSecundario+'): '
+          + _pc.evidenciasSecundarias.join('; ') + '</div>' : '';
+      var tardio = _pc.decideTarde
+        ? '<div style="margin-top:8px;font-size:10px;color:var(--ylw);">⏰ '+_pc.decideTarde+
+          '% dos gols saem entre 76-90\' — este jogo decide tarde, a compressão das odds vem no fim.</div>' : '';
+      percBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:var(--acc2);background:rgba(0,0,0,.22);">'+
+        '<div class="ab-title" style="color:var(--acc2);letter-spacing:2px;">🧱 PERCALÇO PROVÁVEL — '+_pc.titulo+'</div>'+
+        '<div class="ab-text" style="font-size:11px;line-height:1.65;">'+_pc.leitura+'</div>'+
+        '<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.6;">'+
+        '<div style="color:var(--txt2);">O que aponta para isso nos dados deste confronto:</div>'+evid+'</div>'+
+        evid2 + tardio +
+        '<div style="margin-top:8px;font-size:9px;color:var(--txt3);">'+
+        'Confiança '+(100*_pc.confianca).toFixed(0)+'% · ranking dos obstáculos avaliados: '+
+        (_pc.candidatos||[]).join(' · ')+'</div>'+
+        '</div>';
+    } else if(_pc) {
+      percBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.12);">'+
+        '<div class="ab-title" style="color:var(--txt3);letter-spacing:2px;">🧱 PERCALÇO — não identificado</div>'+
+        '<div class="ab-text" style="font-size:11px;">'+_pc.resumo+'</div>'+
+        '</div>';
+    }
+
+    var evBlock = '';
+    if(gate) {
+      var detHtml = '';
+      if(gate.r && gate.r.detalhe && gate.r.detalhe.length) {
+        detHtml = '<div style="margin-top:10px;display:grid;gap:3px;">'
+          + gate.r.detalhe.map(function(d){
+              var ec = d.edge === null ? 'var(--txt3)' : d.edge > 0.015 ? 'var(--grn)' : d.edge < -0.015 ? 'var(--red)' : 'var(--txt2)';
+              var etxt = d.edge === null ? '—' : ((d.edge>=0?'+':'')+(d.edge*100).toFixed(1)+'%');
+              return '<div style="display:flex;justify-content:space-between;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'
+                + '<span style="color:var(--txt2);">'+d.score+' @'+d.odd+'</span>'
+                + '<span>modelo '+d.pModelo.toFixed(2)+'% vs mercado '+d.pMercado.toFixed(2)+'%</span>'
+                + '<span style="color:'+ec+';font-weight:700;">edge '+etxt+'</span>'
+                + '<span style="color:var(--txt2);">R$'+(d.stake||0).toFixed(2)+'</span>'
+                + '</div>';
+            }).join('')
+          + '</div>';
+      }
+      var motHtml = (gate.motivos && gate.motivos.length)
+        ? '<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.6;">'
+          + gate.motivos.map(function(m){ return '• '+m; }).join('<br>') + '</div>'
+        : '';
+      evBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:'+gate.cor+';background:rgba(0,0,0,.25);">'+
+        '<div class="ab-title" style="color:'+gate.cor+';letter-spacing:2px;">'+gate.titulo+'</div>'+
+        '<div class="ab-text" style="font-size:11px;line-height:1.65;">'+gate.resumo+'</div>'+
+        motHtml + detHtml +
+        '<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-style:italic;">'+
+        'EV = probabilidade do modelo próprio × odd real, somado sobre o cluster, líquido de comissão. '+
+        'Não é threshold de probabilidade de mercado.</div>'+
+        '</div>';
+    }
+
+    summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + percBlock + evBlock + probBlock;
 
     // ── CARDS DE EXPANSÃO DA IA (scores de alerta sugeridos pelo Gênio) ──
     const expansaoIA = S._expansaoIA || [];
@@ -7773,10 +9158,41 @@ function analisarLive() {
   if(xgf>xgc*1.5&&gc<=gf) { narr='morta'; narrL='NARRATIVA MORTA'; narrC='var(--red)'; }
   else if(xgf>xgc) { narr='fraca'; narrL='NARRATIVA ENFRAQUECENDO'; narrC='var(--ylw)'; }
 
-  let layMsg='';
-  if(odd>6.0) { const t=parseFloat((odd*0.60).toFixed(1)); layMsg='ORDEM LAY a @'+t+' (não pague @'+odd+').'; }
-  else if(odd>3.5) { layMsg='Aguardar comprimir. Ordem a @'+parseFloat((odd*0.75).toFixed(1))+'.'; }
-  else if(odd>0) { lay='LAY AGORA @ '+odd; }
+  // ── GATILHO DE LAY — regra real de gestão: odd de LAY ≤ 5.5 ──────────
+  // A regra operacional é absoluta, não percentual: só dá LAY do placar
+  // corrente quando a odd de lay DELE comprimiu para 5.5 ou menos; aí LAY de
+  // todo o lucro travado naquele placar, o que potencializa os placares
+  // seguintes do caminho. O código anterior usava percentuais do preço
+  // corrente (odd*0.60 acima de 6.0, odd*0.75 acima de 3.5, "LAY AGORA"
+  // abaixo de 3.5) — três gatilhos relativos que não correspondiam à regra.
+  const LAY_ODD_MAX = 5.5;
+  let layMsg='', layLucro='';
+  const scoreAtual = gc+'-'+gf;
+  const noCluster  = (S.currentCluster||[]).find(s => s.score === scoreAtual);
+  // lucro travado nesse placar = retorno da perna − stake total do cluster
+  const stakeTotalLive = (S.currentCluster||[]).reduce((a,s)=>a+(s.stake||0),0);
+  const lucroTravado = noCluster && noCluster.odd>0
+    ? (noCluster.stake||0) * noCluster.odd - stakeTotalLive : 0;
+
+  if(odd > 0 && odd <= LAY_ODD_MAX) {
+    lay = 'LAY AGORA @ '+odd+' (≤ '+LAY_ODD_MAX+')';
+    layMsg = 'Gatilho atingido: a odd de lay do '+scoreAtual+' comprimiu para @'+odd+'. '
+      + 'LAY de TODO o lucro travado neste placar'
+      + (lucroTravado > 0 ? ' (R$'+lucroTravado.toFixed(2)+')' : '')
+      + ' — isso potencializa os próximos placares do caminho.';
+  } else if(odd > LAY_ODD_MAX) {
+    const falta = ((odd - LAY_ODD_MAX) / odd * 100);
+    layMsg = 'Ainda NÃO. Gatilho é @'+LAY_ODD_MAX+' e a odd está @'+odd
+      + ' — falta comprimir '+falta.toFixed(0)+'%. Deixe ordem de LAY a @'+LAY_ODD_MAX+' e aguarde.'
+      + (S._gols76_90 >= 30 ? ' Atenção: '+S._gols76_90+'% dos gols saem no 76-90\' — comprime mais tarde.' : '');
+  }
+  if(noCluster && lucroTravado > 0) {
+    layLucro = 'Lucro travado em '+scoreAtual+': R$'+lucroTravado.toFixed(2)
+      + ' (stake R$'+(noCluster.stake||0).toFixed(2)+' @'+noCluster.odd+' contra R$'+stakeTotalLive.toFixed(2)+' no cluster).';
+  } else if(!noCluster && (S.currentCluster||[]).length) {
+    layLucro = 'Placar '+scoreAtual+' está FORA do cluster — não há lucro travado para dar LAY.';
+  }
+  if(layLucro) layMsg = layMsg ? (layMsg+' '+layLucro) : layLucro;
 
   // Find next score
   let nextScore='';
@@ -8525,6 +9941,62 @@ function renderPerf() {
       }).join('');
     }
   }
+
+  // ── PAINEL DE MEDIÇÃO DE EDGE ──────────────────────────────────────
+  // Não mede lucro — mede se o modelo está na frente do mercado. É a única
+  // coisa que responde "esse robô tem edge real?".
+  try { renderPainelEdge(); } catch(e) { console.warn('[EDGE] painel:', e.message); }
+}
+
+function renderPainelEdge() {
+  var host = document.getElementById('perf-edge');
+  if(!host) {
+    var painel = document.getElementById('panel-perf');
+    if(!painel) return;
+    host = document.createElement('div');
+    host.id = 'perf-edge';
+    host.style.cssText = 'margin-top:14px;';
+    painel.appendChild(host);
+  }
+  var m = calcMetricasEdge();
+  if(!m || !m.n) {
+    host.innerHTML = '<div style="background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:14px;">'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:2px;margin-bottom:8px;">📐 MEDIÇÃO DE EDGE</div>'+
+      '<div style="font-size:11px;color:var(--txt2);line-height:1.6;">Ainda sem jogos com snapshot e placar final. '+
+      'A partir de agora cada análise grava a probabilidade do modelo para cada placar e a odd CS de entrada. '+
+      'Perto do kickoff, cole as odds atualizadas e clique em “capturar linha de fechamento” — é isso que permite medir CLV. '+
+      'Sem esses dois registros não existe como saber se o robô tem valor real.</div></div>';
+    return;
+  }
+  var venceBrier = (m.brierModelo !== null && m.brierMercado !== null) ? m.brierModelo < m.brierMercado : null;
+  var venceLL    = (m.logLossModelo !== null && m.logLossMercado !== null) ? m.logLossModelo < m.logLossMercado : null;
+  var corClv = m.clvT === null ? 'var(--txt3)' : m.clvT > 2 ? 'var(--grn)' : m.clvT < -2 ? 'var(--red)' : 'var(--ylw)';
+  function linha(rot, a, b, venceu){
+    var cor = venceu === null ? 'var(--txt3)' : venceu ? 'var(--grn)' : 'var(--red)';
+    return '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:7px 10px;background:#0a1520;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt2);">'+rot+'</div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">modelo <b style="color:'+cor+'">'+a+'</b></div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">odds CS <b>'+b+'</b></div>'+
+      '<div style="font-family:Space Mono,monospace;font-size:8px;color:'+cor+';">'+(venceu===null?'—':venceu?'modelo vence':'odds vencem')+'</div>'+
+    '</div>';
+  }
+  host.innerHTML =
+    '<div style="background:#0a1520;border:1px solid var(--border);border-radius:10px;padding:14px;">'+
+    '<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:2px;margin-bottom:10px;">📐 MEDIÇÃO DE EDGE — '+m.n+' jogo(s) com placar final, '+m.nClv+' com linha de fechamento</div>'+
+    '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">'+
+      '<span style="font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:'+corClv+';">'+
+      (m.clvMedio===null?'—':(m.clvMedio>=0?'+':'')+m.clvMedio.toFixed(2)+'%')+'</span>'+
+      '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">CLV médio'+
+      (m.clvT!==null?' · t = '+m.clvT.toFixed(2):'')+'</span>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--txt2);line-height:1.6;margin-bottom:12px;">'+m.veredito+'</div>'+
+    linha('Brier (menor é melhor)', m.brierModelo!==null?m.brierModelo.toFixed(5):'—', m.brierMercado!==null?m.brierMercado.toFixed(5):'—', venceBrier)+
+    linha('Log-loss (menor é melhor)', m.logLossModelo!==null?m.logLossModelo.toFixed(3):'—', m.logLossMercado!==null?m.logLossMercado.toFixed(3):'—', venceLL)+
+    '<div style="font-size:9px;color:var(--txt3);line-height:1.6;margin-top:10px;font-style:italic;">'+
+    'Brier e log-loss comparam a probabilidade do modelo com a probabilidade implícita nas próprias odds CS, sobre a grade inteira de placares. '+
+    'Se o modelo não vencer as odds CS aqui, fora da amostra, não há edge — só ruído bem formatado. '+
+    'ROI não serve como termômetro nesta escala: com acerto ~55% e retorno ~1.8x seriam necessárias da ordem de 3.300 operações para distinguir +3% de zero.'+
+    '</div></div>';
 }
 
 // ===== COPA DO MUNDO 2026 =====
@@ -10324,7 +11796,7 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       box.innerHTML =
         '<div class="g3" style="margin-bottom:14px;">'
         + card('🧠 TOTAL OPERADO', total, 'var(--acc)', 'Todos os jogos registrados pelo usuário, aprovados ou não.')
-        + card('🟢 APROVADOS PELO GÊNIO', a, 'var(--grn)', 'Somente jogos onde o Gênio encontrou edge operacional claro.')
+        + card('🟢 APROVADOS PELO GÊNIO', a, 'var(--grn)', 'Jogos aprovados pelo gate. A partir de 18/09 a aprovação é por EV do cluster (líquido de comissão); os registros anteriores foram estratificados por faixa de odds, não por edge — não compare os dois períodos como se medissem a mesma coisa.')
         + card('🔴 NÃO APROVADOS', n, 'var(--red)', 'Jogos que o usuário decidiu operar mesmo sem aprovação do Gênio.')
         + '</div>';
     }catch(e){ console.warn('renderGenioApprovalPerformance', e); }
