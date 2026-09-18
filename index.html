@@ -2233,63 +2233,19 @@ function avaliarAprovacaoGenio(ctx) {
   else if(rangeFails >= 2) motivoPrincipal = 'As odds estão fora do range mais comum nos jogos já registrados.';
   else motivoPrincipal = 'Perfil estatístico atípico — over, btts ou fav fora do range mais frequente.';
 
-  // ── ÍNDICE DE CONFIANÇA DE ENTRADA ──────────────────────
-  // Critério 1: Favorito (30 pontos máx)
-  var pFav = fav >= 1.40 && fav <= 1.80 ? 30
-           : fav > 1.80 && fav <= 2.00  ? 18
-           : fav > 2.00 && fav <= 2.35  ? 9
-           : 3;
-
-  // Critério 2: Over 2.5 (25 pontos máx)
-  var pOver = over <= 1.80 ? 25
-            : over <= 2.10 ? 15
-            : over <= 2.30 ? 8
-            : 3;
-
-  // Critério 3: BTTS (25 pontos máx)
-  var pBtts = btts <= 1.85 ? 25
-            : btts <= 2.10 ? 15
-            : btts <= 2.30 ? 8
-            : 3;
-
-  // Critério 4: Liquidez CS (10 pontos máx)
-  var liqTotal = 0;
-  if(S && S.csOddsLiq) {
-    var topScores = ['1-0','0-1','2-0','0-2','2-1','1-2','1-1','0-0'];
-    topScores.forEach(function(sc){ liqTotal += (S.csOddsLiq[sc]||0); });
-  }
-  var pLiq = liqTotal >= 200000 ? 10
-           : liqTotal >= 100000 ? 6
-           : liqTotal >= 50000  ? 3
-           : liqTotal > 0 ? 1 : 5; // sem odds coladas → neutro
-
-  // Critério 5: Contexto/Motivação (10 pontos máx)
-  var isCopa = /copa do mundo|world cup|copa 2026/i.test(fullText);
-  var semMotivacao = /amistoso|sem motivação|already qualified|já classificado/i.test(fullText);
-  var pCtx = semMotivacao ? 1
-           : isCopa       ? 10
-           : 5;
-
-  var indiceEntrada = pFav + pOver + pBtts + pLiq + pCtx;
-
-  var recomendacao, corIndice, iconIndice;
-  if(indiceEntrada >= 75) {
-    recomendacao = 'Perfil dentro do range mais comum';
-    corIndice = 'var(--grn)';
-    iconIndice = '📊';
-  } else if(indiceEntrada >= 55) {
-    recomendacao = 'Perfil parcialmente dentro do range comum';
-    corIndice = 'var(--ylw)';
-    iconIndice = '📊';
-  } else if(indiceEntrada >= 35) {
-    recomendacao = 'Perfil atípico — odds fora do range frequente';
-    corIndice = '#ff8c00';
-    iconIndice = '📊';
-  } else {
-    recomendacao = 'Perfil bem atípico — odds raras no histórico';
-    corIndice = 'var(--red)';
-    iconIndice = '📊';
-  }
+  // ── ÍNDICE DE PERFIL — agora vem do ponto único ─────────────────
+  // Antes esta função montava a própria pontuação 0-100 com degraus duros
+  // (fav 1.40-1.80 = 30 pontos, senão 18, senão 9, senão 3), enquanto
+  // checkPackball montava OUTRA pontuação, 0-10, com interpolação suave e
+  // pesos diferentes — e as duas apareciam na tela com o mesmo rótulo.
+  var _ip = calcIndicePerfil(fav, over, btts, {
+    compOficial: isCompOficial,
+    semMotivacao: /amistoso|sem motivação|already qualified|já classificado/i.test(fullText)
+  });
+  var indiceEntrada = _ip.indice;
+  var recomendacao  = _ip.rotulo;
+  var corIndice     = _ip.cor;
+  var iconIndice    = '📊';
 
   return {
     aprovado,
@@ -2310,7 +2266,7 @@ function avaliarAprovacaoGenio(ctx) {
     fav, btts, over,
     // Índice de Confiança de Entrada
     indiceEntrada, recomendacao, corIndice, iconIndice,
-    detalhesIndice: { pFav, pOver, pBtts, pLiq, pCtx }
+    detalhesIndice: _ip.componentes, pesosIndice: _ip.pesos, faixaPerfil: _ip.faixa
   };
 }
 
@@ -2318,24 +2274,31 @@ function renderIndiceConfianca(ap) {
   if(!ap || typeof ap.indiceEntrada === 'undefined') return '';
   var idx = ap.indiceEntrada;
   var d = ap.detalhesIndice || {};
-  var barW = Math.round(idx) + '%';
+  var w = ap.pesosIndice || { fav:40, over:20, btts:20, liq:10, ctx:10 };
+  var barW = Math.max(0, Math.min(100, Math.round(idx))) + '%';
   var barColor = ap.corIndice || 'var(--acc)';
 
+  // Rótulo honesto: isto mede TIPICIDADE, não confiança nem valor. O nome
+  // antigo ("ÍNDICE DE ENTRADA", em duas escalas diferentes na mesma tela)
+  // fazia parecer um veredito de entrada, que ele nunca foi.
   return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;margin-bottom:10px;">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-      + '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;">ÍNDICE DE ENTRADA</span>'
-      + '<span style="font-family:Barlow Condensed,sans-serif;font-size:20px;font-weight:900;color:'+barColor+';">'+ap.iconIndice+' '+idx+'<span style="font-size:11px;color:var(--txt3);">/100</span></span>'
+      + '<span style="font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);letter-spacing:1px;">PERFIL DO JOGO — O QUANTO ELE É TÍPICO</span>'
+      + '<span style="font-family:Barlow Condensed,sans-serif;font-size:20px;font-weight:900;color:'+barColor+';">'+idx+'<span style="font-size:11px;color:var(--txt3);">/100</span></span>'
     + '</div>'
     + '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:6px;margin-bottom:8px;">'
       + '<div style="background:'+barColor+';height:100%;border-radius:4px;width:'+barW+';transition:width .5s;"></div>'
     + '</div>'
     + '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;color:'+barColor+';margin-bottom:8px;">'+ap.recomendacao+'</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito <b style="color:var(--txt);">'+d.pFav+'/30</b></div>'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over 2.5 <b style="color:var(--txt);">'+d.pOver+'/25</b></div>'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS <b style="color:var(--txt);">'+d.pBtts+'/25</b></div>'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez CS <b style="color:var(--txt);">'+d.pLiq+'/10</b></div>'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto <b style="color:var(--txt);">'+d.pCtx+'/10</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito <b style="color:var(--txt);">'+(d.fav||0)+'/'+w.fav+'</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over 2.5 <b style="color:var(--txt);">'+(d.over||0)+'/'+w.over+'</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS <b style="color:var(--txt);">'+(d.btts||0)+'/'+w.btts+'</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez CS <b style="color:var(--txt);">'+(d.liq||0)+'/'+w.liq+'</b></div>'
+      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto <b style="color:var(--txt);">'+(d.ctx||0)+'/'+w.ctx+'</b></div>'
+    + '</div>'
+    + '<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-style:italic;line-height:1.5;">'
+    + 'Mede semelhança com o jogo médio do método, não valor. Um jogo atípico com EV positivo vale mais que um típico sem EV — quem decide é o bloco de EDGE REAL.'
     + '</div>'
   + '</div>';
 }
@@ -2369,6 +2332,86 @@ function updatePkStatusFromApproval() {
   const ap = avaliarAprovacaoGenio({fav,btts,over});
   S.lastGenioApproval = ap;
   el.innerHTML = renderIndiceConfianca(ap) + renderGenioApprovalBox(ap);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÍNDICE DE PERFIL — PONTO ÚNICO (antes eram três)
+// ═══════════════════════════════════════════════════════════════════
+// Existiam TRÊS pontuações competindo pela mesma decisão, duas delas com o
+// mesmo rótulo na tela:
+//
+//   avaliarAprovacaoGenio → indiceEntrada, escala 0-100, degraus duros,
+//                           rótulo "ÍNDICE DE ENTRADA"
+//   checkPackball        → scoreIdx, escala 0-10, interpolação suave,
+//                           rótulo "ÍNDICE DE ENTRADA"
+//   renderCluster        → probTotal, soma de 1/odd, rótulo "FORTE/FRACO"
+//
+// As duas primeiras usavam pesos e cortes diferentes para as mesmas odds; a
+// terceira media outra coisa completamente (cobertura de mercado) e era a
+// que mais parecia um veredito.
+//
+// Consolidado assim: UMA pontuação, na escala suave (que é a versão evoluída),
+// normalizada para 0-100, e com o nome honesto — ela mede TIPICIDADE, ou seja
+// o quanto este jogo se parece com o jogo médio do método. Isso tem valor
+// diagnóstico, mas não é edge e nunca foi. Quem dá veredito é o gate de EV.
+// A cobertura (probTotal) já foi separada e rotulada como cobertura.
+function calcIndicePerfil(fav, over, btts, opts) {
+  opts = opts || {};
+  function escalaSuave(valor, pontos) {
+    for(var i = 0; i < pontos.length - 1; i++) {
+      var v1 = pontos[i][0], s1 = pontos[i][1], v2 = pontos[i+1][0], s2 = pontos[i+1][1];
+      if(valor <= v1) return s1;
+      if(valor <= v2) { var t = (valor - v1) / (v2 - v1); return s1 + t * (s2 - s1); }
+    }
+    return pontos[pontos.length-1][1];
+  }
+
+  // Favorito é o sinal dominante do perfil (40%)
+  var pFav = escalaSuave(fav, [[1.30,10],[1.80,10],[2.00,7],[2.20,5],[2.35,3],[2.80,1]]);
+  // Over e BTTS só pesam de verdade quando o favorito já está fraco (>1.85):
+  // com favorito curto, over/btts altos não tornam o jogo atípico.
+  var pOverBase = escalaSuave(over, [[1.50,10],[1.80,10],[2.10,7],[2.30,5],[2.60,2]]);
+  var pOver = fav <= 1.85 ? Math.max(pOverBase, 7) : pOverBase;
+  var pBttsBase = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,7],[2.30,5],[2.60,2]]);
+  var pBtts = fav <= 1.85 ? Math.max(pBttsBase, 7) : pBttsBase;
+
+  // Liquidez CS — mesma lista de placares nos dois chamadores (antes eram
+  // duas listas diferentes, o que dava totais diferentes para o mesmo jogo)
+  var liqTotal = 0;
+  if(S && S.csOddsLiq) {
+    ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3','0-0'].forEach(function(sc){
+      liqTotal += (S.csOddsLiq[sc] || 0);
+    });
+  }
+  // sem odds coladas → neutro, não zero (ausência de dado não é sinal ruim)
+  var pLiq = liqTotal === 0 ? 5
+           : liqTotal >= 200000 ? 10
+           : liqTotal >= 100000 ? 6
+           : liqTotal >= 50000  ? 3 : 1;
+
+  var pCtx = opts.semMotivacao ? 1 : opts.compOficial ? 10 : 5;
+
+  var idx10 = pFav*0.40 + pOver*0.20 + pBtts*0.20 + pLiq*0.10 + pCtx*0.10;
+  var idx100 = Math.round(idx10 * 10);
+
+  var faixa, rotulo, cor;
+  if(idx100 >= 75)      { faixa='tipico';        rotulo='Perfil dentro do range mais comum do método'; cor='var(--grn)'; }
+  else if(idx100 >= 55) { faixa='semi_tipico';   rotulo='Perfil parcialmente dentro do range comum';   cor='var(--ylw)'; }
+  else if(idx100 >= 35) { faixa='atipico';       rotulo='Perfil atípico — odds fora do range frequente'; cor='#ff8c00'; }
+  else                  { faixa='muito_atipico'; rotulo='Perfil bem atípico — odds raras no histórico'; cor='var(--red)'; }
+
+  return {
+    indice: idx100, faixa: faixa, rotulo: rotulo, cor: cor,
+    liqTotal: liqTotal,
+    componentes: {
+      fav:  +(pFav*4).toFixed(0),   // reescalados para o peso em 0-100
+      over: +(pOver*2).toFixed(0),
+      btts: +(pBtts*2).toFixed(0),
+      liq:  +(pLiq).toFixed(0),
+      ctx:  +(pCtx).toFixed(0)
+    },
+    pesos: { fav:40, over:20, btts:20, liq:10, ctx:10 }
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2899,54 +2942,16 @@ function checkPackball() {
   if(isAmistoso) motivoContexto = 'Amistosos têm alta variância — o Gênio prefere ligas com contexto real.';
   else if(semMotivacao) motivoContexto = 'Jogo sem motivação real — o Gênio prefere jogos com algo em disputa.';
 
-  // ── ÍNDICE DE ENTRADA — escala suave, sem saltos abruptos em pontos de corte ──
-  // Função de interpolação: dado um valor e pontos de referência, calcula score gradual
-  function escalaSuave(valor, pontos) {
-    // pontos = [[valor1,score1], [valor2,score2], ...] em ordem crescente de valor
-    for(var i=0; i<pontos.length-1; i++) {
-      var v1=pontos[i][0], s1=pontos[i][1], v2=pontos[i+1][0], s2=pontos[i+1][1];
-      if(valor <= v1) return s1;
-      if(valor <= v2) {
-        var t = (valor-v1)/(v2-v1);
-        return s1 + t*(s2-s1);
-      }
-    }
-    return pontos[pontos.length-1][1];
-  }
-
-  // ── ÍNDICE RECALIBRADO — Fav é o critério dominante ──
-  // Over e BTTS só penalizam quando o fav já está fraco (>1.85)
-  // Quando o fav é forte (≤1.80), over/btts altos NÃO geram cautela —
-  // o favorito pode vencer 1-0 ou 2-0 independente do BTTS/over
-
-  // Critério 1 — Favorito (40%): peso aumentado — é o sinal principal
-  var pFav = escalaSuave(fav, [[1.30,10],[1.80,10],[2.00,7],[2.20,5],[2.35,3],[2.80,1]]);
-
-  // Critério 2 — Over 2.5 (20%): penaliza menos, e só reduz significativamente
-  // quando o fav também está fraco (>1.85). Se fav é forte, over alto é tolerável.
-  var pOverBase = escalaSuave(over, [[1.50,10],[1.80,10],[2.10,7],[2.30,5],[2.60,2]]);
-  // Bônus: se fav forte (≤1.85), over alto perde peso (não penaliza tanto)
-  var pOver = fav <= 1.85 ? Math.max(pOverBase, 7) : pOverBase;
-
-  // Critério 3 — BTTS (20%): mesma lógica — se fav é forte,
-  // BTTS alto só diz que a zebra PODE marcar, não que o jogo será caótico
-  var pBttsBase = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,7],[2.30,5],[2.60,2]]);
-  var pBtts = fav <= 1.85 ? Math.max(pBttsBase, 7) : pBttsBase;
-
-  pFav = Math.round(pFav*10)/10;
-  pOver = Math.round(pOver*10)/10;
-  pBtts = Math.round(pBtts*10)/10;
-
-  // Critério 4 — Liquidez CS (10%)
-  var liqTotal = 0;
-  if(S.csOddsLiq) {
-    ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3'].forEach(function(s){ liqTotal += S.csOddsLiq[s]||0; });
-  }
-  var pLiq = liqTotal > 200000 ? 10 : liqTotal > 100000 ? 6 : liqTotal > 50000 ? 3 : 1;
-  // Critério 5 — Contexto (10%)
-  var pContexto = _isCompOficial ? 10 : 5;
-
-  var scoreIdx = Math.round(pFav*0.40 + pOver*0.20 + pBtts*0.20 + pLiq*0.10 + pContexto*0.10);
+  // ── ÍNDICE DE PERFIL — mesmo ponto único que avaliarAprovacaoGenio ──
+  // Esta função tinha a sua própria escala 0-10, com pesos próprios e uma
+  // lista de placares diferente para somar liquidez. Duas contas para a mesma
+  // pergunta, exibidas com o mesmo nome na tela. Agora é uma só.
+  var _ipPk = calcIndicePerfil(fav, over, btts, {
+    compOficial: _isCompOficial,
+    semMotivacao: semMotivacao
+  });
+  var indicePerfil = _ipPk.indice;          // 0-100, escala única
+  var scoreIdx = Math.round(indicePerfil/10); // compat: os cortes abaixo usam 0-10
 
   // Ler odds reais para mensagem contextual
   var overVal = parseFloat(document.getElementById('pk-over')?.value) || 0;
