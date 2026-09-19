@@ -1135,6 +1135,7 @@ const S = {
   chatHistory: [],
   csOdds: {},
   csOddsLiq: {},
+  csOddsLay: {},   // odd de LAY por placar — usada só para conferir sanidade do BACK
   lastGenioApproval: null
 };
 function save() { localStorage.setItem('cs_v6h', JSON.stringify(S.hist)); }
@@ -1552,6 +1553,7 @@ function criarJogo() {
     S.currentCluster = []; // limpa cluster do jogo anterior
     S.csOdds = {};
     S.csOddsLiq = {};
+    S.csOddsLay = {};
     saveGames();
     // Limpar APENAS os cards do cluster e o resultado — manter tela de análise intacta
     const out = document.getElementById('resultado-out');
@@ -2053,6 +2055,7 @@ function selectSbGame(id) {
   S.currentCluster = [];
   S.csOdds = {};
   S.csOddsLiq = {};
+  S.csOddsLay = {};
   S.chatHistory = [];
   // ── ESTADO DO MODELO POR JOGO ─────────────────────────────────────
   // Sem isto, o lado do favorito e a forma dos times do jogo ANTERIOR
@@ -2438,21 +2441,68 @@ function extrairAcademia(texto) {
     jogos.push({ data:m[1], casa:m[2].trim(), gc:+m[3], gf:+m[4], fora:m[5].trim() });
   }
   if(jogos.length >= 2) {
+    // ── ORIENTAR O H2H AO MANDO DESTA PARTIDA ────────────────────────
+    // O H2H da Academia alterna o mando: metade dos jogos tem o mandante
+    // de hoje como visitante. Contar os placares como vêm na tabela mistura
+    // as duas orientações e produz número errado com cara de número certo.
+    //
+    // Erro real, Brighton x Arsenal (19/09): o parser devolveu
+    // placar_mais_freq = "2-0" — só que os dois "2-0" do histórico eram
+    // Arsenal 2-0 Brighton, ou seja 0-2 no mando de hoje. Na orientação que
+    // vale para este jogo, 2-0 (Brighton por dois) NUNCA aconteceu nos dez
+    // confrontos. Dois consumidores leem esse campo esperando o mando atual:
+    // a comparação com o placar do cluster e a leitura de "a zebra marca".
+    // O mesmo vale para visitante_marca_pct: 80% na tabela crua, 90% quando
+    // se pergunta o que importa — o visitante DE HOJE marcou?
+    function _norm(s){ return String(s||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+    function _parecido(a, b){
+      a = _norm(a); b = _norm(b);
+      if(!a || !b) return false;
+      if(a === b || a.indexOf(b) === 0 || b.indexOf(a) === 0) return true;
+      var ta = a.split(' ')[0], tb = b.split(' ')[0];
+      return ta.length >= 4 && ta === tb;
+    }
+    var mandanteHoje = timeCasa;
+    var orientou = false;
+    if(mandanteHoje) {
+      orientou = jogos.some(function(j){ return _parecido(j.casa, mandanteHoje) || _parecido(j.fora, mandanteHoje); });
+    }
+    if(!orientou) out._avisos.push('H2H não orientado: não identifiquei o mandante de hoje nas linhas do confronto direto');
+
     var n = jogos.length, btts=0, over=0, gols=0, emp=0, visMarca=0, freq={};
+    var orientados = [];
     jogos.forEach(function(j){
-      gols += j.gc + j.gf;
-      if(j.gc+j.gf > 2.5) over++;
-      if(j.gc>0 && j.gf>0) btts++;
-      if(j.gc === j.gf) emp++;
-      if(j.gf > 0) visMarca++;
-      var k = j.gc+'-'+j.gf; freq[k] = (freq[k]||0)+1;
+      // gm = gols do mandante DE HOJE, gv = gols do visitante DE HOJE
+      var gm = j.gc, gv = j.gf;
+      if(orientou && !_parecido(j.casa, mandanteHoje)) { gm = j.gf; gv = j.gc; }
+      orientados.push({ gm:gm, gv:gv });
+      gols += gm + gv;
+      if(gm+gv > 2.5) over++;
+      if(gm>0 && gv>0) btts++;
+      if(gm === gv) emp++;
+      if(gv > 0) visMarca++;
+      var k = gm+'-'+gv; freq[k] = (freq[k]||0)+1;
     });
-    var maisFreq = Object.keys(freq).sort(function(a,b){ return freq[b]-freq[a]; })[0];
+    // desempate do placar mais frequente: o mais recente entre os empatados
+    var maxFreq = Math.max.apply(null, Object.keys(freq).map(function(k){ return freq[k]; }));
+    var empatados = Object.keys(freq).filter(function(k){ return freq[k] === maxFreq; });
+    var maisFreq = empatados[0];
+    if(empatados.length > 1) {
+      for(var iw = 0; iw < orientados.length; iw++) {
+        var kw = orientados[iw].gm + '-' + orientados[iw].gv;
+        if(empatados.indexOf(kw) >= 0) { maisFreq = kw; break; }   // jogos vêm do mais recente
+      }
+    }
     out.h2h = { amostra:n,
       btts_pct:+(100*btts/n).toFixed(1), over25_pct:+(100*over/n).toFixed(1),
       media_gols:+(gols/n).toFixed(2), empates_pct:+(100*emp/n).toFixed(1),
       visitante_marca_pct:+(100*visMarca/n).toFixed(1), placar_mais_freq:maisFreq,
-      _jogos: jogos.map(function(j){ return j.data+' '+j.casa+' '+j.gc+'-'+j.gf+' '+j.fora; }) };
+      _orientado: orientou, _mandante: mandanteHoje || null,
+      _freq: freq, _empatados: empatados.length > 1 ? empatados : null,
+      _jogos: jogos.map(function(j, ij){ return j.data+' '+j.casa+' '+j.gc+'-'+j.gf+' '+j.fora +
+        ' [mando de hoje: ' + orientados[ij].gm + '-' + orientados[ij].gv + ']'; }) };
   }
 
   // ─────────────── blocos de GOLS (casa / fora / global) ───────────────
@@ -2968,6 +3018,118 @@ function overroundTabelaCS() {
   return soma;
 }
 
+// ===== SANIDADE DA TABELA CS — preço corrompido ======================
+// Caso real, Brighton x Arsenal (19/09): a tabela trouxe 2-2 com BACK @5.0
+// e LAY @19.0. Um back de 5.0 seria 20% de probabilidade — o preço mais curto
+// da tabela inteira, mais curto que o 1-1 @7.8 num jogo de over 2,5 @2.06.
+// É impossível, e dá para PROVAR só com as odds, sem olhar liquidez nenhuma:
+//
+//   soma de 1/odd da tabela inteira COM o 2-2 @5.0 ......... 118.5%
+//   soma de 1/odd da tabela inteira SEM o 2-2 .............. 98.5%
+//
+// Nenhum book fecha abaixo de 100%. Se tirar UM placar derruba a soma para
+// menos de 100%, aquele placar sozinho carregava mais que toda a margem da
+// exchange — o preço está errado, não o resto da tabela. Pelo que sobra, a
+// probabilidade real do 2-2 é ~5,5% (odd ~@18), que é onde a LAY está.
+//
+// Isso não é decisão por liquidez: é cruzamento das odds de todos os placares
+// entre si, que é exatamente a fonte que o método manda usar. O placar não é
+// "descartado por ser pouco líquido" — ele é marcado porque o preço que veio
+// é aritmeticamente impossível diante dos outros 18 preços da mesma tabela.
+var CS_OVERROUND_ESTOURADO = 1.14;   // acima disso a tabela tem excesso anormal
+var CS_OVERROUND_MINIMO    = 1.02;   // abaixo disso um book completo não fecha
+var CS_LAY_RATIO_ABSURDO   = 2.5;    // back 2.5x menor que a lay, em placar curto
+var CS_PROB_CURTA          = 8.0;    // "placar curto" = >= 8% implícito
+
+function sanearTabelaCS(csOdds, csLay) {
+  var res = { suspeitos: {}, soma: 0, n: 0, completa: false };
+  if(!csOdds) return res;
+  csLay = csLay || {};
+  var chaves = Object.keys(csOdds).filter(function(sc){
+    return csOdds[sc] > 1 && (/^\d-\d$/.test(sc) || sc.indexOf('any_other') === 0);
+  });
+  chaves.forEach(function(sc){ res.soma += 1/csOdds[sc]; });
+  res.n = chaves.length;
+  res.completa = res.n >= 14;
+
+  chaves.forEach(function(sc){
+    var odd  = csOdds[sc];
+    var prob = 100/odd;
+    var somaSem = res.soma - 1/odd;
+    var motivos = [], faixa = null;
+
+    // TESTE 1 — a tabela inteira contra esse preço
+    if(res.completa && res.soma > CS_OVERROUND_ESTOURADO && somaSem < CS_OVERROUND_MINIMO) {
+      motivos.push('a tabela soma ' + (res.soma*100).toFixed(1) + '% com esse preço e ' +
+                   (somaSem*100).toFixed(1) + '% sem ele — um book não fecha abaixo de 100%');
+      // faixa justa: o que sobra para esse placar se o book fechar entre 102% e 108%
+      var pMin = 1.02 - somaSem, pMax = 1.08 - somaSem, pMid = 1.04 - somaSem;
+      if(pMin > 0.002 && pMax > pMin) {
+        faixa = { min:+(1/pMax).toFixed(1), max:+(1/pMin).toFixed(1), centro:+(1/pMid).toFixed(1) };
+      }
+    }
+    // TESTE 2 — o back contra a lay DO MESMO placar (só em placar curto)
+    var lay = csLay[sc];
+    if(lay > 1 && prob >= CS_PROB_CURTA && lay / odd >= CS_LAY_RATIO_ABSURDO) {
+      motivos.push('back @' + odd + ' contra lay @' + lay + ' — spread de ' +
+                   (lay/odd).toFixed(1) + 'x num placar de ' + prob.toFixed(1) + '% implícito');
+    }
+    if(motivos.length) {
+      res.suspeitos[sc] = { odd: odd, lay: lay || null, prob: +prob.toFixed(1),
+                            motivos: motivos, faixa: faixa };
+    }
+  });
+
+  var lista = Object.keys(res.suspeitos);
+  if(lista.length) {
+    console.warn('[TABELA CS] ' + lista.length + ' preço(s) incoerente(s) com o resto da tabela: ' +
+      lista.map(function(sc){
+        var s = res.suspeitos[sc];
+        return sc + ' @' + s.odd + (s.faixa ? ' (justa ~@' + s.faixa.centro + ')' : '');
+      }).join(', ') + ' — neutralizados: não viram âncora, não entram no Dutch.');
+    lista.forEach(function(sc){
+      console.warn('  ' + sc + ': ' + res.suspeitos[sc].motivos.join(' | '));
+    });
+  }
+  return res;
+}
+
+// consulta rápida usada por todas as camadas (score em perspectiva REAL da tabela)
+function oddCorrompida(scoreReal) {
+  return !!(S._oddsSuspeitas && S._oddsSuspeitas[scoreReal]);
+}
+
+// ===== O 0-0 ENTRA OU NÃO? — uma regra só, nos três lugares =========
+// Antes esta decisão estava escrita três vezes, sempre como o mesmo par de
+// cortes duros: over > 2.20 E ambas >= 1.90. Dois problemas medidos:
+//   1) é um penhasco. No cenário de teste "jogo que trava" o over era
+//      exatamente 2.20 — reprovava por não ser MAIOR que 2.20, com btts
+//      folgado em 2.05. Um centésimo decidindo.
+//   2) o corte é só de odd de mercado agregada. Ignora o que o modelo diz
+//      sobre o 0-0 daquele jogo e ignora a leitura de obstáculo da partida.
+// Agora: o mercado de under claro continua abrindo a porta sozinho; fora
+// dele, quem decide é o modelo contra o preço do próprio 0-0 (é odd contra
+// odd, não narrativa), e a rota do percalço só entra como desempate quando
+// tem confiança alta E o modelo não contradiz.
+function zeroAzeroEntra(over, btts, oddZero, opts) {
+  opts = opts || {};
+  if(over > 2.20 && btts >= 1.90)
+    return { ok:true, motivo:'mercado de under claro (over@'+over+', ambas@'+btts+')' };
+  var pm = (typeof poissonScoreProb === 'function') ? poissonScoreProb(0,0) : null;
+  var pmkt = (oddZero > 1) ? 100/oddZero : null;
+  if(pm > 0 && pmkt > 0) {
+    var edge = pm/pmkt - 1;
+    if(edge >= 0)
+      return { ok:true, motivo:'modelo dá '+pm.toFixed(1)+'% ao 0-0 contra '+pmkt.toFixed(1)+'% do preço' };
+    if(opts.confPercalco >= 0.70 && edge >= -0.08)
+      return { ok:true, motivo:'rota do percalço '+(opts.tipo||'?')+' ('+Math.round(100*opts.confPercalco)+
+               '% de confiança) e o modelo não contradiz o preço (edge '+(100*edge).toFixed(0)+'%)' };
+    return { ok:false, motivo:'over@'+over+' / ambas@'+btts+' não é under claro e o modelo dá '+
+             pm.toFixed(1)+'% ao 0-0 contra '+pmkt.toFixed(1)+'% do preço (edge '+(100*edge).toFixed(0)+'%)' };
+  }
+  return { ok:false, motivo:'jogo não é genuinamente under (over@'+over+', ambas@'+btts+')' };
+}
+
 function resolverSplitLambda(lamTotal, favOdd, bttsOdd, rhoPadrao) {
   if(!(lamTotal > 0) || !(favOdd > 1.01)) return null;
 
@@ -3137,8 +3299,57 @@ function calcPoisson() {
       var pesoForma = PESO_MAX * Math.min(1, nEfetivo / N_SATURA);
       // dado de temporada anterior vale menos — contexto pode ter mudado
       if(formFav.temporadaAnterior || formZeb.temporadaAnterior) pesoForma *= 0.5;
-      var rFinal = rMerc * (1 - pesoForma) + rReal * pesoForma;
-      rFinal = Math.max(0.34, Math.min(0.92, rFinal));
+      // ── TRAVA DE AJUSTE — a forma não pode quebrar o encaixe do mercado ──
+      // O peso proporcional à amostra não bastou. Medido em Brighton x
+      // Arsenal (19/09), com amostra 2 e peso de apenas 13%:
+      //
+      //   sem blend .... favorito: modelo 53.6% vs mercado 54.3%  (erro 0.7pp)
+      //   com blend .... favorito: modelo 50.1% vs mercado 54.3%  (erro 4.2pp)
+      //
+      // Seis vezes pior. E não é um detalhe de calibração: o edge de placares
+      // individuais virou até 28pp com isso — o 2-0 saiu de -9% para +6%, o
+      // 0-1 de -14% para -19%. Ou seja, quem entra e quem sai do cluster
+      // passou a ser decidido por duas partidas de setembro.
+      //
+      // A regra agora é de encaixe, não de tamanho de amostra: a forma entra
+      // até onde o modelo continuar reproduzindo as odds que o alimentaram.
+      // Passou da tolerância, o peso recua até caber. Amostra grande e
+      // coerente com o mercado passa inteira; amostra pequena e destoante
+      // quase não move nada — que é o comportamento que se quer nos dois casos.
+      var TOL_AJUSTE = 1.0;   // pp de piora tolerada no pior dos três mercados
+      var alvoFavChk  = favOddPk > 1 ? 100/favOddPk : null;
+      var alvoBttsChk = bttsOdd  > 1 ? 100/bttsOdd  : null;
+      // a comparação é MERCADO A MERCADO, não pelo pior dos dois: o blend não
+      // pode piorar o encaixe do favorito só porque o de ambas marcam já
+      // estava folgado. Era assim que 2.6pp de erro no favorito passavam.
+      function _errosDoR(r) {
+        var mm = csMercados(csGrid(lam*r, lam*(1-r), rhoJogo));
+        return {
+          fav:  alvoFavChk  != null ? Math.abs(mm.pFav*100  - alvoFavChk)  : 0,
+          btts: alvoBttsChk != null ? Math.abs(mm.pBtts*100 - alvoBttsChk) : 0
+        };
+      }
+      function _rClamp(p){ return Math.max(0.34, Math.min(0.92, rMerc*(1-p) + rReal*p)); }
+      var erroBase = _errosDoR(Math.max(0.34, Math.min(0.92, rMerc)));
+      function _cabe(p) {
+        var e = _errosDoR(_rClamp(p));
+        return e.fav <= erroBase.fav + TOL_AJUSTE && e.btts <= erroBase.btts + TOL_AJUSTE;
+      }
+      var pesoPedido = pesoForma;
+      var passos = 0;
+      while(pesoForma > 0.001 && !_cabe(pesoForma) && passos < 40) {
+        pesoForma = Math.max(0, pesoForma - 0.02);
+        passos++;
+      }
+      var rFinal = _rClamp(pesoForma);
+      if(passos > 0) {
+        var ePed = _errosDoR(_rClamp(pesoPedido));
+        console.log('[λ SPLIT] trava de ajuste: peso da forma recuou de ' +
+          (100*pesoPedido).toFixed(0) + '% para ' + (100*pesoForma).toFixed(0) +
+          '% — no peso pedido o modelo errava ' + ePed.fav.toFixed(1) + 'pp no favorito e ' +
+          ePed.btts.toFixed(1) + 'pp em ambas, contra ' + erroBase.fav.toFixed(1) + 'pp e ' +
+          erroBase.btts.toFixed(1) + 'pp só com as odds.');
+      }
       console.log('[λ SPLIT] peso da forma = ' + (100*pesoForma).toFixed(0) + '% ' +
         '(amostra efetiva ' + nEfetivo + ' jogo(s)' +
         ((formFav.temporadaAnterior||formZeb.temporadaAnterior)?', temporada anterior':'') + ')');
@@ -3576,6 +3787,7 @@ function parseCS() {
 
   S.csOdds = {};
   S.csOddsLiq = {}; // ← liquidez real por score
+  S.csOddsLay = {}; // ← odd de lay por score (conferência de sanidade do back)
 
   // PASSO 1: extrair e REMOVER mercados especiais ANTES de parsear scores
   const otherHome = rawText.match(/QUALQUER OUTRA VIT[ÓO]RIA EM CASA[\s\S]{0,30}?(\d+(?:[.,]\d+)?)/i);
@@ -3713,6 +3925,13 @@ function parseCS() {
       if(backOdd && backOdd >= 3.0 && !S.csOdds[score]) {
         S.csOdds[score] = backOdd;
         if(backLiq > 0) S.csOddsLiq[score] = backLiq; // ← PREENCHE LIQUIDEZ REAL
+        // A odd de LAY estava sendo lida e jogada fora. Ela é odd, não
+        // liquidez: serve para conferir se o BACK que veio faz sentido.
+        // Betfair mostra BACK (menor) e LAY (maior) do mesmo placar — se o
+        // back for absurdamente mais curto que a lay num placar curto, o
+        // preço veio errado. Foi o caso do 2-2 @5.0 com lay @19.0.
+        var _laySorted = allOdds.filter(function(o){ return o.v > backOdd; });
+        if(_laySorted.length) S.csOddsLay[score] = _laySorted[0].v;
         count++;
       }
     }
@@ -4787,11 +5006,30 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
   csOdds = csOdds || {};
   csOddsLiq = csOddsLiq || {};
 
+  // ── SANIDADE DA TABELA ANTES DE QUALQUER CAMADA ──────
+  // Roda aqui e não depois: se um preço corrompido chegar inteiro até as
+  // camadas, ele vira o placar "mais provável" da tabela e sequestra a
+  // âncora — foi exatamente o que aconteceu em Brighton x Arsenal.
+  S._oddsSuspeitas = sanearTabelaCS(csOdds, S.csOddsLay).suspeitos;
+  // O motor tem ~15 pontos que leem csOdds direto (regra do 2-2, do 0-0, do
+  // 1-1, complemento, reposição de piso...). Em vez de blindar um por um e
+  // esquecer o décimo sexto, o motor inteiro passa a trabalhar com a tabela
+  // sem o preço corrompido. A tabela original continua intacta em S.csOdds
+  // para o card poder mostrar o alerta com o preço que veio.
+  if(Object.keys(S._oddsSuspeitas).length) {
+    var _csLimpa = {};
+    Object.keys(csOdds).forEach(function(k){ if(!oddCorrompida(k)) _csLimpa[k] = csOdds[k]; });
+    csOdds = _csLimpa;
+  }
+
   // ── HELPERS PRÉ-INVERSÃO ─────────────────────────────
   // Quando favorito é visitante, as odds CS estão nos scores invertidos
   // Ex: pré-inversão 1-0 do favorito = score real 0-1 na Betfair
   function oddScoreMotor(score) {
     var realScore = favEhVisitante ? inv(score) : score;
+    // preço comprovadamente incoerente com o resto da tabela = como se não
+    // existisse odd. Nenhuma camada enxerga, nenhuma âncora nasce dele.
+    if(oddCorrompida(realScore)) return 0;
     return csOdds[realScore] || 0;
   }
   function liqScoreMotor(score) {
@@ -5144,9 +5382,14 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
         if(rotaPB.includes(sc) || rotaPA.includes(sc)) return;
         var p = sc.split('-').map(Number);
         if(p.length !== 2 || isNaN(p[0]) || isNaN(p[1])) return;
-        // 0-0 só entra se o mercado confirmar under de verdade (mesma regra
-        // que vale em todo o resto do motor — o percalço não a contorna)
-        if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) return;
+        // 0-0 passa pela regra única — que já considera a confiança desta
+        // leitura de obstáculo, em vez de barrar antes de olhar para ela
+        if(sc === '0-0') {
+          var _z0 = zeroAzeroEntra(over, btts, oddScoreMotor('0-0'),
+                      { confPercalco: percalco.confianca, tipo: percalco.tipo });
+          if(!_z0.ok) { console.log('[PERCALÇO] 0-0 é rota de '+percalco.tipo+' mas fica fora — '+_z0.motivo); return; }
+          console.log('[PERCALÇO] 0-0 entra na rota — '+_z0.motivo);
+        }
         // placar sem odd real não vira proteção
         if(!(oddScoreMotor(sc) > 0)) return;
         if(p[0] > p[1]) rotaPA.push(sc); else rotaPB.push(sc);
@@ -5589,10 +5832,17 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       // isolada bateu um número. Esta checagem faltava aqui — com as camadas
       // reativadas, o 0-0 passou a entrar em jogos de over 1.70 (volume alto),
       // que é o oposto do cenário onde ele pertence.
-      if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) {
-        console.log('[CS COMPLEMENTO] 0-0 qualifica pelo threshold ('+prob.toFixed(1)+
-          '%) mas o jogo não é genuinamente under (over@'+over+', btts@'+btts+') — ignorado');
-        return;
+      // Exceção: se o 0-0 for perna da ROTA DO PERCALÇO identificado para
+      // esta partida (o obstáculo lido do H2H e da forma daquele jogo), a
+      // regra genérica cede. O teste do cenário "jogo que trava" mostrava
+      // JOGO_TRAVA com rota 1-0/1-1/0-0 e o 0-0 sendo barrado aqui — a
+      // camada genérica derrubando justamente a leitura específica do jogo.
+      if(sc === '0-0') {
+        var _z1 = zeroAzeroEntra(over, btts, oddScoreMotor('0-0'), {
+          confPercalco: (S._percalco && (S._percalcoRota||[]).indexOf('0-0') >= 0) ? S._percalco.confianca : 0,
+          tipo: S._percalco && S._percalco.tipo });
+        if(!_z1.ok) { console.log('[CS COMPLEMENTO] 0-0 fica fora — '+_z1.motivo); return; }
+        console.log('[CS COMPLEMENTO] 0-0 entra — '+_z1.motivo);
       }
 
       // ── PLACAR DE VITÓRIA DA ZEBRA — analisar dados reais, não bloquear cego ──
@@ -6191,9 +6441,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
           pior+' cede (edge '+(piorVal*100).toFixed(1)+'%).');
       }
       if(!pior) break;
-      console.log('[CORTE] '+pior+' removido — '+(temModeloCorte
-        ? 'pior edge do cluster ('+(piorVal*100).toFixed(1)+'%)'
-        : 'maior odd (sem modelo disponível para EV)'));
+      console.log('[CORTE] '+pior+' removido — '+(oddScoreMotor(pior) > 0
+        ? (temModeloCorte ? 'pior edge do cluster ('+(piorVal*100).toFixed(1)+'%)'
+                          : 'maior odd (sem modelo disponível para EV)')
+        : 'não há preço válido para ele nesta tabela'));
       if(alvo === protection) protection = protection.filter(function(s){ return s !== pior; });
       else mainScores = mainScores.filter(function(s){ return s !== pior; });
     }
@@ -6246,6 +6497,24 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
         mainScores = mainScores.filter(function(s){ return s !== x.s; });
       });
     }
+    // 5c) placar sem odd REAL não pode ficar no cluster. Alguns perfis
+    //     trazem placares fixos na lista (o 2-2 do fallback de "pulou 1 gol",
+    //     por exemplo) e, se a odd daquele placar não existir na tabela ou
+    //     tiver sido neutralizada por preço incoerente, ele seguia até o card
+    //     e recebia stake — em Brighton x Arsenal o 2-2 @5.0 chegou assim ao
+    //     Dutch. Sai aqui, ANTES da reposição de piso, para o piso repor um
+    //     placar que existe de verdade.
+    [['A', mainScores], ['B', protection]].forEach(function(par){
+      par[1].slice().forEach(function(sc){
+        if(oddScoreMotor(sc) > 0) return;
+        if(total() <= PISO && sc === ancora) return;
+        console.log('[SEM ODD] ' + sc + ' removido do Plano ' + par[0] +
+          ' — não há preço válido para ele nesta tabela.');
+        if(par[0] === 'A') mainScores = mainScores.filter(function(x){ return x !== sc; });
+        else protection = protection.filter(function(x){ return x !== sc; });
+      });
+    });
+
     if(total() < PISO) {
       // repõe pelos placares mais prováveis do board que ainda não estão
       var candidatos = Object.keys(csOdds || {})
@@ -6663,6 +6932,9 @@ async function analisarJogo() {
     Object.keys(S.csOdds || {}).forEach(function(sc){
       // Ignora mercados especiais (any_other_*, etc) e scores já presentes
       if(!sc || sc.startsWith('any_other') || jaNoCluster[sc]) return;
+      // preço incoerente com o resto da tabela não resgata ninguém — seria
+      // justamente o placar de "maior probabilidade" da varredura
+      if(oddCorrompida(sc)) return;
       var partsRescan = sc.split('-');
       if(partsRescan.length !== 2 || isNaN(parseInt(partsRescan[0])) || isNaN(parseInt(partsRescan[1]))) return;
       var oddRescan = S.csOdds[sc];
@@ -6676,10 +6948,12 @@ async function analisarJogo() {
       // dois lados) — não só porque a odd isolada bateu um número.
       // Exige over>2.20 (fora da faixa "moderada/aberta") E btts>=1.90
       // (mercado não convicto de ambos marcarem) ao mesmo tempo.
-      if(sc === '0-0' && !(over > 2.20 && btts >= 1.90)) {
-        console.log('[REDE DE SEGURANÇA] 0-0 qualificaria pelo threshold ('+probRescan.toFixed(1)+
-          '%) mas o jogo não é genuinamente under (over@'+over+', btts@'+btts+') — não resgata.');
-        return;
+      if(sc === '0-0') {
+        var _z2 = zeroAzeroEntra(over, btts, S.csOdds['0-0'] || 0, {
+          confPercalco: (S._percalco && (S._percalcoRota||[]).indexOf('0-0') >= 0) ? S._percalco.confianca : 0,
+          tipo: S._percalco && S._percalco.tipo });
+        if(!_z2.ok) { console.log('[REDE DE SEGURANÇA] 0-0 não resgata — '+_z2.motivo); return; }
+        console.log('[REDE DE SEGURANÇA] 0-0 resgatado — '+_z2.motivo);
       }
 
       // ── CHECAGENS DE COERÊNCIA (antes ausentes aqui) ─────────────────
@@ -7580,12 +7854,25 @@ REGRAS ABSOLUTAS:
           } // fecha else do filtro under/prob
         }
       } catch(eGol) { console.warn('Alerta goleada falhou:', eGol.message); }
+
+      // ── A ÂNCORA TEM QUE SER UM PLACAR DA OPERAÇÃO ────────────────
+      // Erro real, Brighton x Arsenal (19/09): o card anunciou
+      // "🎯 Placar Projetado pelo Gênio: 2-2 — Maior Probabilidade" e o
+      // 2-2 não era nenhum dos cinco cards, não tinha stake e tinha sido
+      // removido do Dutch pela própria sanidade de odd, duas linhas antes.
+      // A âncora é escolhida dentro do motor; o calcStakes pode zerar ou
+      // rebaixar aquele placar DEPOIS (MIN RETORNO, odd suspeita, corte de
+      // teto) e ninguém avisava a âncora. Agora ela é reconciliada com o
+      // cluster que realmente foi para a tela: se o placar âncora não tem
+      // dinheiro em cima dele, ele não é o placar projetado.
+      try { reconciliarAncora(cluster, engineFinal); }
+      catch(eAnc) { console.warn('Reconciliação da âncora falhou:', eAnc.message); }
     } else {
       // Fallback: se engineFinal não disponível, usar extractCluster
       cluster = extractCluster(reply, stake);
       cluster = refinarArvorePremium(cluster, {fav:fav, over:over, btts:btts, text:texto, favEhVisitante:(engine && engine.favEhVisitante)});
     }
-    reply = syncNarrativaComClusterFinal(reply, cluster);
+    reply = syncNarrativaComClusterFinal(reply, cluster, engineFinal ? engineFinal.ancora : null);
 
     // Extract ALERTA DO GÊNIO from reply
     const alertaMatch = reply.match(/⚠️\s*ALERTA[:\s]+([^\n]+)/i);
@@ -7983,6 +8270,50 @@ function extractCluster(text, stake) {
   return cluster;
 }
 
+
+// ===== RECONCILIAÇÃO DA ÂNCORA =======================================
+// A âncora é o "placar projetado" do card — o placar que o método trata
+// como destino mais provável do caminho. Ela só faz sentido se for um
+// placar que está na operação e tem stake. Se o placar âncora saiu do
+// Dutch por qualquer motivo, a âncora passa para o placar do cluster com
+// a maior probabilidade DE MODELO (não a odd mais curta: foi a odd mais
+// curta que sequestrou a âncora no Brighton x Arsenal). Sem modelo
+// disponível, cai para a maior probabilidade de mercado entre os que
+// têm stake — e isso fica explícito no log.
+function reconciliarAncora(cluster, engineFinal) {
+  if(!engineFinal || !cluster || !cluster.length) return;
+  var comStake = cluster.filter(function(s){
+    return s.stake > 0 && s.tipo !== 'expansao' && !String(s.score||'').startsWith('any_other');
+  });
+  if(!comStake.length) return;
+  var atual = engineFinal.ancora;
+  var aindaVale = comStake.some(function(s){ return s.score === atual; });
+  if(aindaVale) return;
+
+  // o _modelProb só é preenchido no render, depois daqui — calcular agora
+  comStake.forEach(function(s){
+    if(!(s._modelProb > 0) && typeof calcModelProb === 'function') {
+      var pm = calcModelProb(s.score);
+      if(pm > 0) s._modelProb = pm;
+    }
+  });
+  var temModelo = comStake.some(function(s){ return s._modelProb > 0; });
+  var melhor = comStake.slice().sort(function(a,b){
+    if(temModelo) return (b._modelProb||0) - (a._modelProb||0);
+    return (b.prob||0) - (a.prob||0);
+  })[0];
+  if(!melhor) return;
+
+  var motivo = !atual ? 'não havia âncora definida'
+    : (cluster.some(function(s){ return s.score === atual; })
+        ? 'o placar ' + atual + ' ficou sem stake na operação'
+        : 'o placar ' + atual + ' não está no cluster final');
+  console.warn('[ÂNCORA] ' + motivo + ' — placar projetado passa para ' + melhor.score +
+    ' (' + (temModelo ? 'maior probabilidade do modelo: ' + (melhor._modelProb||0).toFixed(1) + '%'
+                     : 'maior probabilidade de mercado: ' + (melhor.prob||0).toFixed(1) + '%') + ').');
+  engineFinal.ancora = melhor.score;
+  if(melhor.tipo !== 'caminho') melhor.tipo = 'destino';
+}
 
 function calcStakes(cluster, stake, analysisText) {
   if(!cluster || cluster.length === 0) return;
@@ -9133,9 +9464,27 @@ function renderCluster(cluster, stake) {
     if(gate && gate.veredito === 'modelo_incoerente') {
       gateBdg = '<span class="bdg" style="color:var(--ylw);border-color:var(--ylw);background:rgba(0,0,0,.3);margin-left:4px;font-weight:900;">⚠️ ODDS INCOERENTES</span>';
     }
+    // preço corrompido na tabela: o operador precisa saber, porque o número
+    // que ele vê na Betfair pode não ser o que o robô leu
+    var suspBdg = '';
+    var _susp = S._oddsSuspeitas ? Object.keys(S._oddsSuspeitas) : [];
+    if(_susp.length) {
+      suspBdg = '<span class="bdg" title="' + _susp.map(function(sc){
+          var x = S._oddsSuspeitas[sc];
+          // o preço de equilíbrio do modelo é o número acionável: é a partir
+          // dele que o placar passaria a valer a pena se a odd real for outra
+          var _pmS = (typeof calcModelProb === 'function') ? calcModelProb(sc) : 0;
+          var _eq = _pmS > 0 ? ' — o robô só usaria este placar a partir de @' + (100/_pmS).toFixed(1) +
+                    ' (modelo dá ' + _pmS.toFixed(1) + '%); confira o preço real na Betfair' : '';
+          return sc + ' @' + x.odd + (x.faixa ? ' (pela tabela, justa ~@' + x.faixa.centro + ')' : '') +
+                 _eq + ' — ' + x.motivos.join('; ');
+        }).join(' | ').replace(/"/g,'') +
+        '" style="color:var(--org);border-color:var(--org);background:rgba(0,0,0,.3);margin-left:4px;font-weight:900;cursor:help;">⚠️ PREÇO SUSPEITO: ' +
+        _susp.join(', ') + '</span>';
+    }
     statsEl.innerHTML = '<span class="bdg bdg-b">'+total+' SCORES</span>'
       + '<span class="bdg" style="color:'+probColor+';border-color:'+probColor+';background:rgba(0,0,0,.3);margin-left:4px;">COBERTURA '+probTotal+'%</span>'
-      + gateBdg;
+      + gateBdg + suspBdg;
   }
 
   const colors = {
@@ -12292,7 +12641,7 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
     return arr.slice(0,-1).join(', ') + ' e ' + arr[arr.length-1];
   }
 
-  window.syncNarrativaComClusterFinal = function(reply, cluster){
+  window.syncNarrativaComClusterFinal = function(reply, cluster, ancora){
     try{
       if(!reply || !cluster) return reply;
 
@@ -12303,10 +12652,33 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       const planoBText = joinScores(built.planoB);
 
       // BLOCO Plano A + Plano B
+      // O lookahead antigo exigia quebra de linha antes do "O ..." seguinte.
+      // Em Brighton x Arsenal a IA escreveu tudo no mesmo parágrafo, o
+      // lookahead não casou, a frase sobreviveu inteira e o card saiu
+      // anunciando "Plano A (0-1, 0-2, 1-2, 1-3) e Plano B (1-1, 3-3)" —
+      // com 1-3 e 3-3, que não estavam no cluster. Agora a frase termina
+      // onde uma frase termina: no ponto final.
       reply = reply.replace(
-        /Minha seleção inclui o Plano A[\s\S]*?(?=\n\nO |\nO )/m,
-        `Minha seleção inclui o Plano A\n(placares do favorito como ${planoAText})\njunto com o Plano B\n(proteção via ${planoBText || 'sem proteção adicional'}).\n`
+        /Minha seleção inclui o Plano A[\s\S]*?\.(?=\s|$)/m,
+        `Minha seleção inclui o Plano A (${planoAText}) junto com o Plano B (proteção via ${planoBText || 'sem proteção adicional'}).`
       );
+
+      // A LISTA de placares da narrativa é a primeira coisa que se lê no card.
+      // Ela vinha da IA e podia divergir do cluster — em Brighton x Arsenal
+      // listou 0-0, que não recebeu stake nenhum. Ela passa a ser escrita a
+      // partir do cluster que foi para a tela, não do que a IA escolheu.
+      const listaFinal = built.rota.join('\n');
+      reply = reply.replace(
+        /(minha f[óo]rmula de placares para este jogo ser[áa]:\s*\n)(?:\s*(?:\d-\d|any_other_\w+)\s*\n?)+/i,
+        function(_m, cab){ return cab + listaFinal + '\n'; }
+      );
+
+      // A frase da âncora tem que citar a âncora que foi para o card
+      if(ancora) {
+        reply = reply.replace(/\bO\s+\d-\d\s+é o placar âncora/gi, 'O ' + ancora + ' é o placar âncora');
+        reply = reply.replace(/placar âncora (?:deste|desse) cluster é o \d-\d/gi,
+                              'placar âncora deste cluster é o ' + ancora);
+      }
 
       // Rota do jogo
       const rotaText = built.rota.join(' → ');
@@ -12314,6 +12686,35 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
         /⚡ Rota do Jogo[\s\S]*?(?=\nPOR QUE|\n5 SCORES|\n6 SCORES|\n7 SCORES)/m,
         `⚡ Rota do Jogo\n${rotaText}\n`
       );
+
+      // ── VARREDURA FINAL — frase que MANDA não pode citar placar de fora ──
+      // Distinção importante: a narrativa PODE e DEVE citar placares do
+      // histórico ("o último aqui terminou 0-1", "já tivemos 2-4 e 1-3") —
+      // isso é leitura de dado, não instrução de aposta. O que não pode é uma
+      // frase PRESCRITIVA (Plano A, Plano B, âncora, cluster, proteção, o que
+      // entra) nomear um placar que não está na operação. Quem lê o card não
+      // tem como saber se aquele 3-3 tem dinheiro em cima ou não.
+      const doCluster = {};
+      cluster.forEach(function(s){ if(s && s.score) doCluster[s.score] = true; });
+      if(ancora) doCluster[ancora] = true;
+      const rePrescritiva = /(plano a|plano b|âncora|ancora|cluster|seleção|selecao|proteção|protecao|entra como|entram como|minha fórmula|minha formula)/i;
+      const removidas = [];
+      reply = reply.split('\n').map(function(linha){
+        if(!rePrescritiva.test(linha)) return linha;
+        const frases = linha.split(/(?<=\.)\s+/);
+        const mantidas = frases.filter(function(fr){
+          if(!rePrescritiva.test(fr)) return true;
+          const citados = fr.match(/\b\d-\d\b/g) || [];
+          const fora = citados.filter(function(sc){ return !doCluster[sc]; });
+          if(fora.length) { removidas.push(fora.join(',') + ' → "' + fr.trim().slice(0,90) + '"'); return false; }
+          return true;
+        });
+        return mantidas.join(' ');
+      }).filter(function(l, i, a){ return l.trim() !== '' || (i>0 && a[i-1].trim() !== ''); }).join('\n');
+      if(removidas.length) {
+        console.warn('[NARRATIVA] ' + removidas.length + ' frase(s) prescritiva(s) citavam placar fora do cluster e foram removidas:');
+        removidas.forEach(function(r){ console.warn('   ' + r); });
+      }
 
       return reply;
 
