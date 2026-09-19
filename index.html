@@ -2831,8 +2831,27 @@ function calcPoisson() {
     if(totReal > 0) {
       var rMerc = lamFavMerc / lam;
       var rReal = lamFavReal / totReal;
-      var rFinal = rMerc * 0.60 + rReal * 0.40;   // 60% mercado, 40% forma
+      // ── PESO DA FORMA PROPORCIONAL À AMOSTRA ──────────────────────
+      // O peso era 40% fixo, independente de quantos jogos sustentavam a
+      // média. Em setembro isso é sério: com 2 jogos de Serie A disputados,
+      // 40% da repartição do λ passava a vir de uma amostra de 2 jogos.
+      // Medido em Bologna x Torino (amostra 2 para os dois): o blend puxou a
+      // razão de 0.558 para ~0.52 e o modelo passou a dizer 39.8% de vitória
+      // do Bologna contra 48.5% do mercado — erro de 8.7pp, o bastante para
+      // o próprio gate recusar dar veredito de EV.
+      // Agora o peso cresce com a amostra: ~7% com 1 jogo, 20% com 3,
+      // 33% com 5, e satura no teto de 40% a partir de 6 jogos.
+      var nFav = (formFav.amostra || 0), nZeb = (formZeb.amostra || 0);
+      var nEfetivo = Math.min(nFav, nZeb);
+      var PESO_MAX = 0.40, N_SATURA = 6;
+      var pesoForma = PESO_MAX * Math.min(1, nEfetivo / N_SATURA);
+      // dado de temporada anterior vale menos — contexto pode ter mudado
+      if(formFav.temporadaAnterior || formZeb.temporadaAnterior) pesoForma *= 0.5;
+      var rFinal = rMerc * (1 - pesoForma) + rReal * pesoForma;
       rFinal = Math.max(0.34, Math.min(0.92, rFinal));
+      console.log('[λ SPLIT] peso da forma = ' + (100*pesoForma).toFixed(0) + '% ' +
+        '(amostra efetiva ' + nEfetivo + ' jogo(s)' +
+        ((formFav.temporadaAnterior||formZeb.temporadaAnterior)?', temporada anterior':'') + ')');
       lamFavFinal = lam * rFinal;
       lamZebFinal = lam * (1 - rFinal);
       console.log('[λ SPLIT] razão mercado=' + rMerc.toFixed(3) +
@@ -3493,6 +3512,8 @@ var COMISSAO_BETFAIR = 0.065;   // comissão sobre lucro LÍQUIDO do mercado.
 var EDGE_TILT_K   = 3.0;        // sensibilidade da stake ao edge
 var EDGE_TILT_MIN = 0.55;       // nenhuma perna morre — a gestão ao vivo
 var EDGE_TILT_MAX = 1.80;       // precisa de todos os degraus do caminho
+var MIN_SCORES_CLUSTER = 5;     // piso operacional do método: nunca menos de 5
+                                // placares COM STAKE no cluster final
 
 // Distribuição de stake do Dutch — PONTO ÚNICO.
 // Antes o cálculo `stake_i ∝ 1/odd_i` estava copiado em 5 lugares de
@@ -8311,24 +8332,64 @@ function calcStakes(cluster, stake, analysisText) {
     else minRetornoDin = 0.30;
 
     var tentativas = 0;
-    while(lucroAtual / stake < minRetornoDin && ativos.length > 4 && tentativas < 5) {
+    // PISO DE 5 PLACARES: a condição era `ativos.length > 4`, o que permitia
+    // este laço derrubar o cluster de 5 para 4. Era o último estágio de corte
+    // do pipeline, então ele desfazia o piso que o STEP 5 tinha garantido.
+    // Observado em Bologna x Torino: foram para a tela 4 placares no Dutch.
+    while(lucroAtual / stake < minRetornoDin && ativos.length > MIN_SCORES_CLUSTER && tentativas < 5) {
       tentativas++;
       var candidato2 = null;
       // Prioridade 1: any_other com odd baixa
       candidato2 = cluster.find(function(s){
         return s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao';
       });
-      // Prioridade 2: planb menor prob
+      // ── SEGUNDO PONTO DE CORTE — agora também por EDGE ──────────────
+      // BUG REAL, pego em Bologna x Torino (19/09): este bloco escolhia quem
+      // sai pela MENOR PROBABILIDADE DE MERCADO, ignorando edge por completo.
+      // Ele desativou o 0-0 — que era o placar de MAIOR edge do jogo (+23%
+      // pelo modelo, +7% por uma referência independente) e o 3º mais provável
+      // da partida — deixando stake zero nele. O motor já corta por edge lá
+      // atrás; aqui o critério antigo desfazia essa escolha.
+      // Agora: entre os candidatos, sai o de PIOR edge. Sem modelo, cai no
+      // critério antigo (menor probabilidade) e o log diz qual foi usado.
+      var _criterioCorte = 'menor prob (sem modelo)';
+      function _edgeDe(s){
+        var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+          ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+        return edgeDoScore(pm, s.odd);
+      }
+      function _pior(lista){
+        if(!lista.length) return null;
+        var comEdge = lista.map(function(s){ return { s: s, e: _edgeDe(s) }; });
+        var temTodos = comEdge.every(function(x){ return x.e !== null; });
+        if(temTodos) {
+          _criterioCorte = 'pior edge';
+          return comEdge.sort(function(a,b){ return a.e - b.e; })[0].s;
+        }
+        return lista.slice().sort(function(a,b){ return a.prob - b.prob; })[0];
+      }
+      // Prioridade 2: plano B
       if(!candidato2) {
         var planbs2 = cluster.filter(function(s){ return s.tipo === 'planb' && s.odd > 0; });
-        if(planbs2.length > 1) candidato2 = planbs2.sort(function(a,b){ return a.prob-b.prob; })[0];
+        if(planbs2.length > 1) candidato2 = _pior(planbs2);
       }
-      // Prioridade 3: destino menor prob
+      // Prioridade 3: destino
       if(!candidato2) {
         var dests2 = cluster.filter(function(s){ return s.tipo === 'destino' && s.odd > 0; });
-        if(dests2.length > 1) candidato2 = dests2.sort(function(a,b){ return a.prob-b.prob; })[0];
+        if(dests2.length > 1) candidato2 = _pior(dests2);
       }
       if(!candidato2) break;
+      // rota do percalço identificado não sai por retorno mínimo — ela é a
+      // leitura do obstáculo real, e retorno por acerto não é motivo para
+      // abrir mão de proteção
+      if(S._percalcoRota && S._percalcoRota.indexOf(candidato2.score) >= 0) {
+        var _eRota = _edgeDe(candidato2);
+        if(_eRota === null || _eRota > -0.20) {
+          console.log('[MIN RETORNO DIN] '+candidato2.score+' seria cortado por retorno mínimo, '+
+            'mas é rota do percalço'+(_eRota!==null?' e tem edge '+(100*_eRota).toFixed(1)+'%':'')+' — mantido.');
+          break;
+        }
+      }
 
       var ehAncora2 = candidato2.score === (S.currentGame && S.currentGame.lastAncora);
       // Não remover scores essenciais em SUPER_EQUILIBRADO
@@ -8347,7 +8408,7 @@ function calcStakes(cluster, stake, analysisText) {
       candidato2.tipo = 'expansao';
       candidato2.stake = 0; candidato2.lucro = 0;
       console.log('[MIN RETORNO DIN] '+candidato2.score+' → expansão (min='+
-        (minRetornoDin*100).toFixed(0)+'%)');
+        (minRetornoDin*100).toFixed(0)+'%, critério: '+_criterioCorte+')');
 
       var novosAtivos = cluster.filter(function(s){ return s.odd > 0 && s.tipo !== 'expansao'; });
       if(novosAtivos.length === 0) break;
@@ -8373,6 +8434,74 @@ function calcStakes(cluster, stake, analysisText) {
     const oa=ord[a.tipo]??1, ob=ord[b.tipo]??1;
     return oa !== ob ? oa - ob : b.prob - a.prob;
   });
+
+  // ── STEP 6.5: PISO DE 5 PLACARES — garantia final ───────────────────
+  // Depois de todos os estágios de corte (máximo de scores, retorno mínimo,
+  // threshold dinâmico, edge), conferir que sobraram pelo menos 5 placares
+  // COM STAKE. Um placar rebaixado a 'expansao' tem stake zero: ele aparece
+  // no card mas não está coberto, então não conta para o piso.
+  // Se faltar, repõe pelos melhores candidatos da tabela CS — por edge quando
+  // há modelo, por probabilidade de mercado quando não há.
+  (function pisoFinal(){
+    function ativosComStake(){
+      return cluster.filter(function(s){
+        return s.score && !String(s.score).startsWith('any_other') &&
+               s.odd > 0 && s.stake > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+      });
+    }
+    var ativos = ativosComStake();
+    if(ativos.length >= MIN_SCORES_CLUSTER) return;
+
+    var faltam = MIN_SCORES_CLUSTER - ativos.length;
+    console.log('[PISO 5] cluster ficou com '+ativos.length+' placar(es) com stake — repondo '+faltam+'.');
+
+    // 1º: reativar placares que já estão no cluster mas foram zerados
+    var zerados = cluster.filter(function(s){
+      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+             !(s.stake > 0) && s.tipo !== 'expansao_especifica';
+    });
+    // 2º: trazer de fora da tabela CS o que não está no cluster
+    var jaTem = {}; cluster.forEach(function(s){ if(s.score) jaTem[s.score] = true; });
+    var deFora = Object.keys(S.csOdds || {}).filter(function(sc){
+      return /^\d-\d$/.test(sc) && !jaTem[sc] && S.csOdds[sc] > 1;
+    }).map(function(sc){
+      return { score: sc, odd: S.csOdds[sc], prob: +(100/S.csOdds[sc]).toFixed(1),
+               tipo: 'planb', stake: 0, lucro: 0, oddPG: +(S.csOdds[sc]/2).toFixed(1), _reposto: true };
+    });
+
+    function nota(s){
+      var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+        ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+      var e = edgeDoScore(pm, s.odd);
+      return e !== null ? e : (-1 + (s.prob || 0)/100);   // sem modelo: mais provável primeiro
+    }
+    var candidatos = zerados.concat(deFora).sort(function(a,b){ return nota(b) - nota(a); });
+
+    candidatos.slice(0, faltam).forEach(function(s){
+      if(s._reposto) cluster.push(s);
+      if(s.tipo === 'expansao') {
+        var pts = s.score.split('-').map(Number);
+        s.tipo = (pts[0] > pts[1]) ? 'destino' : 'planb';
+      }
+      console.log('[PISO 5] '+s.score+' @'+s.odd+' entra no Dutch'+
+        (s._reposto ? ' (veio da tabela CS)' : ' (estava zerado no cluster)')+
+        '  — critério: '+(nota(s) > -1 ? 'edge '+(100*nota(s)).toFixed(1)+'%' : 'probabilidade'));
+    });
+
+    // redistribuir a stake entre todos os ativos
+    var novos = cluster.filter(function(s){
+      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+             s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    if(novos.length) {
+      aplicarDutch(novos, stake);
+      novos.forEach(function(s){
+        s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+        s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+      });
+    }
+    console.log('[PISO 5] cluster final com '+ativosComStake().length+' placares cobertos.');
+  })();
 
   // ── STEP 7: Implied odds via modelo Poisson próprio (para EDGE badges) ──
   // ANTES: regex tentava ler uma "odd implícita" que a IA escrevia no
@@ -8515,15 +8644,14 @@ function renderCluster(cluster, stake) {
   }
 
   if(statsEl) {
+    // O veredito de EV da operação saiu do card a pedido do operador: quem
+    // decide operar ou não é ele, ao vivo. O cálculo de EV CONTINUA rodando —
+    // é ele que ordena os placares, inclina a stake e decide quem é cortado.
+    // O único aviso que permanece é quando o modelo não fecha com o mercado,
+    // porque aí a leitura de TODOS os placares fica comprometida.
     var gateBdg = '';
-    if(gate && gate.r) {
-      var gc = gate.cor;
-      var gtxt = gate.veredito === 'edge_real'       ? 'EV +'+gate.r.roi.toFixed(1)+'%'
-               : gate.veredito === 'edge_marginal'   ? 'EV +'+gate.r.roi.toFixed(1)+'% marginal'
-               : gate.veredito === 'sem_edge'        ? 'EV '+gate.r.roi.toFixed(1)+'%'
-               : gate.veredito === 'modelo_incoerente' ? 'MODELO NÃO FECHA'
-               : 'SEM EV';
-      gateBdg = '<span class="bdg" style="color:'+gc+';border-color:'+gc+';background:rgba(0,0,0,.3);margin-left:4px;font-weight:900;">'+gtxt+'</span>';
+    if(gate && gate.veredito === 'modelo_incoerente') {
+      gateBdg = '<span class="bdg" style="color:var(--ylw);border-color:var(--ylw);background:rgba(0,0,0,.3);margin-left:4px;font-weight:900;">⚠️ ODDS INCOERENTES</span>';
     }
     statsEl.innerHTML = '<span class="bdg bdg-b">'+total+' SCORES</span>'
       + '<span class="bdg" style="color:'+probColor+';border-color:'+probColor+';background:rgba(0,0,0,.3);margin-left:4px;">COBERTURA '+probTotal+'%</span>'
@@ -8718,67 +8846,52 @@ function renderCluster(cluster, stake) {
       'e reduz o retorno por acerto. Pior caso sempre = −R$'+stake+'.</div>'+
       '</div>';
 
-    // ── BLOCO DE EDGE REAL — o veredito de valor ─────────────────────────
-    // ── BLOCO DO PERCALÇO — por que o Plano B é esse ────────────────
-    var percBlock = '';
-    var _pc = S._percalco;
-    if(_pc && _pc.tipo !== 'INDETERMINADO') {
-      var evid = (_pc.evidencias||[]).map(function(e){ return '<div style="margin-top:2px;">• '+e+'</div>'; }).join('');
-      var evid2 = (_pc.evidenciasSecundarias||[]).length
-        ? '<div style="margin-top:8px;font-size:9px;color:var(--txt3);">Obstáculo secundário ('+_pc.tipoSecundario+'): '
-          + _pc.evidenciasSecundarias.join('; ') + '</div>' : '';
-      var tardio = _pc.decideTarde
-        ? '<div style="margin-top:8px;font-size:10px;color:var(--ylw);">⏰ '+_pc.decideTarde+
-          '% dos gols saem entre 76-90\' — este jogo decide tarde, a compressão das odds vem no fim.</div>' : '';
-      percBlock =
-        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:var(--acc2);background:rgba(0,0,0,.22);">'+
-        '<div class="ab-title" style="color:var(--acc2);letter-spacing:2px;">🧱 PERCALÇO PROVÁVEL — '+_pc.titulo+'</div>'+
-        '<div class="ab-text" style="font-size:11px;line-height:1.65;">'+_pc.leitura+'</div>'+
-        '<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.6;">'+
-        '<div style="color:var(--txt2);">O que aponta para isso nos dados deste confronto:</div>'+evid+'</div>'+
-        evid2 + tardio +
-        '<div style="margin-top:8px;font-size:9px;color:var(--txt3);">'+
-        'Confiança '+(100*_pc.confianca).toFixed(0)+'% · ranking dos obstáculos avaliados: '+
-        (_pc.candidatos||[]).join(' · ')+'</div>'+
-        '</div>';
-    } else if(_pc) {
-      percBlock =
-        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.12);">'+
-        '<div class="ab-title" style="color:var(--txt3);letter-spacing:2px;">🧱 PERCALÇO — não identificado</div>'+
-        '<div class="ab-text" style="font-size:11px;">'+_pc.resumo+'</div>'+
-        '</div>';
-    }
-
+    // ── QUALIDADE DE CADA PLACAR ─────────────────────────────────────
+    // Era o bloco de veredito ("SEM EDGE REAL / EV -4.3%"). O veredito da
+    // operação saiu — o que fica é a leitura por placar, que é informação de
+    // SELEÇÃO: quanto o modelo próprio acha que cada placar vale contra o que
+    // o mercado está cobrando por ele. É isso que diz se o caminho escolhido
+    // é o caminho certo, e é isso que a stake já está seguindo.
     var evBlock = '';
-    if(gate) {
-      var detHtml = '';
-      if(gate.r && gate.r.detalhe && gate.r.detalhe.length) {
-        detHtml = '<div style="margin-top:10px;display:grid;gap:3px;">'
-          + gate.r.detalhe.map(function(d){
-              var ec = d.edge === null ? 'var(--txt3)' : d.edge > 0.015 ? 'var(--grn)' : d.edge < -0.015 ? 'var(--red)' : 'var(--txt2)';
-              var etxt = d.edge === null ? '—' : ((d.edge>=0?'+':'')+(d.edge*100).toFixed(1)+'%');
-              return '<div style="display:flex;justify-content:space-between;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'
-                + '<span style="color:var(--txt2);">'+d.score+' @'+d.odd+'</span>'
-                + '<span>modelo '+d.pModelo.toFixed(2)+'% vs mercado '+d.pMercado.toFixed(2)+'%</span>'
-                + '<span style="color:'+ec+';font-weight:700;">edge '+etxt+'</span>'
-                + '<span style="color:var(--txt2);">R$'+(d.stake||0).toFixed(2)+'</span>'
-                + '</div>';
-            }).join('')
-          + '</div>';
-      }
-      var motHtml = (gate.motivos && gate.motivos.length)
-        ? '<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.6;">'
-          + gate.motivos.map(function(m){ return '• '+m; }).join('<br>') + '</div>'
-        : '';
+    if(gate && gate.veredito === 'modelo_incoerente') {
       evBlock =
-        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:'+gate.cor+';background:rgba(0,0,0,.25);">'+
-        '<div class="ab-title" style="color:'+gate.cor+';letter-spacing:2px;">'+gate.titulo+'</div>'+
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:var(--ylw);background:rgba(0,0,0,.25);">'+
+        '<div class="ab-title" style="color:var(--ylw);letter-spacing:2px;">⚠️ AS TRÊS ODDS NÃO FECHAM ENTRE SI</div>'+
         '<div class="ab-text" style="font-size:11px;line-height:1.65;">'+gate.resumo+'</div>'+
-        motHtml + detHtml +
-        '<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-style:italic;">'+
-        'EV = probabilidade do modelo próprio × odd real, somado sobre o cluster, líquido de comissão. '+
-        'Não é threshold de probabilidade de mercado.</div>'+
+        '<div style="margin-top:8px;font-size:10px;color:var(--txt3);">Confira favorito, over 2.5 e ambas marcam antes de usar a leitura dos placares abaixo — com as três odds incoerentes, a probabilidade de cada placar fica distorcida.</div>'+
         '</div>';
+    } else if(gate && gate.r && gate.r.detalhe && gate.r.detalhe.length) {
+      var det = gate.r.detalhe.slice().sort(function(a,b){ return (b.edge||-9) - (a.edge||-9); });
+      var linhas = det.map(function(d){
+        var ec = d.edge === null ? 'var(--txt3)' : d.edge > 0.015 ? 'var(--grn)' : d.edge < -0.015 ? 'var(--red)' : 'var(--txt2)';
+        var etxt = d.edge === null ? '—' : ((d.edge>=0?'+':'')+(d.edge*100).toFixed(1)+'%');
+        var barra = Math.max(2, Math.min(100, Math.round(d.pModelo * 5)));
+        return '<div style="margin-top:5px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;font-family:Space Mono,monospace;font-size:8px;color:var(--txt3);">'
+          +   '<span style="color:var(--txt);font-size:10px;font-weight:700;">'+d.score+' <span style="color:var(--txt3);font-size:8px;">@'+d.odd+'</span></span>'
+          +   '<span>modelo '+d.pModelo.toFixed(2)+'% · mercado '+d.pMercado.toFixed(2)+'%</span>'
+          +   '<span style="color:'+ec+';font-weight:700;">'+etxt+'</span>'
+          +   '<span style="color:var(--txt2);">R$'+(d.stake||0).toFixed(2)+'</span>'
+          + '</div>'
+          + '<div style="background:rgba(255,255,255,.05);border-radius:3px;height:3px;margin-top:2px;">'
+          +   '<div style="background:'+ec+';height:100%;border-radius:3px;width:'+barra+'%;"></div>'
+          + '</div></div>';
+      }).join('');
+      var melhor = det[0], pior = det[det.length-1];
+      evBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.14);background:rgba(0,0,0,.25);">'+
+        '<div class="ab-title" style="color:var(--acc);letter-spacing:2px;">📐 QUALIDADE DE CADA PLACAR DO CAMINHO</div>'+
+        '<div class="ab-text" style="font-size:11px;line-height:1.6;">'+
+        'Comparação entre o que o modelo próprio calcula para cada placar e o que o mercado está cobrando. '+
+        'Melhor preço do caminho: <strong style="color:var(--grn);">'+melhor.score+'</strong>'+
+        (melhor.edge!==null?' ('+((melhor.edge>=0?'+':'')+(melhor.edge*100).toFixed(1))+'%)':'')+
+        ' · mais caro: <strong style="color:var(--red);">'+pior.score+'</strong>'+
+        (pior.edge!==null?' ('+((pior.edge>=0?'+':'')+(pior.edge*100).toFixed(1))+'%)':'')+'.'+
+        '</div>'+
+        '<div style="margin-top:8px;">'+linhas+'</div>'+
+        '<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-style:italic;line-height:1.5;">'+
+        'A stake de cada placar já segue esta leitura — quanto melhor o preço, mais peso. A barra é a probabilidade do modelo.'+
+        '</div></div>';
     }
 
     summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + percBlock + evBlock + probBlock;
