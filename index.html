@@ -2471,7 +2471,7 @@ function extrairAcademia(texto) {
     }
     if(!orientou) out._avisos.push('H2H não orientado: não identifiquei o mandante de hoje nas linhas do confronto direto');
 
-    var n = jogos.length, btts=0, over=0, gols=0, emp=0, visMarca=0, freq={};
+    var n = jogos.length, btts=0, over=0, gols=0, emp=0, visMarca=0, mandMarca=0, freq={};
     var orientados = [];
     jogos.forEach(function(j){
       // gm = gols do mandante DE HOJE, gv = gols do visitante DE HOJE
@@ -2483,6 +2483,7 @@ function extrairAcademia(texto) {
       if(gm>0 && gv>0) btts++;
       if(gm === gv) emp++;
       if(gv > 0) visMarca++;
+      if(gm > 0) mandMarca++;
       var k = gm+'-'+gv; freq[k] = (freq[k]||0)+1;
     });
     // desempate do placar mais frequente: o mais recente entre os empatados
@@ -2498,7 +2499,8 @@ function extrairAcademia(texto) {
     out.h2h = { amostra:n,
       btts_pct:+(100*btts/n).toFixed(1), over25_pct:+(100*over/n).toFixed(1),
       media_gols:+(gols/n).toFixed(2), empates_pct:+(100*emp/n).toFixed(1),
-      visitante_marca_pct:+(100*visMarca/n).toFixed(1), placar_mais_freq:maisFreq,
+      visitante_marca_pct:+(100*visMarca/n).toFixed(1),
+      mandante_marca_pct:+(100*mandMarca/n).toFixed(1), placar_mais_freq:maisFreq,
       _orientado: orientou, _mandante: mandanteHoje || null,
       _freq: freq, _empatados: empatados.length > 1 ? empatados : null,
       _jogos: jogos.map(function(j, ij){ return j.data+' '+j.casa+' '+j.gc+'-'+j.gf+' '+j.fora +
@@ -2747,7 +2749,13 @@ function detectarPercalco(ctx) {
 
   // "a zebra marca no H2H": visitante_marca_pct refere-se ao VISITANTE do
   // confronto. Só vale como sinal da zebra quando a zebra é a visitante.
-  var h2hZebraMarca = (temH2H && zebraEhVisitante) ? g(h2h,'visitante_marca_pct') : 0;
+  // Quando a zebra é o MANDANTE (favorito visitante), esse campo descreve o
+  // favorito e não servia para nada — o sinal "a zebra marca no H2H" ficava
+  // zerado em todo jogo de favorito fora, silenciosamente. O parser agora
+  // publica os dois lados e aqui se escolhe o que corresponde à zebra.
+  var h2hZebraMarca = !temH2H ? 0
+    : (zebraEhVisitante ? g(h2h,'visitante_marca_pct')
+                        : (g(h2h,'mandante_marca_pct') || 0));
 
   // gols do favorito no placar mais frequente dele
   function golsNoPlacar(p, ladoFav) {
@@ -5070,10 +5078,20 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // Base: probabilidade implícita do btts
     var pBase = btts > 0 ? (100/btts) : 50;
 
-    // Ajuste pelo form_fora.marca_pct (últimos 10 jogos fora)
+    // ── A FORMA QUE INTERESSA AQUI É A DA ZEBRA ───────────────────────
+    // Esta função responde "a zebra marca?" e lia S._formFora direto, ou
+    // seja, assumia que a zebra é sempre o visitante. Com favorito de fora
+    // ela respondia com a forma do PRÓPRIO FAVORITO. Medido no teste de
+    // espelho: mesmo jogo, mesma forma, o termo saía 2.1pp com favorito em
+    // casa e 3.2pp com favorito fora, e isso mudava o cluster final.
+    // S._formCasa/S._formFora continuam sendo a forma no mando certo de cada
+    // time — só se escolhe o time certo.
+    var formZebraPM = S._favEhVisitante ? S._formCasa : S._formFora;
+
+    // Ajuste pelo marca_pct da zebra (últimos jogos, no mando dela)
     var ajusteForm = 0;
-    if(S._formFora && S._formFora.marca_pct > 0) {
-      ajusteForm = (S._formFora.marca_pct - 55) * 0.14; // reduzido de 0.20
+    if(formZebraPM && formZebraPM.marca_pct > 0) {
+      ajusteForm = (formZebraPM.marca_pct - 55) * 0.14; // reduzido de 0.20
       ajusteForm = Math.max(-7, Math.min(7, ajusteForm)); // max ±7%
     }
 
@@ -5084,10 +5102,10 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       ajusteH2H = Math.max(-5, Math.min(5, ajusteH2H)); // max ±5%
     }
 
-    // Ajuste pelo over histórico da zebra fora
+    // Ajuste pelo over histórico da zebra (no mando dela)
     var ajusteOver = 0;
-    if(S._formFora && S._formFora.over25_pct > 0) {
-      ajusteOver = (S._formFora.over25_pct - 45) * 0.08; // reduzido de 0.10
+    if(formZebraPM && formZebraPM.over25_pct > 0) {
+      ajusteOver = (formZebraPM.over25_pct - 45) * 0.08; // reduzido de 0.10
       ajusteOver = Math.max(-4, Math.min(4, ajusteOver)); // max ±4%
     }
 
@@ -5098,7 +5116,7 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // dados são mais fracos (H2H curto, amostra pequena), mas nunca zero.
     var ajusteEditor = 0;
     var h2hFraco = !S._h2hData || S._h2hData.amostra < 4;
-    var amostraFracaForm = !S._formFora || S._formFora.amostra < 5;
+    var amostraFracaForm = !formZebraPM || formZebraPM.amostra < 5;
     var dadosFracos = h2hFraco || amostraFracaForm;
     if(S._sugestaoEditor) {
       var dir = (S._sugestaoEditor.direcao || '').toLowerCase();
@@ -5701,7 +5719,22 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       // 1-1 invertido continua 1-1 — pode ser válido se btts baixo
       // Manter âncora atual se for empate com btts forte
       if(ancora !== '1-1' || btts > 1.95) {
-        ancora = '1-0'; // pós-inversão vira 0-1 — score mais natural do visitante favorito
+        // Antes era fixo em '1-0'. Isso criava assimetria de lado: medido no
+        // teste de espelho, o MESMO jogo com favorito em casa terminava com
+        // âncora 2-0 e com favorito fora terminava com âncora 1-0 — e, como a
+        // âncora é imune ao corte por EV, o 2-0 acabava cortado só nos jogos
+        // de favorito visitante, mudando o cluster inteiro.
+        // Agora escolhe a vitória MAIS PROVÁVEL do favorito que já está no
+        // cluster, pelo preço — mesmo critério do resto do motor.
+        var melhorFavAnc = null, melhorProbAnc = 0;
+        mainScores.forEach(function(s){
+          var p = s.split('-').map(Number);
+          if(!(p[0] > p[1])) return;              // só vitória do favorito
+          var o = oddScoreMotor(s);
+          var pr = o > 0 ? 100/o : 0;
+          if(pr > melhorProbAnc) { melhorProbAnc = pr; melhorFavAnc = s; }
+        });
+        ancora = melhorFavAnc || '1-0';  // pós-inversão vira o placar do visitante favorito
       }
     }
   }
@@ -6595,6 +6628,16 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     mainScores = invArr(mainScores);
     protection = invArr(protection);
     ancora     = inv(ancora);
+    // A rota do percalço também é da perspectiva do favorito até aqui. Ela é
+    // lida DEPOIS, no calcStakes, onde os placares já estão na orientação real
+    // — e lá a comparação falhava em todo jogo de favorito visitante: o corte
+    // por retorno mínimo mandava para expansão justamente a perna do obstáculo
+    // que o motor tinha identificado. Medido no teste de espelho: o mesmo jogo
+    // mantinha a rota com favorito em casa e a perdia com favorito fora.
+    if(S._percalcoRota && S._percalcoRota.length) {
+      S._percalcoRota = invArr(S._percalcoRota);
+      console.log('[INVERSÃO] rota do percalço também invertida: ['+S._percalcoRota.join(',')+']');
+    }
     console.log('[INVERSÃO] DEPOIS: mainScores=['+mainScores.join(',')+'] protection=['+protection.join(',')+']');
   } else {
     console.log('[INVERSÃO] favEhVisitante=false — NÃO inverte. mainScores=['+mainScores.join(',')+']');
@@ -8315,6 +8358,34 @@ function reconciliarAncora(cluster, engineFinal) {
   if(melhor.tipo !== 'caminho') melhor.tipo = 'destino';
 }
 
+// ===== DE QUE LADO ESTÁ O FAVORITO — uma fonte só ====================
+// O calcStakes trabalha com os placares JÁ INVERTIDOS (orientação real da
+// tabela: primeiro número = mandante). Ele precisa saber de que lado está o
+// favorito para classificar caminho/destino/plano B, e ADIVINHAVA isso pelo
+// conteúdo do cluster ("tem alguma vitória do mandante por 2+? então o
+// favorito é o mandante"). Bug medido: num cluster de favorito VISITANTE que
+// continha o 2-1 da zebra — coisa que a rota do percalço ZEBRA_ABRE/REAGE
+// coloca lá com frequência — o palpite dava "favorito é mandante" e o
+// pipeline inteiro invertia: a maior stake do Dutch (a fatia do caminho) ia
+// para a vitória da ZEBRA por 1-0, e os placares do favorito viravam "plano B".
+// S._favEhVisitante já existe, é definido por jogo e é a fonte certa.
+function favoritoEhMandante(cluster) {
+  if(typeof S._favEhVisitante === 'boolean') return !S._favEhVisitante;
+  // fallback só para o caminho antigo (extractCluster sem motor): compara os
+  // dois lados em vez de olhar só para a casa, que era o erro original
+  var casa = 0, fora = 0;
+  (cluster||[]).forEach(function(s){
+    if(!s || !s.score || !/^\d-\d$/.test(s.score)) return;
+    var p = s.score.split('-').map(Number);
+    if(p[0] > p[1] && p[0] > 1) casa++;
+    if(p[1] > p[0] && p[1] > 1) fora++;
+  });
+  return casa >= fora;
+}
+// o placar "favorito vence por 1" e o "zebra vence por 1", na orientação real
+function caminhoDoFavorito(cluster) { return favoritoEhMandante(cluster) ? '1-0' : '0-1'; }
+function vitoriaDaZebraPor1(cluster) { return favoritoEhMandante(cluster) ? '0-1' : '1-0'; }
+
 function calcStakes(cluster, stake, analysisText) {
   if(!cluster || cluster.length === 0) return;
 
@@ -8358,10 +8429,11 @@ function calcStakes(cluster, stake, analysisText) {
   // The extractor may label 1-0 as 'destino' if bot wrote it that way.
   // Correct scores (1-0 casa, 0-1 fora) MUST be caminho regardless of label.
   // Detect casa/fora by checking which side has majority of winning scores
-  const hasHigherHome = cluster.some(s => { const [h,a]=s.score.split('-').map(Number); return h>a && h>1; });
-  const hasHigherAway = cluster.some(s => { const [h,a]=s.score.split('-').map(Number); return a>h && a>1; });
-  const likelyCasa = hasHigherHome; // if 2-0, 3-0 exist → casa favorito
-  const correctCaminhoScore = likelyCasa ? '1-0' : '0-1';
+  // O palpite antigo (hasHigherHome) foi substituído pela fonte real: um
+  // cluster de favorito visitante contendo o 2-1 da zebra era lido como
+  // "favorito da casa" e invertia caminho, destinos e plano B.
+  const likelyCasa = favoritoEhMandante(cluster);
+  const correctCaminhoScore = caminhoDoFavorito(cluster);
   const existingCaminho = cluster.find(s => s.tipo === 'caminho');
   const targetCaminho   = cluster.find(s => s.score === correctCaminhoScore);
   if(targetCaminho && targetCaminho.tipo !== 'caminho') {
@@ -8372,8 +8444,9 @@ function calcStakes(cluster, stake, analysisText) {
   // ── STEP 2: Deterministic classification by math ──────────────────
   const cam = cluster.find(s => s.tipo === 'caminho');
   if(cam) {
-    const cp = cam.score.split('-');
-    const isCasa = parseInt(cp[0]) > parseInt(cp[1]);
+    // o lado vem do favorito, não do placar do caminho: com caminho 1-1
+    // (empate) a conta antiga dava "favorito é visitante" em todo jogo
+    const isCasa = favoritoEhMandante(cluster);
     cluster.forEach(s => {
       if(s.tipo === 'caminho' || s.tipo === 'expansao') return;
       if(s.score && s.score.startsWith('any_other')) return; // não reclassificar any_other
@@ -8387,8 +8460,7 @@ function calcStakes(cluster, stake, analysisText) {
   // ── STEP 2: Deterministic classification — math overrides LLM ───────
   const cam2 = cluster.find(s => s.tipo === 'caminho');
   if(cam2) {
-    const cp2 = cam2.score.split('-');
-    const isFavCasa2 = parseInt(cp2[0]) > parseInt(cp2[1]);
+    const isFavCasa2 = favoritoEhMandante(cluster);
     cluster.forEach(s => {
       if(s.tipo === 'caminho' || s.tipo === 'expansao') return;
       if(s.score && s.score.startsWith('any_other')) return; // não reclassificar any_other
@@ -8397,9 +8469,8 @@ function calcStakes(cluster, stake, analysisText) {
       else if(isFavCasa2 ? h>a : a>h)    s.tipo = 'destino';
       else                                s.tipo = 'planb';
     });
-    // CAMINHO = 1-0 or 0-1 always
-    const [hC,aC] = cam2.score.split('-').map(Number);
-    const corrC = hC > aC ? '1-0' : '0-1';
+    // CAMINHO = a vitória do FAVORITO por 1, sempre
+    const corrC = caminhoDoFavorito(cluster);
     if(cam2.score !== corrC) {
       cam2.tipo = 'destino';
       const realC = cluster.find(s => s.score === corrC);
@@ -8613,16 +8684,28 @@ function calcStakes(cluster, stake, analysisText) {
 
     if(prof === 'goleada') {
       // GOLEADA: fixed weights per score — inverted pyramid
+      // Os pesos estão escritos na perspectiva do FAVORITO (4-0, 3-0, 2-0 =
+      // favorito goleando; 0-1 = favorito perdendo por 1). Com favorito
+      // visitante os placares reais são 0-4, 0-3, 0-2 — nenhum batia na
+      // tabela, todos caíam no balde "desconhecido" e recebiam peso IGUAL,
+      // ou seja: a pirâmide invertida da goleada simplesmente não existia
+      // para favorito de fora. Pior, o '0-1' batia — e lá ele é a VITÓRIA do
+      // favorito por 1, recebendo o peso de 2% reservado à derrota dele.
       const goleadaWeights = {
         '4-0':0.25,'4-1':0.25,'5-0':0.25,'5-1':0.25,
         '3-0':0.25,'3-1':0.25,'3-2':0.20,
         '2-0':0.20,'2-1':0.20,
         '1-0':0.08,'0-1':0.02,'1-1':0.03,'0-0':0.02
       };
+      const favCasaGW = favoritoEhMandante(cluster);
+      const chaveGW = sc => {
+        if(favCasaGW || !/^\d-\d$/.test(sc)) return sc;
+        const p = sc.split('-'); return p[1]+'-'+p[0];   // volta à perspectiva do favorito
+      };
       let totalW = 0;
       const knownScores = [], unknownScores = [];
       valid.forEach(s => {
-        const w = goleadaWeights[s.score];
+        const w = goleadaWeights[chaveGW(s.score)];
         if(w !== undefined) { s._gw = w; totalW += w; knownScores.push(s); }
         else unknownScores.push(s);
       });
@@ -8733,8 +8816,7 @@ function calcStakes(cluster, stake, analysisText) {
   // ── STEP 4: CAMINHO validation ────────────────────────────────────
   const cFin = cluster.find(s => s.tipo === 'caminho');
   if(cFin) {
-    const [hc,ac] = cFin.score.split('-').map(Number);
-    const corr = hc > ac ? '1-0' : '0-1';
+    const corr = caminhoDoFavorito(cluster);
     if(cFin.score !== corr) {
       cFin.tipo = 'destino';
       const real = cluster.find(s => s.score === corr);
@@ -8743,14 +8825,16 @@ function calcStakes(cluster, stake, analysisText) {
   }
 
   // ── STEP 5: Enforce min 5 scores — add planb if missing ──────────
-  const has01 = cluster.some(s => s.score === '0-1');
+  // A proteção que interessa aqui é "a ZEBRA vence por 1" — e esse placar é
+  // 0-1 quando o favorito é mandante, mas 1-0 quando ele é visitante. Estava
+  // fixo em '0-1': com favorito visitante isso forçava a entrada da vitória do
+  // PRÓPRIO FAVORITO achando que estava adicionando proteção contra a zebra.
+  const scZebra1 = vitoriaDaZebraPor1(cluster);
+  const hasZebra1 = cluster.some(s => s.score === scZebra1);
   const has11 = cluster.some(s => s.score === '1-1');
-  const hasCasa = cluster.some(s => { const [h,a] = s.score.split('-').map(Number); return h > a; });
   let added = false;
-  // 0-1 só forçado se IA não incluiu E é favorito casa — proteção contra zebra
-  // Mantido por segurança (Holland 0-1 provou ser necessário)
-  if(!has01 && hasCasa && S.csOdds['0-1'] > 0) {
-    cluster.push({score:'0-1', odd:S.csOdds['0-1'], tipo:'planb', prob:calcProb(S.csOdds['0-1']), stake:0, lucro:0, oddPG:0});
+  if(!hasZebra1 && S.csOdds[scZebra1] > 0) {
+    cluster.push({score:scZebra1, odd:S.csOdds[scZebra1], tipo:'planb', prob:calcProb(S.csOdds[scZebra1]), stake:0, lucro:0, oddPG:0});
     added = true;
     // Marcar que foi adicionado pelo sistema (não pela IA)
     cluster._forced01 = true;
@@ -9307,8 +9391,12 @@ function calcStakes(cluster, stake, analysisText) {
     candidatos.slice(0, faltam).forEach(function(s){
       if(s._reposto) cluster.push(s);
       if(s.tipo === 'expansao') {
+        // destino = vitória DO FAVORITO. Estava escrito como "vitória do
+        // mandante", o que rotulava a vitória da zebra como destino sempre
+        // que o favorito era visitante.
         var pts = s.score.split('-').map(Number);
-        s.tipo = (pts[0] > pts[1]) ? 'destino' : 'planb';
+        var venceFav = favoritoEhMandante(cluster) ? (pts[0] > pts[1]) : (pts[1] > pts[0]);
+        s.tipo = venceFav ? 'destino' : 'planb';
       }
       console.log('[PISO 5] '+s.score+' @'+s.odd+' entra no Dutch'+
         (s._reposto ? ' (veio da tabela CS)' : ' (estava zerado no cluster)')+
