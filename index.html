@@ -2060,7 +2060,7 @@ function selectSbGame(id) {
   // antes da detecção de favorito visitante do jogo novo) e lê exatamente
   // estas variáveis para escolher de quem é "a forma do favorito".
   S._favEhVisitante = false;
-  S._formCasa = null; S._formFora = null; S._h2hData = null;
+  S._formCasa = null; S._formFora = null; S._h2hData = null; S._dadosDoParser = false;
   S._sugestaoEditor = null;
   S._lamFav = null; S._lamZeb = null; S._dcRho = null;
   S._poisson = null; S._modelCheck = null; S._modelErroMax = null;
@@ -2408,6 +2408,177 @@ function calcIndicePerfil(fav, over, btts, opts) {
     pesos: { fav:45, over:23, btts:23, ctx:10 }
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PARSER DETERMINÍSTICO DA ACADEMIA DAS APOSTAS
+// ═══════════════════════════════════════════════════════════════════
+// Motivo: os campos h2h / form_casa / form_fora chegavam ao motor por um JSON
+// que a IA devolvia. Em dois jogos seguidos (Bologna x Torino e Burnley x
+// Derby) esse JSON voltou vazio — a IA LEU os dados para escrever a narrativa
+// (citou "abre o placar em 3 de 15" corretamente) mas não os emitiu como dado.
+// Resultado: o percalço dizia "sem dados suficientes" com o texto inteiro
+// colado, e todas as camadas de forma ficavam inertes.
+// Texto tem estrutura fixa. Não precisa de IA para ler.
+
+function extrairAcademia(texto) {
+  if(!texto || texto.length < 200) return null;
+  var T = texto.replace(/\r/g, '');
+  var out = { h2h:null, form_casa:null, form_fora:null, _origem:'parser', _avisos:[] };
+
+  // ── nomes dos times: primeira linha do bloco de últimos 10 jogos ──
+  var mTimes = T.match(/Últimos 10 jogos em todas as competições\s*\n\s*([^\n]+)\n/i);
+  var timeCasa = mTimes ? mTimes[1].trim() : null;
+
+  // ─────────────── H2H ───────────────
+  // linhas "AAAA-MM-DD  <casa>  G-G  <fora>" espalhadas após "Confronto direto"
+  var blocoH2H = T.split(/Últimos 10 jogos em todas as competi/i)[0];
+  var reJogo = /(\d{4}-\d{2}-\d{2})[\s\S]{0,40}?\n\s*([A-Za-zÀ-ÿ0-9 .'\-]+?)\s*\n?\s*(\d+)-(\d+)\s*\n?\s*([A-Za-zÀ-ÿ0-9 .'\-]+?)\s*(?=\n|$)/g;
+  var jogos = [], m;
+  while((m = reJogo.exec(blocoH2H)) !== null) {
+    jogos.push({ data:m[1], casa:m[2].trim(), gc:+m[3], gf:+m[4], fora:m[5].trim() });
+  }
+  if(jogos.length >= 2) {
+    var n = jogos.length, btts=0, over=0, gols=0, emp=0, visMarca=0, freq={};
+    jogos.forEach(function(j){
+      gols += j.gc + j.gf;
+      if(j.gc+j.gf > 2.5) over++;
+      if(j.gc>0 && j.gf>0) btts++;
+      if(j.gc === j.gf) emp++;
+      if(j.gf > 0) visMarca++;
+      var k = j.gc+'-'+j.gf; freq[k] = (freq[k]||0)+1;
+    });
+    var maisFreq = Object.keys(freq).sort(function(a,b){ return freq[b]-freq[a]; })[0];
+    out.h2h = { amostra:n,
+      btts_pct:+(100*btts/n).toFixed(1), over25_pct:+(100*over/n).toFixed(1),
+      media_gols:+(gols/n).toFixed(2), empates_pct:+(100*emp/n).toFixed(1),
+      visitante_marca_pct:+(100*visMarca/n).toFixed(1), placar_mais_freq:maisFreq,
+      _jogos: jogos.map(function(j){ return j.data+' '+j.casa+' '+j.gc+'-'+j.gf+' '+j.fora; }) };
+  }
+
+  // ─────────────── blocos de GOLS (casa / fora / global) ───────────────
+  // "Média de gols marcados por jogo\t1.33\t1\t1.14"
+  function num(v){ if(v===undefined||v===null) return null; v=String(v).trim();
+    if(v==='-'||v==='') return null; return parseFloat(v.replace('%','').replace(',','.')); }
+
+  var blocosGols = T.split(/Momento dos gols/i);
+  // o bloco de "Gols" tem duas tabelas seguidas (casa e visitante)
+  function lerTabelaGols(txt) {
+    function pega(rot) {
+      var re = new RegExp(rot + '\\s*\\n?\\s*([\\d.,%-]+)\\s*\\n?\\s*([\\d.,%-]+)\\s*\\n?\\s*([\\d.,%-]+)', 'i');
+      var mm = txt.match(re);
+      if(!mm) { // variante com tabs
+        re = new RegExp(rot + '[\\t ]+([\\d.,%-]+)[\\t ]+([\\d.,%-]+)[\\t ]+([\\d.,%-]+)', 'i');
+        mm = txt.match(re);
+      }
+      return mm ? { casa:num(mm[1]), fora:num(mm[2]), global:num(mm[3]) } : null;
+    }
+    function pegaDupla(rot) {   // "Abre marcador (qualquer altura)\t1 em 3\t33%"
+      var re = new RegExp(rot + '[\\s\\S]{0,40}?(\\d+)\\s*em\\s*(\\d+)[\\s\\S]{0,10}?(\\d+)\\s*%', 'i');
+      var mm = txt.match(re);
+      return mm ? { n:+mm[1], de:+mm[2], pct:+mm[3] } : null;
+    }
+    return {
+      marcados:  pega('Média de gols marcados por jogo'),
+      sofridos:  pega('Média de gols sofridos por jogo'),
+      total:     pega('Média de gols marcados\\+sofridos'),
+      semSofrer: pega('Jogos sem sofrer'),
+      semMarcar: pega('Jogos sem marcar gols'),
+      over25:    pega('Jogos com Mais de 2,5 Gols'),
+      abre:      pegaDupla('Abre marcador'),
+      vira:      pegaDupla('Reviravoltas')
+    };
+  }
+
+  // separa a tabela de gols do time da casa e a do visitante
+  var idxGols = T.search(/\nGols\s*\n/i);
+  var trechoGols = idxGols >= 0 ? T.slice(idxGols) : T;
+  var partes = trechoGols.split(/Casa Global|Fora Global/i);
+  var tabCasa = lerTabelaGols(partes[0] || '');
+  var tabFora = partes.length > 2 ? lerTabelaGols(partes[1] + (partes[2]||'')) : null;
+  // o "Abre marcador" do mandante vem logo após "Casa Global", o do visitante após "Fora Global"
+  var mAbreCasa = trechoGols.match(/Casa Global[\s\S]{0,200}?Abre marcador[\s\S]{0,40}?(\d+)\s*em\s*(\d+)[\s\S]{0,12}?(\d+)\s*%/i);
+  var mViraCasa = trechoGols.match(/Casa Global[\s\S]{0,400}?Reviravoltas[\s\S]{0,30}?(\d+)\s*em\s*(\d+)[\s\S]{0,12}?(\d+)\s*%/i);
+  var mAbreFora = trechoGols.match(/Fora Global[\s\S]{0,200}?Abre marcador[\s\S]{0,40}?(\d+)\s*em\s*(\d+)[\s\S]{0,12}?(\d+)\s*%/i);
+  var mViraFora = trechoGols.match(/Fora Global[\s\S]{0,400}?Reviravoltas[\s\S]{0,30}?(\d+)\s*em\s*(\d+)[\s\S]{0,12}?(\d+)\s*%/i);
+
+  // ─────────────── RESULTADO FINAL: distribuição de placares ───────────
+  function lerResultados(bloco) {
+    if(!bloco) return null;
+    var re = /(\d+-\d+)\s*\n?\s*(\d+)%\s*\((\d+)\)/g, r, lista = [];
+    while((r = re.exec(bloco)) !== null) lista.push({ placar:r[1], pct:+r[2], n:+r[3] });
+    return lista.length ? lista : null;
+  }
+  var mResCasa = T.match(/Resultado final([\s\S]{0,300}?)Total/i);
+  var todosRes = T.match(/Resultado final([\s\S]{0,300}?)Total/gi) || [];
+  var resCasa = todosRes[0] ? lerResultados(todosRes[0]) : null;
+  var resFora = todosRes[1] ? lerResultados(todosRes[1]) : null;
+
+  // ─────────────── MOMENTO ───────────────
+  function lerMomento(nomeTime) {
+    if(!nomeTime) return 'neutro';
+    var re = new RegExp(nomeTime + '[\\s\\S]{0,400}?Não ganha há\\.\\.\\.\\s*\\n?\\s*([\\d-]+)\\s*\\n?\\s*([\\d-]+)\\s*\\n?\\s*([\\d-]+)', 'i');
+    var mm = T.match(re);
+    if(!mm) return 'neutro';
+    var g = parseInt(mm[3]); if(isNaN(g)) return 'neutro';
+    return g >= 4 ? 'negativo' : g <= 1 ? 'positivo' : 'neutro';
+  }
+
+  function montar(tab, res, abre, vira, ehCasa) {
+    if(!tab || !tab.marcados) return null;
+    var lado = ehCasa ? 'casa' : 'fora';
+    var marc = tab.marcados[lado], sofr = tab.sofridos ? tab.sofridos[lado] : null;
+    if(marc === null) return null;
+    var semMarcar = tab.semMarcar ? tab.semMarcar[lado] : null;
+    var semSofrer = tab.semSofrer ? tab.semSofrer[lado] : null;
+    var over25 = tab.over25 ? tab.over25[lado] : null;
+    var placarFreq = null, placarBtts = null;
+    if(res && res.length) {
+      placarFreq = res.slice().sort(function(a,b){ return b.n - a.n; })[0].placar;
+      var comAmbos = res.filter(function(x){ var p=x.placar.split('-').map(Number); return p[0]>0&&p[1]>0; });
+      if(comAmbos.length) placarBtts = comAmbos.sort(function(a,b){ return b.n-a.n; })[0].placar;
+    }
+    var amostra = abre ? abre.de : (res && res.length ? res.reduce(function(a,x){return a+x.n;},0) : 0);
+    return {
+      amostra: amostra,
+      media_gols_marcados: marc,
+      media_gols_sofridos: sofr !== null ? sofr : 0,
+      media_total: tab.total ? (tab.total[lado] || 0) : 0,
+      marca_pct: semMarcar !== null ? +(100 - semMarcar).toFixed(0) : (marc > 0 ? 100 : 0),
+      clean_sheet_pct: semSofrer !== null ? semSofrer : 0,
+      over25_pct: over25 !== null ? over25 : 0,
+      abre_placar_pct: abre ? abre.pct : 0,
+      vira_quando_atras: vira ? vira.pct : 0,
+      placar_mais_freq: placarFreq || '',
+      placar_quando_btts: placarBtts || '',
+      btts_pct: 0,     // preenchido abaixo pela distribuição de resultados
+      gols_76_90_pct: 0,
+      momento: 'neutro',
+      temporadaAnterior: false,
+      _resultados: res
+    };
+  }
+
+  out.form_casa = montar(tabCasa, resCasa, mAbreCasa ? {n:+mAbreCasa[1],de:+mAbreCasa[2],pct:+mAbreCasa[3]} : null,
+                         mViraCasa ? {n:+mViraCasa[1],de:+mViraCasa[2],pct:+mViraCasa[3]} : null, true);
+  out.form_fora = montar(tabFora || tabCasa, resFora, mAbreFora ? {n:+mAbreFora[1],de:+mAbreFora[2],pct:+mAbreFora[3]} : null,
+                         mViraFora ? {n:+mViraFora[1],de:+mViraFora[2],pct:+mViraFora[3]} : null, false);
+
+  // btts_pct pela distribuição de resultados
+  [['form_casa',resCasa],['form_fora',resFora]].forEach(function(par){
+    var f = out[par[0]], res = par[1];
+    if(!f || !res || !res.length) return;
+    var tot = res.reduce(function(a,x){return a+x.n;},0);
+    var amb = res.filter(function(x){var p=x.placar.split('-').map(Number);return p[0]>0&&p[1]>0;})
+                 .reduce(function(a,x){return a+x.n;},0);
+    if(tot) f.btts_pct = +(100*amb/tot).toFixed(0);
+  });
+
+  if(!out.h2h) out._avisos.push('H2H não encontrado no texto');
+  if(!out.form_casa) out._avisos.push('forma do mandante não encontrada');
+  if(!out.form_fora) out._avisos.push('forma do visitante não encontrada');
+  return out;
+}
+
 
 // ═══════════════════════════════════════════════════════════════════
 // PERFIL DE GOLS — quantos gols cada time COSTUMA se envolver
@@ -6422,6 +6593,48 @@ async function analisarJogo() {
   // aqui, com o lado já resolvido, antes do motor consumir S._lamFav/_lamZeb.
   calcPoisson();
 
+  // ═══════════════════════════════════════════════════════════════════
+  // EXTRAÇÃO DOS DADOS — ANTES do motor, e sem depender da IA
+  // ═══════════════════════════════════════════════════════════════════
+  // BUG RAIZ CORRIGIDO. A ordem real era:
+  //     analyzeCSGame()            <- o motor rodava aqui
+  //     ...550 linhas...
+  //     S._h2hData = {...}         <- os dados chegavam aqui
+  //     S._formCasa = {...}
+  //     S._formFora = {...}
+  //
+  // O motor rodava ANTES dos dados existirem. Toda camada que depende de H2H
+  // ou de forma — percalço, camada de gols, perfil da zebra, Camada 8, blend
+  // do λ, proteção cirúrgica — rodava com objeto vazio, em TODO jogo. Por isso
+  // o card dizia "percalço não identificado" com o texto inteiro colado.
+  //
+  // Não era a IA falhando em devolver o JSON: ela devolvia, tarde demais.
+  //
+  // Agora um parser determinístico lê o texto da Academia direto, antes do
+  // motor. O texto tem estrutura fixa — não precisa de IA para ser lido. O
+  // JSON da IA continua chegando depois e só preenche o que o parser não
+  // conseguiu (campos que exigem leitura de linguagem, como goleada recente).
+  try {
+    var _ac = extrairAcademia(texto);
+    if(_ac) {
+      if(_ac.h2h)       S._h2hData  = _ac.h2h;
+      if(_ac.form_casa) S._formCasa = _ac.form_casa;
+      if(_ac.form_fora) S._formFora = _ac.form_fora;
+      console.log('[PARSER ACADEMIA] H2H ' + (_ac.h2h ? _ac.h2h.amostra + ' jogos (ambas ' + _ac.h2h.btts_pct +
+        '%, média ' + _ac.h2h.media_gols + ' gols, mais frequente ' + _ac.h2h.placar_mais_freq + ')' : 'não encontrado') +
+        ' | mandante ' + (_ac.form_casa ? _ac.form_casa.amostra + ' jogos, abre ' + _ac.form_casa.abre_placar_pct +
+        '%, marca ' + _ac.form_casa.marca_pct + '%' : 'não encontrado') +
+        ' | visitante ' + (_ac.form_fora ? _ac.form_fora.amostra + ' jogos, abre ' + _ac.form_fora.abre_placar_pct +
+        '%, marca ' + _ac.form_fora.marca_pct + '%' : 'não encontrado'));
+      if(_ac._avisos.length) console.warn('[PARSER ACADEMIA] ' + _ac._avisos.join(' | '));
+      S._dadosDoParser = true;
+      // recalcular o λ agora que a forma existe — o blend depende dela
+      calcPoisson();
+    }
+  } catch(ePar) {
+    console.warn('[PARSER ACADEMIA] falhou, seguindo sem dados de forma:', ePar.message);
+  }
+
   // ── Motor determinístico — calcular scores por código ──────
   const engine = analyzeCSGame(fav, over, btts, S.csOdds, favEhVisitanteReal, S.csOddsLiq);
 
@@ -6967,8 +7180,10 @@ REGRAS ABSOLUTAS:
             console.log('[SUGESTÃO EDITOR]', JSON.stringify(S._sugestaoEditor));
           }
 
-          S._h2hData = null;
-          if(voto && voto.h2h && typeof voto.h2h === 'object') {
+          // O parser determinístico já rodou antes do motor. A IA agora só
+          // preenche o que ele não conseguiu — nunca sobrescreve.
+          if(!S._dadosDoParser) S._h2hData = null;
+          if(!S._h2hData && voto && voto.h2h && typeof voto.h2h === 'object') {
             var h2hRaw = voto.h2h;
             var h2hAmostra = parseInt(h2hRaw.amostra) || 0;
             if(h2hAmostra >= 4) {
@@ -6988,9 +7203,8 @@ REGRAS ABSOLUTAS:
           }
 
           // Processar form_casa e form_fora — últimos 10 jogos de cada time
-          S._formCasa = null;
-          S._formFora = null;
-          if(voto && voto.form_casa && typeof voto.form_casa === 'object') {
+          if(!S._dadosDoParser) { S._formCasa = null; S._formFora = null; }
+          if(!S._formCasa && voto && voto.form_casa && typeof voto.form_casa === 'object') {
             var tempAnteriorCasa = voto.form_casa.amostra_temporada_anterior === true;
             S._formCasa = {
               over25_pct:          parseFloat(voto.form_casa.over25_pct) || 0,
@@ -7014,7 +7228,7 @@ REGRAS ABSOLUTAS:
             if(tempAnteriorCasa) console.log('[FORM CASA] ⚠️ dado de temporada anterior — peso reduzido');
             console.log('[FORM CASA]', JSON.stringify(S._formCasa));
           }
-          if(voto && voto.form_fora && typeof voto.form_fora === 'object') {
+          if(!S._formFora && voto && voto.form_fora && typeof voto.form_fora === 'object') {
             var tempAnteriorFora = voto.form_fora.amostra_temporada_anterior === true;
             S._formFora = {
               over25_pct:          parseFloat(voto.form_fora.over25_pct) || 0,
