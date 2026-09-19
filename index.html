@@ -3119,8 +3119,25 @@ function oddCorrompida(scoreReal) {
 // dele, quem decide é o modelo contra o preço do próprio 0-0 (é odd contra
 // odd, não narrativa), e a rota do percalço só entra como desempate quando
 // tem confiança alta E o modelo não contradiz.
+var BTTS_VETA_ZERO = 1.90;   // abaixo disso o mercado está convicto de que ambos marcam
+
 function zeroAzeroEntra(over, btts, oddZero, opts) {
   opts = opts || {};
+  // ── VETO DO MERCADO DE AMBAS MARCAM ───────────────────────────────
+  // O 0-0 exige que os DOIS times falhem em marcar, e existe um mercado
+  // líquido que precifica exatamente isso. Com ambas em 1.72, o mercado diz
+  // ~58% de que os dois marcam — pedir 0-0 ali é apostar contra a leitura mais
+  // direta que existe sobre o evento. Caso real, Remo x Santos (19/09): ambas
+  // @1.72, e o 0-0 entrou no cluster porque o MODELO dava 8.8% contra 6.7% do
+  // preço. Só que esse "edge" é justamente onde o modelo é medidamente mais
+  // fraco — a correção de correlação de Dixon-Coles infla o 0-0 em 20-26% nos
+  // cenários testados. Edge de modelo não vence preço de mercado sobre o
+  // próprio evento: abaixo deste limite o 0-0 não entra por nenhum caminho,
+  // nem por modelo, nem por rota de percalço.
+  if(btts > 1.01 && btts < BTTS_VETA_ZERO) {
+    return { ok:false, motivo:'ambas marcam @'+btts+' — o mercado dá '+(100/btts).toFixed(0)+
+             '% de que os dois marcam, e o 0-0 precisa que nenhum marque' };
+  }
   if(over > 2.20 && btts >= 1.90)
     return { ok:true, motivo:'mercado de under claro (over@'+over+', ambas@'+btts+')' };
   var pm = (typeof poissonScoreProb === 'function') ? poissonScoreProb(0,0) : null;
@@ -9810,6 +9827,53 @@ function renderCluster(cluster, stake) {
         'A stake de cada placar já segue esta leitura — quanto melhor o preço, mais peso. A barra é a probabilidade do modelo.'+
         '</div></div>';
     }
+
+    // ── O OBSTÁCULO REAL DESTA PARTIDA ───────────────────────────────
+    // Este bloco era referenciado aqui sem nunca ter sido construído:
+    // `percBlock` não existia, e a linha abaixo lançava ReferenceError em
+    // TODA análise. Como renderCluster morria aqui, tudo o que vem depois
+    // dela parava de ser desenhado — inclusive a caixa "Resultado financeiro
+    // deste jogo", que é onde o operador digita o green/red. Não foi removida:
+    // deixou de ser desenhada por causa deste erro.
+    var percBlock = '';
+    (function(){
+      var pc = S._percalco;
+      if(!pc) return;
+      if(pc.tipo === 'INDETERMINADO') {
+        percBlock =
+          '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.10);">'+
+          '<div class="ab-title" style="color:var(--txt3);letter-spacing:2px;">OBSTÁCULO DA PARTIDA — NÃO IDENTIFICADO</div>'+
+          '<div class="ab-text" style="font-size:11px;line-height:1.6;">'+
+          (pc.resumo || 'Sem H2H ou forma suficientes para ler o obstáculo desta partida. O Plano B fica no padrão do perfil.')+
+          '</div></div>';
+        return;
+      }
+      var conf = Math.round(100 * (pc.confianca || 0));
+      var corConf = conf >= 70 ? 'var(--grn)' : conf >= 45 ? 'var(--ylw)' : 'var(--org)';
+      var rota = (pc.rota || []).concat(pc.rotaSecundaria || []);
+      var rotaTela = rota.map(function(s){
+        return (S._favEhVisitante && /^\d-\d$/.test(s)) ? s.split('-')[1]+'-'+s.split('-')[0] : s;
+      });
+      var evid = (pc.evidencias || []).slice(0, 4);
+      percBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:'+corConf+';background:rgba(0,0,0,.25);">'+
+        '<div class="ab-title" style="color:'+corConf+';letter-spacing:2px;">🧗 OBSTÁCULO MAIS PROVÁVEL — '+pc.tipo.replace(/_/g,' ')+
+          ' <span style="color:var(--txt3);font-weight:400;">('+conf+'% de confiança)</span></div>'+
+        '<div class="ab-text" style="font-size:11px;line-height:1.65;">'+(pc.leitura || pc.titulo || '')+'</div>'+
+        (rotaTela.length
+          ? '<div style="margin-top:8px;font-family:Space Mono,monospace;font-size:10px;color:var(--txt2);">'+
+            'Rota do obstáculo: <strong style="color:'+corConf+';">'+rotaTela.join(' → ')+'</strong></div>'
+          : '')+
+        (evid.length
+          ? '<div style="margin-top:8px;font-size:9px;color:var(--txt3);line-height:1.7;">'+
+            evid.map(function(e){ return '• '+e; }).join('<br>')+'</div>'
+          : '')+
+        (pc.candidatos && pc.candidatos.length
+          ? '<div style="margin-top:8px;font-size:8px;color:var(--txt3);font-family:Space Mono,monospace;">'+
+            pc.candidatos.join('  ')+'</div>'
+          : '')+
+        '</div>';
+    })();
 
     summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + percBlock + evBlock + probBlock;
 
