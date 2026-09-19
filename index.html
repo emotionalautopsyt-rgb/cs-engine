@@ -8641,6 +8641,82 @@ function calcStakes(cluster, stake, analysisText) {
     return oa !== ob ? oa - ob : b.prob - a.prob;
   });
 
+  // ── STEP 7: Implied odds via modelo Poisson próprio (para EDGE badges) ──
+  // ANTES: regex tentava ler uma "odd implícita" que a IA escrevia no
+  // texto num formato antigo ("~@X.X |") que não existe mais na narrativa
+  // atual — o badge de EDGE ficava morto, nunca disparava. AGORA: usa o
+  // modelo Poisson próprio (S._lamFav/S._lamZeb, já combinando mercado +
+  // forma real dos times) pra gerar uma odd "justa" independente do
+  // mercado, e comparar contra a odd real — EV genuíno, não estimativa
+  // da IA no texto.
+  cluster.forEach(function(s) {
+    if(!s.score || s.score.startsWith('any_other')) return;
+    var modelProb = calcModelProb(s.score);
+    if(modelProb && modelProb > 0.1) {
+      s.impliedOdd = parseFloat((100 / modelProb).toFixed(2));
+      s._modelProb = modelProb;
+    }
+  });
+
+  // ── STEP 6.4: SANIDADE DA ODD — o preço é possível? ─────────────────
+  // Achado em Burnley x Derby (19/09): o 3-3 entrou no cluster COM STAKE a
+  // @11.5, quando o preço justo daquele placar era ~@96. O modelo sabia — o
+  // card mostrava "CÉTICO -88%" — e o placar foi operado assim mesmo.
+  //
+  // Causa: o corte por edge vive dentro de analyzeCSGame, que roda ANTES da
+  // IA. O cluster final vem de extractCluster(reply), e a IA pode escrever um
+  // placar que o motor nunca escolheria. Depois disso não havia nenhum filtro
+  // de edge — só o de retorno mínimo, que só dispara em outra condição.
+  //
+  // Esta checagem é diferente de "esse placar tem edge ruim". Uma odd 3x fora
+  // do justo nos dois sentidos quase nunca é o mercado estar errado: é a odd
+  // estar errada — parse da tabela desalinhado, placar trocado, campo faltando.
+  // Operar em cima disso é operar em cima de dado quebrado.
+  (function sanidadeOdds(){
+    var ALERTA_ALTA = 3.0;    // odd 3x MAIOR que a justa
+    var ALERTA_BAIXA = 0.35;  // odd 3x MENOR que a justa
+    var EDGE_ABSURDO = -0.50; // pior que -50%: doação, venha de onde vier
+    var suspeitos = [];
+    cluster.forEach(function(s){
+      if(!s.score || String(s.score).startsWith('any_other')) return;
+      if(!(s.odd > 1) || s.tipo === 'expansao_especifica') return;
+      var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+        ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+      if(!(pm > 0)) return;
+      var justa = 100 / pm;
+      var razao = s.odd / justa;
+      var edge = (pm/100) * s.odd - 1;
+      var motivo = null;
+      if(razao > ALERTA_ALTA)        motivo = 'odd @' + s.odd + ' é ' + razao.toFixed(1) +
+        'x MAIOR que a justa (@' + justa.toFixed(1) + ') — preço improvável, provável erro de leitura da tabela';
+      else if(razao < ALERTA_BAIXA)  motivo = 'odd @' + s.odd + ' é ' + (1/razao).toFixed(1) +
+        'x MENOR que a justa (@' + justa.toFixed(1) + ') — preço improvável, provável erro de leitura da tabela';
+      else if(edge < EDGE_ABSURDO)   motivo = 'edge ' + (100*edge).toFixed(0) +
+        '% — o preço não sustenta esse placar de jeito nenhum';
+      if(motivo) { s._oddSuspeita = motivo; suspeitos.push(s); }
+    });
+    if(!suspeitos.length) { S._oddsSuspeitas = null; return; }
+
+    suspeitos.forEach(function(s){
+      s.tipo = 'expansao'; s.stake = 0; s.lucro = 0;
+      console.warn('[ODD SUSPEITA] ' + s.score + ' REMOVIDO do Dutch — ' + s._oddSuspeita);
+    });
+    S._oddsSuspeitas = suspeitos.map(function(s){ return { score:s.score, odd:s.odd, motivo:s._oddSuspeita }; });
+
+    // redistribuir entre os que sobraram
+    var restantes = cluster.filter(function(s){
+      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+             s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    if(restantes.length) {
+      aplicarDutch(restantes, stake);
+      restantes.forEach(function(s){
+        s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+        s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+      });
+    }
+  })();
+
   // ── STEP 6.5: PISO DE 5 PLACARES — garantia final ───────────────────
   // Depois de todos os estágios de corte (máximo de scores, retorno mínimo,
   // threshold dinâmico, edge), conferir que sobraram pelo menos 5 placares
@@ -8709,22 +8785,6 @@ function calcStakes(cluster, stake, analysisText) {
     console.log('[PISO 5] cluster final com '+ativosComStake().length+' placares cobertos.');
   })();
 
-  // ── STEP 7: Implied odds via modelo Poisson próprio (para EDGE badges) ──
-  // ANTES: regex tentava ler uma "odd implícita" que a IA escrevia no
-  // texto num formato antigo ("~@X.X |") que não existe mais na narrativa
-  // atual — o badge de EDGE ficava morto, nunca disparava. AGORA: usa o
-  // modelo Poisson próprio (S._lamFav/S._lamZeb, já combinando mercado +
-  // forma real dos times) pra gerar uma odd "justa" independente do
-  // mercado, e comparar contra a odd real — EV genuíno, não estimativa
-  // da IA no texto.
-  cluster.forEach(function(s) {
-    if(!s.score || s.score.startsWith('any_other')) return;
-    var modelProb = calcModelProb(s.score);
-    if(modelProb && modelProb > 0.1) {
-      s.impliedOdd = parseFloat((100 / modelProb).toFixed(2));
-      s._modelProb = modelProb;
-    }
-  });
 }
 
 // ===== RENDER CLUSTER =====
