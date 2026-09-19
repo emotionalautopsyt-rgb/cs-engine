@@ -2183,7 +2183,7 @@ function avaliarAprovacaoGenio(ctx) {
   if(amistoso) motivos.push('amistoso/pré-temporada aumenta variância e reduz previsibilidade');
   if(rotacao) motivos.push('possível rotação/reservas/desfalques fortes');
   if(semObjetivo) motivos.push('motivação competitiva fraca ou incerta');
-  if(baixaLiq) motivos.push('liquidez CS insuficiente para leitura forte do mercado');
+  // liquidez removida dos motivos — é foto de um tick, não leitura de mercado
   if(csPouco) motivos.push('poucas odds CS válidas coladas');
 
   if(crossScore !== null) {
@@ -2294,7 +2294,6 @@ function renderIndiceConfianca(ap) {
       + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Favorito <b style="color:var(--txt);">'+(d.fav||0)+'/'+w.fav+'</b></div>'
       + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Over 2.5 <b style="color:var(--txt);">'+(d.over||0)+'/'+w.over+'</b></div>'
       + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">BTTS <b style="color:var(--txt);">'+(d.btts||0)+'/'+w.btts+'</b></div>'
-      + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Liquidez CS <b style="color:var(--txt);">'+(d.liq||0)+'/'+w.liq+'</b></div>'
       + '<div style="font-family:Space Mono,monospace;font-size:7px;color:var(--txt3);">Contexto <b style="color:var(--txt);">'+(d.ctx||0)+'/'+w.ctx+'</b></div>'
     + '</div>'
     + '<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-style:italic;line-height:1.5;">'
@@ -2375,23 +2374,20 @@ function calcIndicePerfil(fav, over, btts, opts) {
   var pBttsBase = escalaSuave(btts, [[1.50,10],[1.85,10],[2.10,7],[2.30,5],[2.60,2]]);
   var pBtts = fav <= 1.85 ? Math.max(pBttsBase, 7) : pBttsBase;
 
-  // Liquidez CS — mesma lista de placares nos dois chamadores (antes eram
-  // duas listas diferentes, o que dava totais diferentes para o mesmo jogo)
+  // LIQUIDEZ REMOVIDA DO ÍNDICE. O número que a Betfair mostra ao lado da odd
+  // é o que está na fila naquele tick — não é o mercado, e pode mudar num
+  // segundo. Um placar com R$284 na melhor ponta pode ter muito mais dinheiro
+  // um tick atrás. Pontuar o jogo por isso era transformar uma foto do
+  // momento em critério de decisão. O peso foi redistribuído para as odds,
+  // que é o que realmente descreve o perfil do jogo.
   var liqTotal = 0;
   if(S && S.csOddsLiq) {
-    ['1-0','0-1','1-1','2-0','0-2','2-1','1-2','3-0','0-3','0-0'].forEach(function(sc){
-      liqTotal += (S.csOddsLiq[sc] || 0);
-    });
+    Object.keys(S.csOddsLiq).forEach(function(sc){ liqTotal += (S.csOddsLiq[sc] || 0); });
   }
-  // sem odds coladas → neutro, não zero (ausência de dado não é sinal ruim)
-  var pLiq = liqTotal === 0 ? 5
-           : liqTotal >= 200000 ? 10
-           : liqTotal >= 100000 ? 6
-           : liqTotal >= 50000  ? 3 : 1;
 
   var pCtx = opts.semMotivacao ? 1 : opts.compOficial ? 10 : 5;
 
-  var idx10 = pFav*0.40 + pOver*0.20 + pBtts*0.20 + pLiq*0.10 + pCtx*0.10;
+  var idx10 = pFav*0.45 + pOver*0.225 + pBtts*0.225 + pCtx*0.10;
   var idx100 = Math.round(idx10 * 10);
 
   var faixa, rotulo, cor;
@@ -2404,14 +2400,86 @@ function calcIndicePerfil(fav, over, btts, opts) {
     indice: idx100, faixa: faixa, rotulo: rotulo, cor: cor,
     liqTotal: liqTotal,
     componentes: {
-      fav:  +(pFav*4).toFixed(0),   // reescalados para o peso em 0-100
-      over: +(pOver*2).toFixed(0),
-      btts: +(pBtts*2).toFixed(0),
-      liq:  +(pLiq).toFixed(0),
+      fav:  +(pFav*4.5).toFixed(0),   // reescalados para o peso em 0-100
+      over: +(pOver*2.25).toFixed(0),
+      btts: +(pBtts*2.25).toFixed(0),
       ctx:  +(pCtx).toFixed(0)
     },
-    pesos: { fav:40, over:20, btts:20, liq:10, ctx:10 }
+    pesos: { fav:45, over:23, btts:23, ctx:10 }
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PERFIL DE GOLS — quantos gols cada time COSTUMA se envolver
+// ═══════════════════════════════════════════════════════════════════
+// O motor sabia SE a zebra marca (marca_pct) mas não QUANTOS. São perguntas
+// diferentes e decidem placares diferentes: uma zebra que marca 1 gol quando
+// marca aponta para 2-1 e 1-1; uma que marca 2 com frequência abre 2-2, 1-2 e
+// 3-2. Mesmo marca_pct, clusters opostos.
+//
+// Estimativa: marca_pct dá P(marcar zero) direto. O resto da massa é
+// distribuída por Poisson condicionada a "marcou pelo menos um", com o λ
+// resolvido para reproduzir a média de gols marcados. Usa os dois números que
+// a fonte já entrega, sem inventar nenhum.
+function perfilGols(form) {
+  if(!form) return null;
+  var m = +form.media_gols_marcados || 0;
+  var p = (+form.marca_pct || 0) / 100;          // P(marca >= 1)
+  var n = +form.amostra || 0;
+  if(!(m > 0) || n < 2) return null;
+  if(!(p > 0.02)) p = Math.min(0.95, 1 - Math.exp(-m));   // sem marca_pct: deriva da média
+
+  // média condicional a ter marcado
+  var mCond = m / p;
+  if(!(mCond >= 1)) mCond = 1.001;
+  // resolve λ tal que λ/(1-e^-λ) = mCond  (Poisson truncada em zero)
+  var lo = 0.001, hi = 8;
+  for(var i = 0; i < 60; i++) {
+    var mid = (lo + hi) / 2;
+    var f = mid / (1 - Math.exp(-mid));
+    if(f > mCond) hi = mid; else lo = mid;
+  }
+  var lam = (lo + hi) / 2;
+  var denom = 1 - Math.exp(-lam);
+  function condK(k) {                              // P(k gols | marcou)
+    var v = 1; for(var j = 1; j <= k; j++) v *= lam / j;
+    return (v * Math.exp(-lam)) / (denom || 1);
+  }
+  var pZero = 1 - p;
+  var pUm   = p * condK(1);
+  var pDois = p * condK(2);
+  var pTres = Math.max(0, p - pUm - pDois);
+
+  // evidência direta dos placares mais frequentes — vale mais que a média
+  var direto = [];
+  [form.placar_mais_freq, form.placar_quando_btts].forEach(function(pl){
+    if(pl && /^\d-\d$/.test(pl)) direto.push(pl);
+  });
+
+  // CALIBRAÇÃO. A primeira versão classificava como "chega a 3 gols com
+  // frequência" um time que marca 1.5 por jogo — matematicamente ele faz 3+
+  // em ~19% dos jogos, mas 1 em 5 não é "frequência", e esse rótulo ADICIONA
+  // um placar de 3 gols ao cluster. Era o caminho para o cluster ficar
+  // agressivo demais, que é justamente o erro que se quer evitar.
+  // Agora cada rótulo exige a probabilidade E a média — os dois, não um só.
+  var pDoisMais = pDois + pTres;
+  var tipo, rotulo;
+  if(pZero >= 0.55)                                  { tipo='SECO';      rotulo='raramente marca'; }
+  else if(pTres >= 0.25 && m >= 1.80)                { tipo='TRES_MAIS'; rotulo='chega a 3 gols com frequência'; }
+  else if(pDoisMais >= 0.32 && m >= 1.30)            { tipo='DOIS_MAIS'; rotulo='marca 2 ou mais com frequência'; }
+  else if(pDoisMais < 0.15)                          { tipo='UM_GOL';    rotulo='quando marca, marca 1'; }
+  else                                               { tipo='UM_AS_VEZES_DOIS'; rotulo='marca 1, às vezes 2'; }
+
+  // amostra pequena rebaixa a confiança — não o resultado
+  var confianca = Math.min(1, n / 6) * (form.temporadaAnterior ? 0.6 : 1);
+
+  return { tipo:tipo, rotulo:rotulo, amostra:n, confianca:+confianca.toFixed(2),
+           media:m, marcaPct:+(100*p).toFixed(0), mediaQuandoMarca:+mCond.toFixed(2),
+           pZero:+(100*pZero).toFixed(1), pUm:+(100*pUm).toFixed(1),
+           pDois:+(100*pDois).toFixed(1), pTresMais:+(100*pTres).toFixed(1),
+           placaresDiretos: direto,
+           resumo: rotulo + ' (' + (100*pZero).toFixed(0) + '% zero / ' +
+                   (100*pUm).toFixed(0) + '% um / ' + (100*(pDois+pTres)).toFixed(0) + '% dois+)' };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2714,23 +2782,64 @@ function csMercados(g) {
 // Substitui o split fixo 0.55/0.45 e o ρ fixo. Mínimos quadrados em grade com
 // refino — determinístico, sem julgamento narrativo, sem número inventado.
 // Retorna null quando não há odd de favorito utilizável (o chamador decide).
+// Overround REAL da tabela CS colada. Não é constante chutada: é medido na
+// própria tabela do jogo. Retorna 1 quando a tabela é curta demais para medir.
+function overroundTabelaCS() {
+  if(!S.csOdds) return 1;
+  var soma = 0, n = 0;
+  Object.keys(S.csOdds).forEach(function(sc){
+    var o = S.csOdds[sc];
+    if(!(o > 1)) return;
+    if(/^\d-\d$/.test(sc) || sc.indexOf('any_other') === 0) { soma += 1/o; n++; }
+  });
+  // precisa da tabela quase inteira para o número significar alguma coisa
+  if(n < 14 || soma < 0.9 || soma > 1.25) return 1;
+  return soma;
+}
+
 function resolverSplitLambda(lamTotal, favOdd, bttsOdd, rhoPadrao) {
   if(!(lamTotal > 0) || !(favOdd > 1.01)) return null;
-  var alvoFav  = 1 / favOdd;                                  // prob implícita crua
-  var alvoBtts = (bttsOdd > 1.01) ? (1 / bttsOdd) : null;
-  // NOTA: não removemos o overround. Na exchange ele é pequeno (~1%) e, como o
-  // volume vem do over e a repartição vem da razão, boa parte do viés se cancela.
-  // Fica registrado como aproximação conhecida, não como certeza.
+
+  // ── DE-VIG PELA PRÓPRIA TABELA CS ────────────────────────────────────
+  // Antes os alvos eram as probabilidades implícitas CRUAS. Elas somam mais
+  // que 100% (a margem da exchange), então formam um conjunto de metas
+  // impossível de reproduzir por uma distribuição de verdade — e o ajuste
+  // compensa empurrando ρ para o extremo da faixa.
+  //
+  // Medido em Bologna x Torino: com alvos crus o ρ travou em -0.22 (o limite
+  // do código) e o 0-0 saiu em 12.53%, contra 10.93% de uma referência
+  // independente — 15% de inflação no placar mais sensível do jogo, e o badge
+  // de edge dele pulou de +7% para +23%.
+  //
+  // O fator de correção não é chutado: é o overround MEDIDO na tabela CS que
+  // o usuário colou. Sem tabela completa, fica 1 e o comportamento é o antigo.
+  // Cada mercado tem margem PRÓPRIA. Usar o overround da grade CS (medido em
+  // ~102.3% no Bologna x Torino) para corrigir favorito e ambas foi testado e
+  // piorou: o mercado de ambas marcam diverge da grade CS em ~5%, bem além de
+  // qualquer margem. Fica uma correção modesta e documentada — mercados 2-way
+  // e 3-way na exchange rodam perto de 101%.
+  var VIG_MERCADO = 1.01;
+  var alvoFav  = (1 / favOdd) / VIG_MERCADO;
+  var alvoBtts = (bttsOdd > 1.01) ? (1 / bttsOdd) / VIG_MERCADO : null;
 
   var R_MIN = 0.34, R_MAX = 0.92;      // fora disso não é jogo de futebol real
-  var RHO_MIN = -0.22, RHO_MAX = 0.04; // faixa empírica + folga
+  var RHO_MIN = -0.26, RHO_MAX = 0.06; // faixa empírica com folga nos dois lados
+
+  // ρ é parâmetro AUXILIAR, não alvo. Ele controla as células 0-0/1-0/0-1/1-1 e
+  // por isso decide sozinho o preço do 0-0 — no Bologna x Torino a diferença
+  // entre ρ=-0.22 e ρ=-0.08 move o edge do 0-0 de +23% para +6%.
+  // Deixá-lo livre para perseguir o alvo de "ambas marcam" o empurrava para o
+  // extremo da faixa sempre que esse mercado discordava da grade CS. Agora ele
+  // é puxado para o valor empírico e só se afasta quando os dados exigem.
+  var RHO_PRIOR = 0.13 * -1;      // faixa típica em futebol europeu: -0.18 a -0.08
+  var PESO_BTTS = 0.35;           // era 0.6 — o btts é o sinal mais ruidoso dos três
+  var PESO_RHO  = 0.020;          // regularização: 0.1 de desvio em ρ ≈ 1.4pp no favorito
 
   function erro(r, rho) {
     var m = csMercados(csGrid(lamTotal * r, lamTotal * (1 - r), rho));
     var e = Math.pow(m.pFav - alvoFav, 2);
-    // Peso menor no btts: a odd do favorito é o sinal mais limpo de repartição,
-    // o btts é o mais sujeito a ruído de liquidez em ligas menores.
-    if(alvoBtts !== null) e += 0.6 * Math.pow(m.pBtts - alvoBtts, 2);
+    if(alvoBtts !== null) e += PESO_BTTS * Math.pow(m.pBtts - alvoBtts, 2);
+    e += PESO_RHO * Math.pow(rho - RHO_PRIOR, 2);
     return e;
   }
 
@@ -2755,9 +2864,18 @@ function resolverSplitLambda(lamTotal, favOdd, bttsOdd, rhoPadrao) {
     passoR /= 2; passoRho /= 2;
   }
 
+  // Parâmetro encostado no limite da faixa significa que o ajuste quis ir
+  // além e não pôde — as probabilidades dos placares baixos (que é o que ρ
+  // controla) ficam pouco confiáveis. Fica registrado para o gate.
+  var naBorda = (best.rho <= RHO_MIN + 1e-6) || (best.rho >= RHO_MAX - 1e-6)
+             || (best.r <= R_MIN + 1e-6)     || (best.r >= R_MAX - 1e-6);
+  if(naBorda) console.log('[AJUSTE] parâmetro no limite da faixa (r=' + best.r.toFixed(3) +
+    ', ρ=' + best.rho.toFixed(3) + ') — leitura dos placares baixos menos confiável.');
+
   return {
     r: best.r,
     rho: best.rho,
+    naBorda: naBorda,
     lamFav: lamTotal * best.r,
     lamZeb: lamTotal * (1 - best.r),
     erro: Math.sqrt(best.e)
@@ -2812,6 +2930,7 @@ function calcPoisson() {
     S._splitDegradado = true;
   }
   if(split) S._splitDegradado = false;
+  S._ajusteNaBorda = !!(split && split.naBorda);
 
   var lamFavFinal = lamFavMerc;
   var lamZebFinal = lamZebMerc;
@@ -5109,10 +5228,15 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     // Garantir âncora coerente com jogo aberto
     // Se âncora é score limpo do favorito (1-0) em jogo aberto → mudar para 1-1 ou 2-1
     if(ancora === '1-0' || ancora === '2-0') {
-      var liq11 = liqScoreMotor('1-1'); // 1-1 simétrico
-      var liq21 = liqScoreMotor('2-1'); // favorito visitante: lê 1-2
-      if(liq11 > 0 || liq21 > 0) {
-        ancora = liq11 >= liq21 ? '1-1' : '2-1';
+      // A âncora era escolhida pela LIQUIDEZ de cada placar. Isso está errado
+      // por dois motivos: o número que a Betfair mostra é o que está na fila
+      // NAQUELE tick, não o mercado; e mesmo que fosse o mercado inteiro,
+      // dinheiro parado não diz qual placar é mais provável. Agora decide pela
+      // probabilidade real das odds, com o btts como desempate.
+      var p11anc = oddScoreMotor('1-1') > 0 ? 100/oddScoreMotor('1-1') : 0;
+      var p21anc = oddScoreMotor('2-1') > 0 ? 100/oddScoreMotor('2-1') : 0;
+      if(p11anc > 0 || p21anc > 0) {
+        ancora = p11anc >= p21anc ? '1-1' : '2-1';
       } else {
         ancora = btts < 1.85 ? '1-1' : '2-1';
       }
@@ -5692,6 +5816,86 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     console.log('[FORM MOMENTO] Favorito em momento negativo — scores de goleada removidos');
   }
   // ═══════════════════════════════════════════════════════════════════
+  // CAMADA DE GOLS — quantos gols cada time costuma se envolver
+  // ═══════════════════════════════════════════════════════════════════
+  // Responde o que o motor não perguntava: a zebra marca UM gol ou mais de um?
+  // O favorito em casa se envolve em quantos gols? Faz goleada? Esse confronto
+  // tem muito 1-1? Mesmo marca_pct, as respostas abrem clusters opostos.
+  (function camadaGols(){
+    var fFav = favEhVisitante ? S._formFora : S._formCasa;
+    var fZeb = favEhVisitante ? S._formCasa : S._formFora;
+    var pgFav = perfilGols(fFav), pgZeb = perfilGols(fZeb);
+    S._perfilGolsFav = pgFav; S._perfilGolsZeb = pgZeb;
+    if(!pgFav && !pgZeb) { S._camadaGols = null; return; }
+
+    var acoes = [];
+    function temScore(sc){ return clusterScores.indexOf(sc) >= 0; }
+    function add(sc, motivo){
+      if(temScore(sc) || !(oddScoreMotor(sc) > 0)) return;
+      clusterScores.push(sc); acoes.push('+ ' + sc + ' — ' + motivo);
+    }
+    function tira(sc, motivo){
+      if(!temScore(sc) || sc === ancora) return;
+      clusterScores = clusterScores.filter(function(x){ return x !== sc; });
+      acoes.push('- ' + sc + ' — ' + motivo);
+    }
+    var zebraDois = clusterScores.filter(function(sc){
+      var pt = sc.split('-'); return pt.length===2 && parseInt(pt[1]) >= 2; });
+    var favTres = clusterScores.filter(function(sc){
+      var pt = sc.split('-'); return pt.length===2 && parseInt(pt[0]) >= 3; });
+
+    if(pgZeb && pgZeb.confianca >= 0.33) {
+      if(pgZeb.tipo === 'UM_GOL' || pgZeb.tipo === 'SECO') {
+        var h2hAbre = S._h2hData && S._h2hData.amostra >= 4 && (S._h2hData.btts_pct || 0) >= 60;
+        if(!h2hAbre) zebraDois.forEach(function(sc){
+          var pr = oddScoreMotor(sc) > 0 ? 100/oddScoreMotor(sc) : 0;
+          if(pr < 6.0) tira(sc, 'zebra ' + pgZeb.rotulo + ' (' + pgZeb.pDois +
+            '% de marcar 2, ' + pgZeb.amostra + ' jogos) e a odd nao sustenta');
+        });
+      } else if((pgZeb.tipo === 'DOIS_MAIS' || pgZeb.tipo === 'TRES_MAIS') && pgZeb.confianca >= 0.5) {
+        // adicionar placar pede mais confiança do que deixar de adicionar:
+        // um placar a mais dilui o retorno de todos os outros
+        if(!zebraDois.length) {
+          var cand = ['2-2','1-2','3-2'].filter(function(sc){
+            var pr = oddScoreMotor(sc) > 0 ? 100/oddScoreMotor(sc) : 0; return pr >= 4.0; })
+            .sort(function(a,b){ return oddScoreMotor(a) - oddScoreMotor(b); });
+          if(cand.length) add(cand[0], 'zebra ' + pgZeb.rotulo + ' (' +
+            (pgZeb.pDois + pgZeb.pTresMais).toFixed(0) + '% de marcar 2+) e o cluster nao cobria isso');
+        }
+      }
+    }
+
+    if(pgFav && pgFav.confianca >= 0.33) {
+      if(pgFav.tipo === 'TRES_MAIS' && pgFav.confianca >= 0.5) {
+        var c3 = ['3-0','3-1'].filter(function(sc){
+          var pr = oddScoreMotor(sc) > 0 ? 100/oddScoreMotor(sc) : 0; return pr >= 3.5; });
+        if(!favTres.length && c3.length) {
+          var escolha = (pgZeb && (pgZeb.tipo === 'SECO' || pgZeb.tipo === 'UM_GOL') && pgZeb.pZero >= 45)
+            ? (c3.indexOf('3-0') >= 0 ? '3-0' : c3[0])
+            : (c3.indexOf('3-1') >= 0 ? '3-1' : c3[0]);
+          add(escolha, 'favorito ' + pgFav.rotulo + ' (' + pgFav.pTresMais + '% de fazer 3+)');
+        }
+      } else if(pgFav.pTresMais < 10 && favTres.length) {
+        favTres.forEach(function(sc){
+          var pr = oddScoreMotor(sc) > 0 ? 100/oddScoreMotor(sc) : 0;
+          if(pr < 5.0) tira(sc, 'favorito so faz 3+ em ' + pgFav.pTresMais + '% dos jogos');
+        });
+      }
+    }
+
+    var h = S._h2hData;
+    var muito11 = h && h.amostra >= 4 &&
+      ((h.placar_mais_freq === '1-1') || ((h.empates_pct || 0) >= 38 && (h.media_gols || 9) <= 2.6));
+    if(muito11) add('1-1', 'H2H marcado por 1-1 / empates com gol (' +
+      (h.placar_mais_freq || '') + ', empates ' + (h.empates_pct||0) + '%)');
+
+    S._camadaGols = { fav:pgFav, zeb:pgZeb, muito11:!!muito11, acoes:acoes };
+    if(pgFav) console.log('[GOLS FAVORITO] ' + pgFav.resumo + ' | amostra ' + pgFav.amostra);
+    if(pgZeb) console.log('[GOLS ZEBRA] ' + pgZeb.resumo + ' | amostra ' + pgZeb.amostra);
+    if(acoes.length) console.log('[CAMADA GOLS] ' + acoes.join('  |  '));
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════
   // RECONCILIAÇÃO — devolver clusterScores para mainScores/protection
   // ═══════════════════════════════════════════════════════════════════
   // BUG ESTRUTURAL CORRIGIDO. `clusterScores` nasce na linha do
@@ -6177,12 +6381,14 @@ async function analisarJogo() {
   // MAS: só usa liquidez como critério definitivo se a odd do usuário (fav) também
   // estiver fora da faixa de favorito normal (>2.35) — caso contrário, um único
   // score com liquidez alta distorceria o resultado (ex: 1-2 com R$2.75k enganando)
-  const favPorLiq = (liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.30)
-    && fav > 2.35; // só inverte por liquidez se o próprio fav confirmar que não é favorito claro
+  // DESLIGADO: decidir de que lado está o favorito pela soma de liquidez dos
+  // placares é decidir por dinheiro parado num tick. As odds já dizem isso, e
+  // dizem melhor. Mantido o cálculo só para o log de diagnóstico.
+  const favPorLiq = false;
   // Combinado: odds + liquidez juntos (threshold mais suave)
-  const favPorCombinado = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85 &&
-                           liqVisitante > 0 && liqCasa > 0 && liqVisitante > liqCasa * 1.10)
-    && fav > 2.00; // só inverte combinado se o fav já está na zona de dúvida
+  // Sem o braço de liquidez: só as ODDS decidem o lado do favorito.
+  const favPorCombinado = (avgVisitante > 0 && avgCasa > 0 && avgVisitante < avgCasa * 0.85)
+    && fav > 2.00;
 
   // Camada 3: texto da análise
   const textoLower = texto.toLowerCase();
