@@ -1876,22 +1876,17 @@ function confirmarEncerrar(id) {
       return (c.score||c) === placarFinal;
     });
 
-    // Se o placar não bateu literalmente, verificar se bate no card de GOLEADA
-    // (any_other_home = favorito casa vence por 4+, any_other_away = visitante vence por 4+)
+    // Se o placar não bateu literalmente, verificar se cai num balde
+    // "qualquer outra" que esteja no cluster — cobertura em anyOtherCobre().
     if(!placarNoCluster && placarFinal) {
       var partes = placarFinal.split('-').map(Number);
       if(partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1])) {
         var golsCasa = partes[0], golsFora = partes[1];
-        var totalGols = golsCasa + golsFora;
-        var temAnyHome = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_home'; });
-        var temAnyAway = clusterSalvo.some(function(c){ return (c.score||c) === 'any_other_away'; });
-        // Goleada casa (4+ gols diferença, casa vencendo) bateu any_other_home
-        if(temAnyHome && golsCasa > golsFora && golsCasa >= 4) placarNoCluster = true;
-        // Goleada visitante (4+ gols diferença, visitante vencendo) bateu any_other_away
-        if(temAnyAway && golsFora > golsCasa && golsFora >= 4) placarNoCluster = true;
-        // Também conta se a diferença é 4+ gols independente do total
-        if(temAnyHome && (golsCasa - golsFora) >= 4) placarNoCluster = true;
-        if(temAnyAway && (golsFora - golsCasa) >= 4) placarNoCluster = true;
+        ['any_other_home','any_other_away','any_other_draw'].forEach(function(b){
+          if(placarNoCluster) return;
+          var temBalde = clusterSalvo.some(function(c){ return (c.score||c) === b; });
+          if(temBalde && anyOtherCobre(b, golsCasa, golsFora)) placarNoCluster = true;
+        });
       }
     }
     var placarNaAncora = placarFinal && g.savedAncora && g.savedAncora === placarFinal;
@@ -4017,13 +4012,113 @@ function poissonScoreProb(golsFav, golsZeb) {
 // e devolve a probabilidade do MODELO (não do mercado) para esse score,
 // já considerando de que lado está o favorito.
 function calcModelProb(scoreAbsoluto) {
-  if(!scoreAbsoluto || scoreAbsoluto.startsWith('any_other')) return null;
+  if(!scoreAbsoluto) return null;
+  // Os baldes "qualquer outra" TAMBÉM têm probabilidade de modelo — é a soma
+  // das células da grade que caem dentro deles. Devolver null aqui significava
+  // que a única perna do cluster sem cruzamento modelo x preço era justamente
+  // a que cobre a faixa mais larga de resultados.
+  if(scoreAbsoluto.startsWith('any_other')) return probModeloAnyOther(scoreAbsoluto);
   var parts = scoreAbsoluto.split('-').map(Number);
   if(parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
   var golsCasa = parts[0], golsFora = parts[1];
   var golsFav = S._favEhVisitante ? golsFora : golsCasa;
   var golsZeb = S._favEhVisitante ? golsCasa : golsFora;
   return poissonScoreProb(golsFav, golsZeb);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BALDES "QUALQUER OUTRA" (any_other_home / away / draw)
+// ═══════════════════════════════════════════════════════════════════
+// Na Betfair o correct score é cotado placar a placar até certo ponto (quase
+// sempre 0-0 .. 3-3) e TODO o resto cai em três baldes. O arquivo tinha três
+// definições diferentes do que cada balde cobre, e as três erravam:
+//
+//  · rótulo do card:  '4-1 / 4-2 / 4-3 / 5-0+'  — sem o 4-0. O Vasco venceu
+//    o Coritiba por 4-0, que está DENTRO do any_other_home, e o card dizia
+//    que não estava.
+//  · `_covers`:       '3-2/4-0/4-1+'  — o 3-2 é cotado à parte, nunca esteve
+//    nesse balde.
+//  · empate raro:     '3-3/4-4+'      — o 3-3 também é cotado à parte.
+//  · mapa de acerto:  qualquer vitória da casa fora do cluster contava como
+//    coberta pelo any_other_home — um 2-1 marcava verde sem ter ganho nada.
+//
+// Agora existe UMA fonte e ela é a própria tabela colada: o que está cotado
+// individualmente não entra no balde; o que não está, entra. Se um dia a
+// exchange cotar até 4-4, a cobertura se ajusta sozinha.
+var ANY_GRADE_PADRAO = 3;   // grade clássica, usada só quando não há tabela
+
+function _gradeCotada(csOdds) {
+  var set = {}, achou = false;
+  var t = csOdds || (typeof S !== 'undefined' ? S.csOdds : null);
+  if(t) Object.keys(t).forEach(function(k){
+    if(/^\d+-\d+$/.test(k) && t[k] > 0) { set[k] = true; achou = true; }
+  });
+  if(!achou) {
+    for(var h=0; h<=ANY_GRADE_PADRAO; h++)
+      for(var a=0; a<=ANY_GRADE_PADRAO; a++) set[h+'-'+a] = true;
+  }
+  return set;
+}
+
+function _tipoAnyOther(nome) {
+  var s = String(nome||'').toLowerCase();
+  if(s.indexOf('any_other') < 0 && s.indexOf('qualquer') < 0 &&
+     s.indexOf('goleada_extra') < 0 && s.indexOf('empate_raro') < 0 &&
+     s !== 'home' && s !== 'away' && s !== 'draw') return null;
+  if(s.indexOf('home')>=0 || s.indexOf('casa')>=0 || s.indexOf('goleada_extra')>=0) return 'home';
+  if(s.indexOf('away')>=0 || s.indexOf('visitante')>=0) return 'away';
+  if(s.indexOf('draw')>=0 || s.indexOf('empate')>=0) return 'draw';
+  return null;
+}
+
+// O placar (golsCasa x golsFora) cai dentro deste balde?
+function anyOtherCobre(nomeBalde, golsCasa, golsFora, csOdds) {
+  var tipo = _tipoAnyOther(nomeBalde);
+  if(!tipo) return false;
+  if(!(golsCasa >= 0) || !(golsFora >= 0)) return false;
+  if(tipo === 'home' && !(golsCasa > golsFora)) return false;
+  if(tipo === 'away' && !(golsFora > golsCasa)) return false;
+  if(tipo === 'draw' && golsCasa !== golsFora)  return false;
+  return !_gradeCotada(csOdds)[golsCasa + '-' + golsFora];
+}
+
+// Texto legível do que o balde cobre, DERIVADO da tabela — nunca fixo.
+function anyOtherCobertura(nomeBalde, csOdds) {
+  var tipo = _tipoAnyOther(nomeBalde);
+  if(!tipo) return '';
+  var LIM = 8, nivel = -1;
+  for(var n=0; n<=LIM && nivel<0; n++) {
+    for(var h=0; h<=n && nivel<0; h++) for(var a=0; a<=n; a++) {
+      if(Math.max(h,a) === n && anyOtherCobre(nomeBalde, h, a, csOdds)) { nivel = n; break; }
+    }
+  }
+  if(nivel < 0) return '';
+  var itens = [];
+  for(var h2=0; h2<=nivel; h2++) for(var a2=0; a2<=nivel; a2++) {
+    if(Math.max(h2,a2) === nivel && anyOtherCobre(nomeBalde, h2, a2, csOdds))
+      itens.push({h:h2, a:a2, t:h2+a2});
+  }
+  itens.sort(function(x,y){ return x.t - y.t; });
+  var lista = itens.slice(0, 5).map(function(i){ return i.h+'-'+i.a; });
+  var prox = nivel + 1;
+  lista.push(tipo === 'home' ? prox+'-0+' : tipo === 'away' ? '0-'+prox+'+' : prox+'-'+prox+'+');
+  return lista.join(' / ');
+}
+
+// Probabilidade do MODELO para o balde inteiro — a soma das células da grade
+// Dixon-Coles que caem dentro dele. Sem isso o balde era a única perna do
+// cluster julgada só pela odd, enquanto todas as outras cruzavam modelo x preço.
+function probModeloAnyOther(nomeBalde, csOdds) {
+  var tipo = _tipoAnyOther(nomeBalde);
+  if(!tipo) return null;
+  if(!S._lamFav || !S._lamZeb || S._lamFav <= 0 || S._lamZeb <= 0) return null;
+  var g = csGrid(S._lamFav, S._lamZeb, S._dcRho), soma = 0;
+  for(var f=0; f<=CS_GRID_MAX; f++) for(var z=0; z<=CS_GRID_MAX; z++) {
+    var gc = S._favEhVisitante ? z : f;
+    var gf = S._favEhVisitante ? f : z;
+    if(anyOtherCobre(nomeBalde, gc, gf, csOdds)) soma += g[f][z];
+  }
+  return parseFloat((soma*100).toFixed(2));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4072,6 +4167,7 @@ function aplicarDutch(valid, stake) {
     var tilt = Math.max(EDGE_TILT_MIN, Math.min(EDGE_TILT_MAX, 1 + EDGE_TILT_K * e));
     return { s: s, w: base * tilt, tilt: tilt, edge: e };
   });
+  _pisoRetornoPorPerna(pesos);
   var sumW = pesos.reduce(function(a,p){ return a + p.w; }, 0);
   if(!(sumW > 0)) return false;
   pesos.forEach(function(p){
@@ -4086,6 +4182,60 @@ function aplicarDutch(valid, stake) {
     maior.s.stake = parseFloat((maior.s.stake + (stake - somaReal)).toFixed(2));
   }
   return usouEdge;
+}
+
+// ── NENHUMA PERNA PODE DAR PREJUÍZO SE ELA ACERTAR ──────────────────
+// Achado em Vasco x Coritiba, quando o balde de goleada (@5,60) passou a
+// receber stake: a inclinação por edge tem piso 0,55 e teto 1,80, uma
+// amplitude de 3,3x. Num cluster de 6 pernas isso empurrou o 1-0 para
+// R$3,81 numa banca de R$40 — se o jogo terminasse 1-0, o placar ESTAVA
+// coberto e mesmo assim o resultado era R$-7,23. E não era falta de
+// margem: o Dutch plano daquele mesmo cluster pagava +39,9% em TODAS as
+// pernas. A inclinação sozinha criou a perna perdedora.
+//
+// No método do usuário cada perna é um degrau do caminho que ele vai
+// gerir ao vivo. Um degrau que dá vermelho ao ser acertado não é degrau.
+// Então: depois da inclinação, toda perna recebe pelo menos a stake que
+// devolve a banca inteira + PISO_RETORNO_PERNA. O excedente continua
+// distribuído pelo edge entre as pernas que já estão acima do piso.
+// Se a soma dos mínimos não couber (mercado sem margem), o piso cede até
+// o retorno do Dutch plano — nunca se pede o impossível.
+var PISO_RETORNO_PERNA = 0.05;   // +5% da banca, no mínimo, em cada perna
+
+function _pisoRetornoPorPerna(pesos) {
+  if(!pesos || pesos.length < 2) return;
+  var somaInv = 0, ok = true;
+  pesos.forEach(function(p){
+    if(!(p.s && p.s.odd > 1)) ok = false; else somaInv += 1/p.s.odd;
+  });
+  if(!ok || !(somaInv > 0)) return;
+  var retPlano = 1/somaInv - 1;                 // retorno uniforme máximo possível
+  var piso = Math.min(PISO_RETORNO_PERNA, retPlano);
+  if(!(piso > 0)) return;                       // cluster sem margem: nada a garantir
+
+  var tot = pesos.reduce(function(a,p){ return a + p.w; }, 0);
+  if(!(tot > 0)) return;
+  var share = pesos.map(function(p){ return p.w / tot; });
+  var minS  = pesos.map(function(p){ return (1 + piso) / p.s.odd; });
+
+  for(var it = 0; it < 25; it++) {
+    var travado = share.map(function(x, i){ return x < minS[i] - 1e-12; });
+    if(!travado.some(Boolean)) break;
+    var somaTrav = 0, somaLivre = 0;
+    share = share.map(function(x, i){
+      if(travado[i]) { somaTrav += minS[i]; return minS[i]; }
+      somaLivre += x; return x;
+    });
+    var restante = 1 - somaTrav;
+    if(!(restante > 0) || !(somaLivre > 0)) {   // nada sobra: rateio pelo mínimo
+      var sm = minS.reduce(function(a,b){ return a + b; }, 0);
+      share = minS.map(function(m){ return m / sm; });
+      break;
+    }
+    var esc = restante / somaLivre;
+    share = share.map(function(x, i){ return travado[i] ? x : x * esc; });
+  }
+  pesos.forEach(function(p, i){ p.w = share[i]; });
 }
 
 // edge de um placar = quanto o modelo ganha bancando aquela odd.
@@ -8101,12 +8251,20 @@ REGRAS ABSOLUTAS:
           // over moderado/alto sem prob compensando não justifica goleada
           const overJustificaGoleadaExp = overAtualExp2 <= 1.90 || probExp >= 12.0;
 
+          // mesma segunda rota da calcStakes — modelo x preço, não faixa de odd
+          const probModDest = probModeloAnyOther(expScore) || 0;
+          const edgeModDest = probExp > 0 ? (probModDest/probExp - 1) : -1;
+          const rotaModeloDest = probModDest >= 8.0 && edgeModDest >= 0;
+          const rotaPerfilDest = (perfilGoleada === 'LIMPA' || (perfilGoleada === 'SUJA' && volumePrecoce));
+
           const entrarComoDestino = !favForteJogoFechadoExp && overJustificaGoleadaExp &&
-            (perfilGoleada === 'LIMPA' || (perfilGoleada === 'SUJA' && volumePrecoce)) &&
+            (rotaModeloDest || rotaPerfilDest) &&
             (probExp >= probAncora || probExp >= 15.0);
 
-          console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% | âncora: '+
-            probAncora.toFixed(1)+'% | favForteFechado:'+favForteJogoFechadoExp+
+          console.log('[GOLEADA] '+expScore+' tem '+probExp.toFixed(1)+'% de mercado | modelo: '+
+            probModDest.toFixed(1)+'% (edge '+(edgeModDest>=0?'+':'')+(edgeModDest*100).toFixed(0)+'%) | âncora: '+
+            probAncora.toFixed(1)+'% | perfil: '+perfilGoleada+
+            ' | favForteFechado:'+favForteJogoFechadoExp+
             ' | overJustifica:'+overJustificaGoleadaExp+' | modo: '+(entrarComoDestino ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
 
           if(entrarComoDestino) {
@@ -8896,17 +9054,39 @@ function calcStakes(cluster, stake, analysisText) {
       const poissonExp = S._poisson || {};
       const perfilGoleadaExp = poissonExp.perfilGoleada || 'BAIXA';
       const volumePrecoceExp = S._volumePrecoce === true;
-      const entrarComoDestinoExp = (perfilGoleadaExp === 'LIMPA' || (perfilGoleadaExp === 'SUJA' && volumePrecoceExp)) &&
+
+      // ── POR QUE EXISTE UMA SEGUNDA ROTA AQUI ──────────────────────
+      // Vasco x Coritiba (19/09) terminou 4-0. O any_other_home estava
+      // @5,60 (17,9% de mercado) e o MODELO dava 19,4% — o resultado
+      // isolado mais provável de toda a tabela, com preço a favor. Ele
+      // ficou com R$0 e virou card de "expansão" por um motivo só: o
+      // perfil de goleada saiu 'MEDIA' em vez de 'LIMPA'. E esse perfil
+      // é uma faixa de odd — 'LIMPA' exige over <= 1,70; o over do jogo
+      // era 1,71. Um centésimo decidiu se a perna mais provável do jogo
+      // recebia dinheiro. Isso é exatamente o threshold isolado que o
+      // projeto proíbe.
+      // A rota categórica continua (não removi comportamento existente);
+      // ao lado dela entra o MESMO teste que toda outra perna do cluster
+      // já faz: probabilidade do modelo x preço do mercado.
+      var probModExp = probModeloAnyOther(expansionScore) || 0;
+      var edgeModExp = probAnyOther > 0 ? (probModExp/probAnyOther - 1) : -1;
+      var rotaModeloExp = probModExp >= 8.0 && edgeModExp >= 0;
+      var rotaPerfilExp = (perfilGoleadaExp === 'LIMPA' || (perfilGoleadaExp === 'SUJA' && volumePrecoceExp));
+      const entrarComoDestinoExp = (rotaModeloExp || rotaPerfilExp) &&
         (probAnyOther >= probAncoraCl || probAnyOther >= 15.0);
 
-      console.log('[GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+'% | âncora: '+
-        probAncoraCl.toFixed(1)+'% | modo: '+(entrarComoDestinoExp ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
+      console.log('[GOLEADA] '+expansionScore+' tem '+probAnyOther.toFixed(1)+'% de mercado | modelo: '+
+        probModExp.toFixed(1)+'% (edge '+(edgeModExp>=0?'+':'')+(edgeModExp*100).toFixed(0)+'%) | âncora: '+
+        probAncoraCl.toFixed(1)+'% | perfil: '+perfilGoleadaExp+
+        ' | rota: '+(rotaModeloExp?'MODELO':'')+(rotaModeloExp&&rotaPerfilExp?'+':'')+(rotaPerfilExp?'PERFIL':'')+
+        (!rotaModeloExp&&!rotaPerfilExp?'nenhuma':'')+
+        ' | modo: '+(entrarComoDestinoExp ? 'DESTINO NORMAL' : 'ALERTA/EXPANSÃO'));
 
       cluster.push({score:expansionScore, odd:expansionOdd,
         tipo:(entrarComoDestinoExp ? 'destino' : 'expansao'),
         prob:calcProb(expansionOdd), stake:0, lucro:0, oddPG:0,
         _label:(favAwayExpansion ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA'),
-        _covers:(favAwayExpansion ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+')});
+        _covers:anyOtherCobertura(expansionScore)});
       } // fecha else do threshold 8%
     }
 
@@ -9085,7 +9265,14 @@ function calcStakes(cluster, stake, analysisText) {
   if(added) {
     // Recalculate Dutch with added scores — via aplicarDutch (ponto único),
     // senão a ponderação por edge do STEP 3 era sobrescrita por lucro igual.
-    const v2 = cluster.filter(s => s.odd > 0);
+    // `tipo !== 'expansao'` estava faltando SÓ aqui — todos os outros sete
+    // pontos de re-Dutch já filtravam. Consequência medida: o balde de
+    // goleada, empurrado como card de expansão (stake 0) logo acima, entrava
+    // neste rateio e saía com stake; os re-Dutches seguintes o excluíam e
+    // redistribuíam os R$100 inteiros entre os demais, então a stake dele
+    // ficava POR CIMA da banca — R$126 numa operação de R$100, em 114 dos
+    // 1188 cenários da varredura.
+    const v2 = cluster.filter(s => s.odd > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica');
     aplicarDutch(v2, stake);
     v2.forEach(s => {
       s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
@@ -9284,6 +9471,11 @@ function calcStakes(cluster, stake, analysisText) {
         if(!h2hTeve00) {
           s.tipo = 'expansao';
           s.stake = 0; s.lucro = 0;
+          // marca de VETO explícito: o piso de 5 placares não pode repor um
+          // placar que uma regra de leitura tirou de propósito. Sem isso o
+          // 0-0 saía aqui e voltava três blocos depois pelo melhor edge —
+          // o mesmo erro de ordem de execução já corrigido em outros pontos.
+          s._vetado = 'FAV FORTE (fav@'+favAtual+' < 1.65, sem 0-0 no H2H)';
           console.log('[FAV FORTE] 0-0 removido do Dutch — fav@'+favAtual+' < 1.65 (sem precedente de 0-0 no H2H)');
         } else {
           console.log('[FAV FORTE] 0-0 mantido apesar de fav@'+favAtual+' < 1.65 — H2H já teve 0-0 entre esses times');
@@ -9418,9 +9610,28 @@ function calcStakes(cluster, stake, analysisText) {
     while(lucroAtual / stake < minRetornoDin && ativos.length > MIN_SCORES_CLUSTER && tentativas < 5) {
       tentativas++;
       var candidato2 = null;
-      // Prioridade 1: any_other com odd baixa
+      // Prioridade 1: any_other com odd baixa E SEM LASTRO DE MODELO.
+      // BUG REAL, Vasco x Coritiba (19/09, jogo terminou 4-0): este find
+      // era cego — "balde com odd < 8 sai primeiro, ponto". O any_other_home
+      // estava @5,60 (17,9% de mercado) e o modelo dava 19,4%: o resultado
+      // isolado mais provável de toda a tabela, com preço a favor. Ele era
+      // cortado ANTES de qualquer comparação, e o log ainda dizia "sem
+      // modelo" porque o critério nem chegava a ser avaliado.
+      // Um balde caro de fato come muita stake num Dutch de lucro igual —
+      // por isso a prioridade continua existindo. Mas ela agora só vale
+      // quando o balde NÃO tem lastro: se o modelo dá a ele pelo menos o
+      // que o preço pede, ele desce para a fila normal e disputa a vaga
+      // pelo mesmo critério das outras pernas (menos provável sai).
       candidato2 = cluster.find(function(s){
-        return s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao';
+        if(!(s.score && s.score.startsWith('any_other') && s.odd < 8.0 && s.tipo !== 'expansao')) return false;
+        var pmAO = (typeof calcModelProb === 'function') ? calcModelProb(s.score) : null;
+        var pMktAO = s.odd > 0 ? 100/s.odd : 0;
+        if(pmAO > 0 && pMktAO > 0 && pmAO >= pMktAO) {
+          console.log('[MIN RETORNO DIN] '+s.score+' tem odd baixa (@'+s.odd+'), mas o modelo dá '+
+            pmAO.toFixed(1)+'% contra '+pMktAO.toFixed(1)+'% do preço — não sai só por ser balde.');
+          return false;
+        }
+        return true;
       });
       // ── SEGUNDO PONTO DE CORTE — agora também por EDGE ──────────────
       // BUG REAL, pego em Bologna x Torino (19/09): este bloco escolhia quem
@@ -9629,11 +9840,18 @@ function calcStakes(cluster, stake, analysisText) {
     var faltam = MIN_SCORES_CLUSTER - ativos.length;
     console.log('[PISO 5] cluster ficou com '+ativos.length+' placar(es) com stake — repondo '+faltam+'.');
 
-    // 1º: reativar placares que já estão no cluster mas foram zerados
+    // 1º: reativar placares que já estão no cluster mas foram zerados.
+    // Placar com VETO explícito (uma regra de leitura tirou ele de propósito)
+    // fica fora da reposição — repor aqui desfazia a regra silenciosamente.
+    var vetados = [];
     var zerados = cluster.filter(function(s){
-      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
-             !(s.stake > 0) && s.tipo !== 'expansao_especifica';
+      if(!(s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+           !(s.stake > 0) && s.tipo !== 'expansao_especifica')) return false;
+      if(s._vetado) { vetados.push(s); return false; }
+      return true;
     });
+    if(vetados.length) console.log('[PISO 5] não reponho (veto explícito): '+
+      vetados.map(function(s){ return s.score+' — '+s._vetado; }).join(', '));
     // 2º: trazer de fora da tabela CS o que não está no cluster
     var jaTem = {}; cluster.forEach(function(s){ if(s.score) jaTem[s.score] = true; });
     var deFora = Object.keys(S.csOdds || {}).filter(function(sc){
@@ -9665,6 +9883,12 @@ function calcStakes(cluster, stake, analysisText) {
     var _pmBase = (typeof probMinDin === 'number' && probMinDin > 0) ? probMinDin : 5.5;
     var PISO_PROB_MIN = Math.max(3.0, _pmBase * 0.6);
     var todosCand = zerados.concat(deFora);
+    // último recurso: sem nenhum candidato limpo, o veto cede para não
+    // entregar cluster abaixo do piso operacional de 5 placares
+    if(!todosCand.length && vetados.length) {
+      console.log('[PISO 5] sem candidato sem veto — o veto cede para manter o piso de 5.');
+      todosCand = vetados.slice();
+    }
     var plausiveis = todosCand.filter(function(s){ return (s.prob || 0) >= PISO_PROB_MIN; });
     var descartados = todosCand.filter(function(s){ return (s.prob || 0) < PISO_PROB_MIN; });
     if(descartados.length) {
@@ -9674,11 +9898,25 @@ function calcStakes(cluster, stake, analysisText) {
           return s.score+' @'+s.odd+' ('+(s.prob||0).toFixed(1)+'%, edge '+(100*nota(s)).toFixed(0)+'%)';
         }).join(', '));
     }
-    // se NADA for plausível, repõe pelo mais provável do que existe — nunca
-    // pela odd mais longa
+    // ── ENTRA O MAIS PROVÁVEL, PREÇO DESEMPATA ────────────────────────
+    // Espelho exato do critério de CORTE. Antes o motor cortava pelo
+    // caminho MENOS PROVÁVEL e repunha pelo MELHOR EDGE — dois critérios
+    // opostos no mesmo pipeline. Em Vasco x Coritiba isso tirava o 2-1
+    // (9,5% pelo modelo, 3º placar mais provável da partida) e repunha o
+    // 0-0 (5,9%) porque o 0-0 tinha edge maior. Agora o desempate por
+    // preço só age entre placares de probabilidade parecida (0,3pp).
+    function _pmDe(s){
+      var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+        ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+      return (pm > 0) ? pm : (s.prob || 0);
+    }
     var candidatos = (plausiveis.length ? plausiveis : todosCand.slice()
         .sort(function(a,b){ return (b.prob||0) - (a.prob||0); }).slice(0, faltam))
-      .sort(function(a,b){ return nota(b) - nota(a); });
+      .sort(function(a,b){
+        var pa = _pmDe(a), pb = _pmDe(b);
+        if(Math.abs(pa - pb) > 0.3) return pb - pa;
+        return nota(b) - nota(a);
+      });
 
     candidatos.slice(0, faltam).forEach(function(s){
       if(s._reposto) cluster.push(s);
@@ -9692,12 +9930,17 @@ function calcStakes(cluster, stake, analysisText) {
       }
       console.log('[PISO 5] '+s.score+' @'+s.odd+' entra no Dutch'+
         (s._reposto ? ' (veio da tabela CS)' : ' (estava zerado no cluster)')+
-        '  — critério: '+(nota(s) > -1 ? 'edge '+(100*nota(s)).toFixed(1)+'%' : 'probabilidade'));
+        '  — critério: '+_pmDe(s).toFixed(1)+'% pelo modelo'+
+        (nota(s) > -1 ? ' (edge '+(100*nota(s)).toFixed(1)+'%)' : ''));
     });
 
-    // redistribuir a stake entre todos os ativos
+    // Redistribuir a stake entre todos os ativos.
+    // O balde any_other era EXCLUÍDO daqui enquanto o resto do pipeline já o
+    // incluía. Quando ele passou a poder receber stake (Vasco x Coritiba), a
+    // banca do usuário estourava: os outros placares rateavam os R$40 inteiros
+    // e o balde ficava com a stake dele POR CIMA — R$55 numa operação de R$40.
     var novos = cluster.filter(function(s){
-      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+      return s.score && s.odd > 0 &&
              s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
     });
     if(novos.length) {
@@ -9906,12 +10149,13 @@ function renderCluster(cluster, stake) {
     // Special market label for Any Other Win scores
     const specialMarket = (() => {
       const sc = s.score.toLowerCase();
+      // cobertura derivada da tabela colada — ver anyOtherCobertura()
       if(sc === 'any_other_home' || sc === 'qualquer_casa' || sc === 'goleada_extra')
-        return {label:'🏠 GOLEADA CASA', covers:'4-1 / 4-2 / 4-3 / 5-0+', color:'var(--acc)'};
+        return {label:'🏠 GOLEADA CASA', covers:(anyOtherCobertura('any_other_home') || '4-0 / 4-1 / 4-2 / 4-3 / 5-0+'), color:'var(--acc)'};
       if(sc === 'any_other_away' || sc === 'qualquer_visitante')
-        return {label:'✈️ GOLEADA VISITANTE', covers:'0-4 / 1-4 / 2-4 / 0-5+', color:'var(--ylw)'};
+        return {label:'✈️ GOLEADA VISITANTE', covers:(anyOtherCobertura('any_other_away') || '0-4 / 1-4 / 2-4 / 3-4 / 0-5+'), color:'var(--ylw)'};
       if(sc === 'any_other_draw' || sc === 'empate_raro')
-        return {label:'➖ EMPATE RARO', covers:'3-3/4-4+', color:'var(--txt3)'};
+        return {label:'➖ EMPATE RARO', covers:(anyOtherCobertura('any_other_draw') || '4-4 / 5-5+'), color:'var(--txt3)'};
       return null;
     })();
     const displayScore = specialMarket ? specialMarket.label : s.score;
@@ -11569,20 +11813,20 @@ function renderCopa() {
         var stake=Number(r.s||S.stake||300);
         var cluster=r.cluster&&r.cluster.length?r.cluster.map(function(c){return c.score||c;}):[]; 
         var noCluster=sc&&cluster.length>0&&cluster.indexOf(sc)>=0;
-        // Verificar se placar bate no card de GOLEADA (any_other_home/away)
+        // Verificar se o placar cai num balde "qualquer outra" do cluster.
+        // ATENÇÃO: antes aqui bastava ser vitória da casa para contar verde —
+        // um 2-1 fora do cluster marcava acerto sem ter ganho nada. O balde
+        // cobre só o que NÃO é cotado individualmente (ver anyOtherCobre).
         if(!noCluster && sc) {
           var pts=sc.split('-').map(Number);
           if(pts.length===2&&!isNaN(pts[0])&&!isNaN(pts[1])){
             var gc=pts[0],gf=pts[1];
-            // any_other cobre qualquer vitória não listada individualmente no cluster
-            if(cluster.indexOf('any_other_home')>=0 && gc>gf) {
-              var scoreListed = cluster.some(function(s){ return s===sc; });
-              if(!scoreListed) noCluster=true;
-            }
-            if(cluster.indexOf('any_other_away')>=0 && gf>gc) {
-              var scoreListedA = cluster.some(function(s){ return s===sc; });
-              if(!scoreListedA) noCluster=true;
-            }
+            ['any_other_home','any_other_away','any_other_draw'].forEach(function(b){
+              if(noCluster) return;
+              // `{}` explícito: histórico antigo não guarda a tabela, e usar a
+              // tabela do jogo ABERTO agora daria cobertura de outro jogo.
+              if(cluster.indexOf(b)>=0 && anyOtherCobre(b, gc, gf, (r.cs||{}))) noCluster=true;
+            });
           }
         }
         // Faixa neutra: resultado dentro de ±10% da stake = variação normal de cobertura,
@@ -11740,19 +11984,15 @@ function confirmarEditarPlacar(ts) {
   var cluster = (r.cluster||[]).map(function(c){ return c.score||c; });
   r.placarNoCluster = cluster.indexOf(novoPlacar) >= 0;
 
-  // Verificar se bate no card de GOLEADA (any_other_home/away)
+  // Verificar se cai num balde "qualquer outra" do cluster (ver anyOtherCobre)
   if(!r.placarNoCluster && novoPlacar) {
     var pts = novoPlacar.split('-').map(Number);
     if(pts.length===2 && !isNaN(pts[0]) && !isNaN(pts[1])) {
       var gc=pts[0], gf=pts[1];
-      if(cluster.indexOf('any_other_home')>=0 && gc>gf) {
-        var scListed = cluster.some(function(s){ return s===r.sc; });
-        if(!scListed) r.placarNoCluster=true;
-      }
-      if(cluster.indexOf('any_other_away')>=0 && gf>gc) {
-        var scListedA = cluster.some(function(s){ return s===r.sc; });
-        if(!scListedA) r.placarNoCluster=true;
-      }
+      ['any_other_home','any_other_away','any_other_draw'].forEach(function(b){
+        if(r.placarNoCluster) return;
+        if(cluster.indexOf(b)>=0 && anyOtherCobre(b, gc, gf, (r.cs||{}))) r.placarNoCluster=true;
+      });
     }
   }
   r.placarNaAncora = r.ancora === novoPlacar;
@@ -12185,7 +12425,7 @@ function injetarScoresNarrativa(texto, cluster) {
         : (S.csOdds['any_other_home'] || S.csOdds['QUALQUER OUTRA VITÓRIA EM CASA'] || 0);
 
       const correctLabel = favSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
-      const correctCovers = favSide === 'away' ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+';
+      const correctCovers = anyOtherCobertura(correctScore);
 
       cluster.forEach(s=>{
         if(!s || !s.score) return;
@@ -12699,7 +12939,7 @@ function injetarScoresNarrativa(texto, cluster) {
             s.prob = calcProbSafe(s.odd);
             s.oddPG = s.odd ? +(s.odd/2).toFixed(2) : 0;
             s._label = correctSide === 'away' ? '✈️ GOLEADA VISITANTE' : '🏠 GOLEADA CASA';
-            s._covers = correctSide === 'away' ? '2-3/0-4/1-4+' : '3-2/4-0/4-1+';
+            s._covers = anyOtherCobertura(correct);
           }
         });
       }
