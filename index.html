@@ -7024,13 +7024,26 @@ async function chamarIA(opts) {
   }
 
   var res = await postar(usarCache);
-  if(!res.ok && usarCache) {
-    // a API recusou o formato com cache — refaz uma vez do jeito antigo
-    console.warn('[CACHE] a API recusou o system em bloco ('+
-      ((res.data && res.data.error && res.data.error.message) || ('HTTP '+res.status))+
+  var _msgErro = (res.data && res.data.error && res.data.error.message) || '';
+  // ── A REPETIÇÃO SÓ VALE PARA UM MOTIVO: FORMATO DO CACHE ──────────
+  // Antes era `if(!res.ok && usarCache)` — QUALQUER falha disparava a
+  // segunda tentativa. Inclusive timeout. E aí acontecia o pior cenário
+  // possível: a primeira geração estourava o corte, era cancelada e
+  // COBRADA; a segunda gerava tudo de novo, estourava o corte de novo e
+  // era COBRADA de novo; o usuário esperava o dobro do tempo para ver a
+  // mesma mensagem de erro, pagando dois jogos para analisar nenhum.
+  // Repetir sem cache só ajuda quando o que a API recusou foi o BLOCO de
+  // system com cache_control — isso é erro 400 de formato, não 5xx.
+  var _recusouCache = !res.ok && usarCache && res.status === 400 &&
+                      /cache|ephemeral|content block|system/i.test(_msgErro);
+  if(_recusouCache) {
+    console.warn('[CACHE] a API recusou o system em bloco ('+(_msgErro || ('HTTP '+res.status))+
       ') — refazendo sem cache. Nenhuma análise é perdida por isso.');
     S._cacheIndisponivel = true;
     res = await postar(false);
+  } else if(!res.ok && usarCache) {
+    console.warn('[IA] falha HTTP '+res.status+' ('+(_msgErro||'sem mensagem')+
+      ') — NÃO vou repetir: repetir aqui não aumenta a chance de sucesso e cobra de novo.');
   }
   if(res.ok) _contabiliza(res.data && res.data.usage);
   return res;
