@@ -5870,7 +5870,19 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       var odd = csOdds[sc];
       if(!odd || odd <= 0) return;
       var prob = 100/odd;
-      if(prob < thresholdCS) return;
+      // ── ORDEM DE EXECUÇÃO: a regra do 0-0 vem ANTES do threshold genérico ──
+      // O 0-0 tem uma regra própria logo abaixo, construída para ser a
+      // autoridade sobre esse placar (veto do mercado de ambas marcam, depois
+      // modelo contra preço, depois rota do percalço). Só que o corte genérico
+      // por probabilidade rodava primeiro e devolvia antes — e ele corta em
+      // 5,0% a 7,5% conforme o over. Resultado: nos jogos under, justamente
+      // onde o 0-0 importa, a probabilidade dele fica ABAIXO do threshold e a
+      // regra própria nunca era executada. Medido em Vasco x Coritiba: 0-0 com
+      // 4,76% de mercado contra 5,88% do modelo (+24% de edge, o melhor da
+      // tabela) — descartado sem nunca chegar à própria regra.
+      // Isso é ordem de execução errada, não critério: o 0-0 é avaliado pela
+      // regra dele, e o threshold genérico vale para todos os outros placares.
+      if(sc !== '0-0' && prob < thresholdCS) return;
 
       var pts = sc.split('-');
       if(pts.length !== 2) return;
@@ -6082,14 +6094,62 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
     }
 
     // Garantir limite de 5-7 scores
+    // O corte era pela ODD CRUA: ficavam os 7 preços mais curtos. Isso ignora
+    // o modelo e derruba justamente o placar de melhor preço quando ele é
+    // longo. Medido em Vasco x Coritiba: o 0-0 @21 (4,8% de mercado contra
+    // 5,9% do modelo, +24% de edge — o melhor da tabela) era o 8º mais curto
+    // e saía aqui, depois de ter passado por todas as regras próprias dele.
+    // Agora o critério é o mesmo que o resto do motor usa: sai o de pior
+    // edge; sem modelo disponível, cai no critério antigo e o log diz qual foi.
     if(clusterScores.length > 7) {
-      // Remove os menos relevantes (scores com odds mais altas)
-      var comOdds = clusterScores.map(function(sc) {
-        return { sc: sc, odd: oddScoreMotor(sc) || 999 };
+      var _temMod = (typeof poissonScoreProb === 'function');
+      function _edgeCap(sc){
+        if(!_temMod) return null;
+        var pp = sc.split('-'); if(pp.length !== 2) return null;
+        var gf = parseInt(pp[0]), gz = parseInt(pp[1]);
+        if(isNaN(gf) || isNaN(gz)) return null;
+        var o = oddScoreMotor(sc); if(!(o > 1)) return null;
+        var pm = poissonScoreProb(gf, gz); if(!(pm > 0)) return null;
+        return (pm/100) * o - 1;
+      }
+      // mercados especiais (any_other_*) não são placares e não entram nesta
+      // ordenação — deixá-los aqui zerava o critério por modelo (eles não têm
+      // probabilidade de placar) e o teto caía silenciosamente no critério
+      // antigo por odd crua
+      // deduplicar ANTES do teto: havia duplicata (3-1 duas vezes em Vasco x
+      // Coritiba) ocupando uma das 7 vagas e empurrando para fora um placar
+      // legítimo — o 0-0, que era o de melhor edge da tabela. A dedup do
+      // pipeline só rodava depois, na reconciliação, tarde demais para o teto.
+      clusterScores = clusterScores.filter(function(sc,i,arr){ return arr.indexOf(sc) === i; });
+      var _especiais = clusterScores.filter(function(sc){ return !/^\d-\d$/.test(sc); });
+      var comOdds = clusterScores.filter(function(sc){ return /^\d-\d$/.test(sc); })
+        .map(function(sc) {
+          return { sc: sc, odd: oddScoreMotor(sc) || 999, e: _edgeCap(sc) };
+        });
+      // NÃO ordenar por edge puro: testado, e ele corta o caminho (1-0) e o
+      // 2-1 para manter placares de preço bom porém improváveis. Edge escolhe
+      // ENTRE caminhos plausíveis; ele não define quais são os caminhos.
+      // O teto mantém os 7 mais prováveis PELO MODELO — é a leitura de quais
+      // rotas o jogo pode percorrer — e o edge só desempata. Com isso o 0-0
+      // do Vasco (5,9% do modelo) fica e o 0-1 (2,6%) sai, que é a ordem certa.
+      comOdds.forEach(function(x){
+        var pp = x.sc.split('-');
+        x.pm = (_temMod && pp.length===2) ? (poissonScoreProb(parseInt(pp[0]), parseInt(pp[1])) || 0) : 0;
       });
-      comOdds.sort(function(a,b) { return a.odd - b.odd; }); // menor odd = mais provável
-      clusterScores = comOdds.slice(0, 7).map(function(x) { return x.sc; });
-      console.log('[ZEBRA] Cluster limitado a 7 scores');
+      var todosComEdge = comOdds.every(function(x){ return x.e !== null; });
+      if(todosComEdge) comOdds.sort(function(a,b){
+        if(Math.abs(b.pm - a.pm) > 0.3) return b.pm - a.pm;   // mais provável fica
+        return b.e - a.e;                                      // empate técnico: melhor preço
+      });
+      else comOdds.sort(function(a,b){ return a.odd - b.odd; }); // antigo
+      var _saiu = comOdds.slice(7).map(function(x){ return x.sc; });
+      clusterScores = comOdds.slice(0, 7).map(function(x) { return x.sc; }).concat(_especiais);
+      console.log('[ZEBRA] ordem usada no teto: '+comOdds.map(function(x){
+        return x.sc+'('+(x.pm||0).toFixed(1)+'%'+(x.e!==null?'/'+(100*x.e).toFixed(0)+'%':'')+')';
+      }).join(' '));
+      console.log('[ZEBRA] Cluster limitado a 7 scores — critério: '+
+        (todosComEdge ? 'ficam os 7 mais prováveis pelo modelo (edge desempata)' : 'maior odd sai (sem modelo)')+
+        (_saiu.length ? ' | saiu: '+_saiu.join(',') : ''));
     }
   }
 
@@ -6466,34 +6526,81 @@ function analyzeCSGame(fav, over, btts, csOdds, favEhVisitante, csOddsLiq) {
       return (pm/100) * odd - 1;
     }
     var temModeloCorte = edgeMotor(mainScores[0] || '1-0') !== null;
+    // probabilidade de MODELO do placar (perspectiva do favorito)
+    function probMotor(s){
+      var p = s.split('-'); if(p.length !== 2) return null;
+      var gf = parseInt(p[0]), gz = parseInt(p[1]);
+      if(isNaN(gf) || isNaN(gz)) return null;
+      if(typeof poissonScoreProb !== 'function') return null;
+      var pm = poissonScoreProb(gf, gz);
+      return pm > 0 ? pm : null;
+    }
+    // ── QUEM SAI: O MENOS PROVÁVEL, NÃO O DE PIOR PREÇO ────────────────
+    // O critério era edge puro. Isso produziu, em Vasco x Coritiba, a linha
+    // "[CORTE] 0-0 removido — pior edge do cluster (23.6%)": um placar com
+    // +24% de edge, o melhor da tabela, sendo cortado como "o pior". Aconteceu
+    // porque a âncora e a rota do percalço eram intocáveis e o 0-0 sobrou como
+    // único elegível — e o log ainda chamou o edge dele de pior.
+    // Um cluster é uma faixa de caminhos: quem sai é o caminho MENOS PROVÁVEL.
+    // O preço só desempata entre probabilidades parecidas (menos de 0,3pp).
+    function _piorDaLista(lista, ignorarIntocavel){
+      var cand = lista.filter(function(s){ return s !== ancora; })   // âncora nunca sai
+        .map(function(s){ return { s:s, pm:probMotor(s), e:edgeMotor(s),
+                                   odd:oddScoreMotor(s)||9999, prot:intocavel(s) }; });
+      if(!cand.length) return null;
+      var todosPm = cand.every(function(x){ return x.pm !== null; });
+      function pior(a,b){   // a é pior que b?
+        if(todosPm && Math.abs(a.pm - b.pm) > 0.3) return a.pm < b.pm;
+        var ea = (a.e !== null) ? a.e : -(a.odd), eb = (b.e !== null) ? b.e : -(b.odd);
+        return ea < eb;
+      }
+      cand.sort(function(a,b){ return pior(a,b) ? -1 : (pior(b,a) ? 1 : 0); });
+      if(ignorarIntocavel) return cand[0];
+
+      // ── A PROTEÇÃO NÃO PODE EXPULSAR UMA PERNA MELHOR ─────────────────
+      // A rota do percalço é protegida do corte. Mas em Vasco x Coritiba isso
+      // fez o 0-1 (2,6% pelo modelo, edge -23%) sobreviver empurrando para
+      // fora o 0-0 (5,9%, edge +24%) — a proteção derrubando a perna que era
+      // melhor nos DOIS eixos. Proteger uma leitura de obstáculo é uma coisa;
+      // sustentar um placar pior em probabilidade E em preço que outro do
+      // mesmo plano é outra. Quando a perna protegida perde nos dois eixos
+      // para a candidata livre, é a protegida que cede.
+      var pioresLivres = cand.filter(function(x){ return !x.prot; });
+      var piorGeral = cand[0];
+      if(!piorGeral.prot) return piorGeral;
+      if(!pioresLivres.length) return piorGeral;
+      var piorLivre = pioresLivres[0];
+      var perdeNosDois = todosPm && piorGeral.pm !== null && piorLivre.pm !== null &&
+        piorGeral.e !== null && piorLivre.e !== null &&
+        piorGeral.pm < piorLivre.pm && piorGeral.e < piorLivre.e;
+      if(perdeNosDois) {
+        console.log('[CORTE] '+piorGeral.s+' é rota do percalço, mas perde para '+piorLivre.s+
+          ' em probabilidade ('+piorGeral.pm.toFixed(1)+'% vs '+piorLivre.pm.toFixed(1)+
+          '%) E em preço ('+(100*piorGeral.e).toFixed(0)+'% vs '+(100*piorLivre.e).toFixed(0)+
+          '%) — a proteção cede.');
+        return piorGeral;
+      }
+      return piorLivre;
+    }
     while(total() > TETO) {
       var alvo = protection.length > 2 ? protection : mainScores;
       if(alvo.length <= 2) break;
-      var pior = null, piorVal = Infinity;
-      // primeira passada: não cortar âncora nem rota do percalço
-      alvo.forEach(function(s){
-        if(intocavel(s)) return;
-        var e = edgeMotor(s);
-        // com modelo: menor edge sai. sem modelo: maior odd sai (critério antigo)
-        var val = (e !== null) ? e : -(oddScoreMotor(s) || 9999);
-        if(val < piorVal) { piorVal = val; pior = s; }
-      });
+      var pior = null, piorVal = Infinity, piorPm = null;
+      var _esc = _piorDaLista(alvo, false);
+      if(_esc) { pior = _esc.s; piorVal = (_esc.e !== null) ? _esc.e : 0; piorPm = _esc.pm; }
       // se sobrou só âncora + rota do percalço, aí sim a rota pode ceder —
       // o teto de 7 é operacional (o card e a gestão não comportam mais)
       if(!pior) {
-        alvo.forEach(function(s){
-          if(s === ancora) return;
-          var e2 = edgeMotor(s);
-          var v2 = (e2 !== null) ? e2 : -(oddScoreMotor(s) || 9999);
-          if(v2 < piorVal) { piorVal = v2; pior = s; }
-        });
-        if(pior) console.log('[CORTE] teto de '+TETO+' atingido e só restavam pernas estruturais — '+
-          pior+' cede (edge '+(piorVal*100).toFixed(1)+'%).');
+        var _esc2 = _piorDaLista(alvo, true);
+        if(_esc2) { pior = _esc2.s; piorVal = (_esc2.e !== null) ? _esc2.e : 0; piorPm = _esc2.pm;
+          console.log('[CORTE] teto de '+TETO+' atingido e só restavam pernas estruturais — '+
+            pior+' cede.'); }
       }
       if(!pior) break;
       console.log('[CORTE] '+pior+' removido — '+(oddScoreMotor(pior) > 0
-        ? (temModeloCorte ? 'pior edge do cluster ('+(piorVal*100).toFixed(1)+'%)'
-                          : 'maior odd (sem modelo disponível para EV)')
+        ? (piorPm !== null ? 'caminho menos provável do cluster ('+piorPm.toFixed(1)+
+             '% pelo modelo, edge '+(piorVal*100).toFixed(1)+'%)'
+           : 'maior odd (sem modelo disponível para EV)')
         : 'não há preço válido para ele nesta tabela'));
       if(alvo === protection) protection = protection.filter(function(s){ return s !== pior; });
       else mainScores = mainScores.filter(function(s){ return s !== pior; });
@@ -6693,6 +6800,92 @@ function typeWriter(el, html, spd) {
   }, spd);
 }
 
+// ===== CHAMADA À IA — ponto único, com cache e contabilidade =========
+// Medido em 19/09, interceptando as requisições reais de uma análise:
+//   chamada 1 (validação) ....  7.368 caracteres de entrada
+//   chamada 2 (narrativa) .... 32.818 caracteres, dos quais 26.438 são o
+//                              system prompt — texto IDÊNTICO em todo jogo
+// Ou seja: dois terços do que se paga é o mesmo texto reenviado. O cache de
+// prompt existe exatamente para isso: a primeira chamada da janela paga 1,25x
+// para gravar, as seguintes pagam 0,10x para ler.
+//
+// A function do Netlify repassa `system` e `messages` verbatim, então basta
+// mandar o system como bloco com cache_control. Se por qualquer motivo a API
+// recusar esse formato, a chamada é refeita UMA vez no formato antigo — uma
+// análise nunca quebra por causa desta otimização.
+var PRECO_IA = {            // US$ por token — confira no console da Anthropic
+  entrada:      3.00/1e6,
+  saida:       15.00/1e6,
+  cacheGravar:  3.75/1e6,   // 1,25x a entrada
+  cacheLer:     0.30/1e6    // 0,10x a entrada
+};
+var CACHE_MIN_CHARS = 5000; // abaixo disso não compensa gravar cache
+
+// Ligar/desligar a chamada de validação. Ela nasceu quando a IA ainda
+// escolhia placares. Hoje o parser determinístico lê o texto da Academia e o
+// cluster é soberano — a validação só consegue desempatar âncora em empate
+// técnico e preencher campos que o parser não achou. Custa ~18% do gasto por
+// análise. Fica desligada por padrão; ligue em S.usarValidacaoIA se quiser.
+function validacaoIALigada() {
+  return S.usarValidacaoIA === true;
+}
+
+function _zeraCustoJogo() {
+  S._custoJogo = { chamadas:0, entrada:0, saida:0, cacheLido:0, cacheGravado:0, usd:0 };
+}
+function _contabiliza(usage) {
+  if(!usage) return;
+  if(!S._custoJogo) _zeraCustoJogo();
+  if(!S._custoSessao) S._custoSessao = { analises:0, usd:0 };
+  var ent  = usage.input_tokens || 0;
+  var sai  = usage.output_tokens || 0;
+  var cW   = usage.cache_creation_input_tokens || 0;
+  var cR   = usage.cache_read_input_tokens || 0;
+  var usd  = ent*PRECO_IA.entrada + sai*PRECO_IA.saida +
+             cW*PRECO_IA.cacheGravar + cR*PRECO_IA.cacheLer;
+  var c = S._custoJogo;
+  c.chamadas++; c.entrada += ent; c.saida += sai;
+  c.cacheGravado += cW; c.cacheLido += cR; c.usd += usd;
+  S._custoSessao.usd += usd;
+  console.log('[CUSTO] chamada: entrada '+ent+' | saída '+sai+
+    (cW?' | cache gravado '+cW:'') + (cR?' | cache LIDO '+cR:'') +
+    ' → US$ '+usd.toFixed(4));
+}
+
+async function chamarIA(opts) {
+  var usarCache = opts.cache !== false && typeof opts.system === 'string' &&
+                  opts.system.length >= CACHE_MIN_CHARS;
+
+  async function postar(comCache) {
+    var corpo = {
+      model: opts.model || 'claude-sonnet-4-6',
+      max_tokens: opts.max_tokens || 1500,
+      temperature: (typeof opts.temperature === 'number') ? opts.temperature : 0.3,
+      system: comCache
+        ? [{ type:'text', text: opts.system, cache_control: { type:'ephemeral' } }]
+        : opts.system,
+      messages: opts.messages
+    };
+    var r = await fetch('/.netlify/functions/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo)
+    });
+    var d = await r.json().catch(function(){ return {}; });
+    return { ok: r.ok, status: r.status, data: d };
+  }
+
+  var res = await postar(usarCache);
+  if(!res.ok && usarCache) {
+    // a API recusou o formato com cache — refaz uma vez do jeito antigo
+    console.warn('[CACHE] a API recusou o system em bloco ('+
+      ((res.data && res.data.error && res.data.error.message) || ('HTTP '+res.status))+
+      ') — refazendo sem cache. Nenhuma análise é perdida por isso.');
+    S._cacheIndisponivel = true;
+    res = await postar(false);
+  }
+  if(res.ok) _contabiliza(res.data && res.data.usage);
+  return res;
+}
+
 async function analisarJogo() {
   if(S.thinking) return;
   var btnAn = document.getElementById('btn-analisar');
@@ -6701,9 +6894,29 @@ async function analisarJogo() {
   // Limpar autosave ao iniciar análise — evita restaurar dado desatualizado
   try { localStorage.removeItem('cs_autosave'); } catch(e) {}
 
+  _zeraCustoJogo();
   const textoRaw = document.getElementById('an-texto')?.value?.trim() || '';
-  // Limitar a 3000 chars para evitar timeout na API
-  const texto = textoRaw.length > 3000 ? textoRaw.substring(0, 3000) + '...' : textoRaw;
+  // ── DOIS TEXTOS, NÃO UM ───────────────────────────────────────────
+  // O corte em 3.000 caracteres existe para o PROMPT (menos token, menos
+  // risco de timeout). Só que o texto cortado estava sendo usado também pelo
+  // parser determinístico — e o bloco "Gols / Abre marcador / Momento dos
+  // gols / Resultado final" da Academia começa DEPOIS do caractere 3.000 em
+  // toda colagem real. Medido nos três jogos de hoje:
+  //
+  //   texto inteiro ..... Remo: forma casa 13 jogos, abre 46%, marca 77%
+  //   cortado em 3.000 .. Remo: forma casa 0 jogos, abre null, marca null
+  //   (idem Brighton e Bologna: form_casa e form_fora voltavam NULOS)
+  //
+  // Ou seja: na tela, o percalço, o blend do λ, a camada de gols e o perfil
+  // da zebra rodavam SEM dado de forma — o mesmo bug de origem que o parser
+  // tinha vindo consertar. Os testes não pegaram porque alimentavam o parser
+  // com o texto inteiro, direto.
+  //
+  // Ler o texto inteiro é local e não custa um centavo de API. Quem precisa
+  // ser curto é só o que viaja na requisição.
+  const texto = textoRaw;                                  // parser: tudo
+  const textoPrompt = textoRaw.length > 3000               // API: enxuto
+    ? textoRaw.substring(0, 3000) + '...' : textoRaw;
 
   // ── EXTRAÇÃO DETERMINÍSTICA DO MANDANTE — independente da IA ──────
   // Regex busca o padrão "TimeA e TimeB jogam/se enfrentam/medem forças"
@@ -7000,7 +7213,9 @@ async function analisarJogo() {
       var oddRescan = S.csOdds[sc];
       if(!oddRescan || oddRescan <= 1) return;
       var probRescan = 100 / oddRescan;
-      if(probRescan < probMinDinScan) return;
+      // mesma correção de ordem: o 0-0 responde à regra dele (logo abaixo),
+      // não ao corte genérico por probabilidade
+      if(sc !== '0-0' && probRescan < probMinDinScan) return;
 
       // ── EXCEÇÃO ESPECÍFICA PRO 0-0 — não é "qualquer score que passa
       // no threshold entra". 0-0 é raro e só faz sentido de verdade
@@ -7137,7 +7352,7 @@ Você tem 3 fontes de informação. Use as 3 para validar o cluster.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FONTE 1 — CONTEXTO DO JOGO:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${texto}
+${textoPrompt}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FONTE 2 — MOTOR MATEMÁTICO:
@@ -7227,7 +7442,7 @@ Sua tarefa: escrever a narrativa explicando por que esses scores são os de MAIO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FONTE 1 — ANÁLISE DO JOGO:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${texto}
+${textoPrompt}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FONTE 2 — MERCADO (bússola do perfil):
@@ -7320,19 +7535,20 @@ REGRAS ABSOLUTAS:
     engineFinal.mainScores = [...engine.mainScores];
     engineFinal.protection = [...engine.protection];
     try {
-      const respValidacao = await fetch('/.netlify/functions/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 400,
-          temperature: 0.1,
-          system: 'Você é um validador de árvore de correct score trading. Responda APENAS com JSON válido. Sem texto adicional.',
-          messages: [{ role:'user', content: promptValidacao }]
-        })
-      });
-      if(respValidacao.ok) {
-        const dataV = await respValidacao.json();
+      const respValidacao = validacaoIALigada() ? await chamarIA({
+        max_tokens: 400,
+        temperature: 0.1,
+        cache: false,   // system curto, não compensa
+        system: 'Você é um validador de árvore de correct score trading. Responda APENAS com JSON válido. Sem texto adicional.',
+        messages: [{ role:'user', content: promptValidacao }]
+      }) : null;
+      if(!respValidacao) {
+        console.log('[VALIDAÇÃO IA] desligada — o cluster do motor segue como está. '+
+          'Economia de ~2.000 tokens de entrada e 400 de saída por análise. '+
+          'Para religar: S.usarValidacaoIA = true');
+      }
+      if(respValidacao && respValidacao.ok) {
+        const dataV = respValidacao.data;
         const replyV = dataV.content?.[0]?.text || '';
         // Extrair JSON da resposta
         const jsonMatch = replyV.match(/\{[\s\S]*\}/);
@@ -7656,24 +7872,19 @@ REGRAS ABSOLUTAS:
     // diminuindo o risco de estourar o timeout da função do Netlify
     // (que pode gerar cobrança "fantasma" — a Anthropic processa e
     // cobra mesmo quando o Netlify desiste e devolve 504 pro usuário).
-    const resp = await fetch('/.netlify/functions/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        temperature: 0.3,
-        system: SP,
-        messages: [{ role:'user', content: promptFinal }]
-      })
+    const resp = await chamarIA({
+      max_tokens: 1500,
+      temperature: 0.3,
+      cache: true,          // o system tem ~26k caracteres e não muda entre jogos
+      system: SP,
+      messages: [{ role:'user', content: promptFinal }]
     });
 
     if(!resp.ok) {
-      const errData = await resp.json().catch(()=>({}));
-      const errMsg = errData?.error?.message || 'HTTP '+resp.status;
+      const errMsg = resp.data?.error?.message || 'HTTP '+resp.status;
       throw new Error(errMsg);
     }
-    const data = await resp.json();
+    const data = resp.data;
     let reply = data.content?.[0]?.text || 'Erro.';
 
 
@@ -9036,7 +9247,23 @@ function calcStakes(cluster, stake, analysisText) {
           console.log('[PROTEÇÃO CAMADA 8b] '+s.score+' protegido — veio do sinal de volume');
         }
 
-        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial && !ehComplementoCS && !ehVolumeCamada8b) {
+        // O 0-0 tem regra própria (veto do mercado de ambas marcam, depois
+        // modelo contra preço). Ela roda no motor, mas o threshold genérico
+        // DAQUI cortava o placar depois, desfazendo a decisão — mesmo bug de
+        // ordem que existia no motor. Em Vasco x Coritiba o 0-0 passava na
+        // regra dele (+24% de edge, o melhor da tabela) e morria aqui por
+        // 4,8% contra um mínimo de 5,5%. Se a regra própria aprovou, o
+        // threshold genérico não derruba.
+        var eh00Aprovado = false;
+        if(s.score === '0-0' && typeof zeroAzeroEntra === 'function') {
+          var _z00 = zeroAzeroEntra(overAtual, bttsAtual, s.odd, {
+            confPercalco: (S._percalco && (S._percalcoRota||[]).indexOf('0-0') >= 0) ? S._percalco.confianca : 0,
+            tipo: S._percalco && S._percalco.tipo });
+          eh00Aprovado = !!_z00.ok;
+          if(eh00Aprovado) console.log('[THRESHOLD DIN] 0-0 abaixo do mínimo ('+prob.toFixed(1)+
+            '% < '+probMinDin+'%) mas aprovado pela regra própria — '+_z00.motivo);
+        }
+        if(!ehAncora && !eh22ComBtts && !ehVolumeAlto && !eh31EquilOf && !eh01Conserv && !ehEssencial && !ehComplementoCS && !ehVolumeCamada8b && !eh00Aprovado) {
           s.tipo = 'expansao';
           s.stake = 0; s.lucro = 0;
           console.log('[THRESHOLD DIN] '+s.score+' prob='+prob.toFixed(1)+'%'
@@ -9210,13 +9437,32 @@ function calcStakes(cluster, stake, analysisText) {
           ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
         return edgeDoScore(pm, s.odd);
       }
+      // Mesmo princípio do teto do motor: quem sai de um Dutch é o caminho
+      // MENOS PROVÁVEL, não o de pior preço. Medido em Vasco x Coritiba: o
+      // critério por edge puro mandava para expansão o 2-1 (9,5% pelo modelo,
+      // 3º placar mais provável da tabela) e mantinha o 3-1 (7,2%) — num jogo
+      // em que a zebra marca em 74% dos jogos fora, isso inverte a leitura.
+      // O preço volta a decidir quando as probabilidades são parecidas.
       function _pior(lista){
         if(!lista.length) return null;
-        var comEdge = lista.map(function(s){ return { s: s, e: _edgeDe(s) }; });
-        var temTodos = comEdge.every(function(x){ return x.e !== null; });
+        var cand = lista.map(function(s){
+          var pm = (typeof s._modelProb === 'number' && s._modelProb > 0)
+            ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+          return { s: s, e: _edgeDe(s), pm: (pm > 0 ? pm : null) };
+        });
+        var temTodos = cand.every(function(x){ return x.e !== null; });
+        var temPm    = cand.every(function(x){ return x.pm !== null; });
+        if(temTodos && temPm) {
+          _criterioCorte = 'menos provável (preço desempata)';
+          cand.sort(function(a,b){
+            if(Math.abs(a.pm - b.pm) > 0.3) return a.pm - b.pm;
+            return a.e - b.e;
+          });
+          return cand[0].s;
+        }
         if(temTodos) {
           _criterioCorte = 'pior edge';
-          return comEdge.sort(function(a,b){ return a.e - b.e; })[0].s;
+          return cand.sort(function(a,b){ return a.e - b.e; })[0].s;
         }
         return lista.slice().sort(function(a,b){ return a.prob - b.prob; })[0];
       }
@@ -9403,7 +9649,36 @@ function calcStakes(cluster, stake, analysisText) {
       var e = edgeDoScore(pm, s.odd);
       return e !== null ? e : (-1 + (s.prob || 0)/100);   // sem modelo: mais provável primeiro
     }
-    var candidatos = zerados.concat(deFora).sort(function(a,b){ return nota(b) - nota(a); });
+
+    // ── PLAUSIBILIDADE ANTES DE EDGE ──────────────────────────────────
+    // Este bloco ordenava os candidatos SÓ por edge. Edge é uma razão, e numa
+    // odd longa a razão é dominada por ruído do modelo: o 0-3 @210 vale 0,48%
+    // para o mercado e 0,61% para o modelo — diferença de 0,13 ponto
+    // percentual que vira "+27% de edge" e põe o placar no topo da fila.
+    // Foi assim que entrou um 0-3 @210 num cluster de Cali x Cúcuta, e um
+    // 4-1 @505 apareceu na bateria de testes de espelho.
+    //
+    // Uma perna de Dutch precisa ser um placar PLAUSÍVEL; edge decide entre
+    // plausíveis, não cria plausibilidade. O piso usado é o mesmo threshold
+    // dinâmico por over que o resto do motor já aplica, com folga de 40% —
+    // e nunca abaixo de 3% de probabilidade de mercado.
+    var _pmBase = (typeof probMinDin === 'number' && probMinDin > 0) ? probMinDin : 5.5;
+    var PISO_PROB_MIN = Math.max(3.0, _pmBase * 0.6);
+    var todosCand = zerados.concat(deFora);
+    var plausiveis = todosCand.filter(function(s){ return (s.prob || 0) >= PISO_PROB_MIN; });
+    var descartados = todosCand.filter(function(s){ return (s.prob || 0) < PISO_PROB_MIN; });
+    if(descartados.length) {
+      console.log('[PISO 5] fora de cogitação por serem improváveis demais (mínimo '+
+        PISO_PROB_MIN.toFixed(1)+'% de mercado): '+
+        descartados.map(function(s){
+          return s.score+' @'+s.odd+' ('+(s.prob||0).toFixed(1)+'%, edge '+(100*nota(s)).toFixed(0)+'%)';
+        }).join(', '));
+    }
+    // se NADA for plausível, repõe pelo mais provável do que existe — nunca
+    // pela odd mais longa
+    var candidatos = (plausiveis.length ? plausiveis : todosCand.slice()
+        .sort(function(a,b){ return (b.prob||0) - (a.prob||0); }).slice(0, faltam))
+      .sort(function(a,b){ return nota(b) - nota(a); });
 
     candidatos.slice(0, faltam).forEach(function(s){
       if(s._reposto) cluster.push(s);
@@ -9875,7 +10150,35 @@ function renderCluster(cluster, stake) {
         '</div>';
     })();
 
-    summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + percBlock + evBlock + probBlock;
+    // ── O QUE ESTA ANÁLISE CUSTOU ────────────────────────────────────
+    // Não é enfeite: sem isso o operador só descobre o gasto quando os
+    // créditos acabam. Os números vêm do campo `usage` que a própria API
+    // devolve — não são estimativa.
+    var custoBlock = '';
+    (function(){
+      var c = S._custoJogo;
+      if(!c || !c.chamadas) return;
+      var econ = c.cacheLido * (PRECO_IA.entrada - PRECO_IA.cacheLer);
+      custoBlock =
+        '<div class="ab" style="margin-top:10px;margin-bottom:0;border-color:rgba(255,255,255,.10);">'+
+        '<div class="ab-title" style="color:var(--txt3);letter-spacing:2px;">CUSTO DESTA ANÁLISE</div>'+
+        '<div style="font-family:Space Mono,monospace;font-size:10px;color:var(--txt2);line-height:1.8;margin-top:4px;">'+
+          'US$ <strong style="color:var(--txt);">'+c.usd.toFixed(4)+'</strong>'+
+          ' &nbsp;·&nbsp; '+c.chamadas+' chamada'+(c.chamadas>1?'s':'')+
+          ' &nbsp;·&nbsp; entrada '+c.entrada+' · saída '+c.saida+
+          (c.cacheLido ? ' · <span style="color:var(--grn);">cache lido '+c.cacheLido+'</span>' : '')+
+          (c.cacheGravado ? ' · cache gravado '+c.cacheGravado : '')+
+        '</div>'+
+        (c.cacheLido
+          ? '<div style="font-size:9px;color:var(--grn);margin-top:4px;">O cache economizou US$ '+econ.toFixed(4)+' nesta análise.</div>'
+          : (S._cacheIndisponivel
+              ? '<div style="font-size:9px;color:var(--org);margin-top:4px;">Cache recusado pela API — rodando no formato antigo.</div>'
+              : '<div style="font-size:9px;color:var(--txt3);margin-top:4px;">Primeira análise da janela: gravou o cache. As próximas ~5 min custam bem menos.</div>'))+
+        (S._custoSessao ? '<div style="font-size:9px;color:var(--txt3);margin-top:6px;">Acumulado nesta sessão do navegador: US$ '+S._custoSessao.usd.toFixed(3)+'</div>' : '')+
+        '</div>';
+    })();
+
+    summaryEl.innerHTML = anchorBlock + methodBlock + seqBlock + whyBlock + percBlock + evBlock + probBlock + custoBlock;
 
     // ── CARDS DE EXPANSÃO DA IA (scores de alerta sugeridos pelo Gênio) ──
     const expansaoIA = S._expansaoIA || [];
