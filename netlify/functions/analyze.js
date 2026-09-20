@@ -1,6 +1,5 @@
 // netlify/functions/analyze.js
-
-const TIMEOUT_MS = 9000;
+const TIMEOUT_MS = 25000;
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -15,13 +14,13 @@ exports.handler = async function (event) {
     };
   }
 
+  const t0 = Date.now();
   const controller = new AbortController();
   const corte = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     const body = JSON.parse(event.body);
 
-    // `??` e não `||`: preserva 0 e outros valores falsy legítimos
     const payload = {
       model: body.model ?? 'claude-sonnet-4-6',
       max_tokens: body.max_tokens ?? 3000,
@@ -42,14 +41,17 @@ exports.handler = async function (event) {
     });
 
     const data = await response.json();
+    const seg = ((Date.now() - t0) / 1000).toFixed(1);
 
-    // log no painel do Netlify — dá para conferir o gasto sem abrir o console
     if (data && data.usage) {
       const u = data.usage;
-      console.log('[USAGE] entrada=' + (u.input_tokens || 0) +
+      console.log('[USAGE] ' + seg + 's' +
+        ' | entrada=' + (u.input_tokens || 0) +
         ' saida=' + (u.output_tokens || 0) +
         ' cache_gravado=' + (u.cache_creation_input_tokens || 0) +
         ' cache_lido=' + (u.cache_read_input_tokens || 0));
+    } else {
+      console.log('[USAGE] ' + seg + 's | resposta sem bloco usage (status ' + response.status + ')');
     }
 
     return {
@@ -59,15 +61,18 @@ exports.handler = async function (event) {
     };
 
   } catch (err) {
+    const seg = ((Date.now() - t0) / 1000).toFixed(1);
     const abortou = err.name === 'AbortError';
+    console.log('[ERRO] ' + seg + 's | ' + (abortou ? 'cancelado pelo corte local' : err.message));
     return {
       statusCode: abortou ? 504 : 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: {
           message: abortou
-            ? 'A geração passou de ' + (TIMEOUT_MS / 1000) + 's e foi cancelada antes de terminar. ' +
-              'Tente de novo; se repetir, o texto colado provavelmente está grande demais.'
+            ? 'A geração passou de ' + (TIMEOUT_MS / 1000) + 's e foi cancelada. ' +
+              'Isso é raro: uma narrativa normal leva 10 a 20s. Tente de novo; ' +
+              'se repetir sempre, o texto colado está grande demais ou a API está lenta.'
             : err.message
         }
       })
