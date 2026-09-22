@@ -1,42 +1,34 @@
-// netlify/functions/analyze.mjs  —  FORMATO MODERNO DO NETLIFY
-// Apague o analyze.js antigo: os dois não podem existir juntos.
-// Conferir se está no ar (não gasta crédito):
-//     https://SEUSITE.netlify.app/.netlify/functions/analyze
-// Tem que aparecer "versao": "v4-moderno".
+// netlify/functions/analyze.js  —  versão v5
+// Conferir se está no ar (não gasta crédito): abra no navegador
+//   https://SEUSITE.netlify.app/.netlify/functions/analyze
+// Tem que aparecer "versao": "v5".
 
-const VERSAO = 'v4-moderno';
+const VERSAO = 'v5';
+const TIMEOUT_MS = Number(process.env.ANALYZE_TIMEOUT_MS) || 55000;
 
-function env(nome) {
-  try { if (globalThis.Netlify && Netlify.env && Netlify.env.get(nome)) return Netlify.env.get(nome); } catch (e) {}
-  return process.env[nome];
-}
-
-const TIMEOUT_MS = Number(env('ANALYZE_TIMEOUT_MS')) || 55000;
-
-function json(obj, status) {
-  return new Response(JSON.stringify(obj), {
-    status: status || 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-export default async (req) => {
-  if (req.method === 'GET') {
-    return json({
-      versao: VERSAO,
-      formato: 'Functions API moderna (export default) — limite de 60s',
-      timeout_segundos: TIMEOUT_MS / 1000,
-      chave_configurada: !!env('ANTHROPIC_API_KEY')
-    });
+exports.handler = async function (event) {
+  if (event.httpMethod === 'GET') {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        versao: VERSAO,
+        timeout_segundos: TIMEOUT_MS / 1000,
+        chave_configurada: !!process.env.ANTHROPIC_API_KEY
+      })
+    };
   }
 
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const chave = env('ANTHROPIC_API_KEY');
-  if (!chave) {
-    return json({ error: { message: 'ANTHROPIC_API_KEY não configurada no Netlify.' } }, 500);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: { message: 'ANTHROPIC_API_KEY não configurada no Netlify.' } })
+    };
   }
 
   const t0 = Date.now();
@@ -44,7 +36,7 @@ export default async (req) => {
   const corte = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const body = await req.json();
+    const body = JSON.parse(event.body);
 
     const payload = {
       model: body.model ?? 'claude-sonnet-4-6',
@@ -56,45 +48,49 @@ export default async (req) => {
 
     console.log('[INICIO] ' + VERSAO + ' | modelo=' + payload.model + ' | teto=' + payload.max_tokens);
 
-    const resposta = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': chave,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(payload)
     });
 
-    const data = await resposta.json();
-    const seg = (Date.now() - t0) / 1000;
+    const data = await response.json();
+    const seg = ((Date.now() - t0) / 1000).toFixed(1);
 
     if (data && data.usage) {
-      const u = data.usage;
-      console.log('[USAGE] ' + seg.toFixed(1) + 's' +
-        ' | saida=' + (u.output_tokens || 0) + ' (teto ' + payload.max_tokens + ')' +
-        ' | entrada=' + (u.input_tokens || 0) +
-        ' cache_gravado=' + (u.cache_creation_input_tokens || 0) +
-        ' cache_lido=' + (u.cache_read_input_tokens || 0));
+      console.log('[USAGE] ' + seg + 's | saida=' + (data.usage.output_tokens || 0) +
+        ' | entrada=' + (data.usage.input_tokens || 0) +
+        ' | cache_lido=' + (data.usage.cache_read_input_tokens || 0));
     } else {
-      console.log('[USAGE] ' + seg.toFixed(1) + 's | status ' + resposta.status +
-        ' | ' + JSON.stringify(data).slice(0, 300));
+      console.log('[USAGE] ' + seg + 's | status ' + response.status);
     }
 
-    return json(data, resposta.status);
+    return {
+      statusCode: response.status,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    };
 
   } catch (err) {
     const seg = ((Date.now() - t0) / 1000).toFixed(1);
     const abortou = err.name === 'AbortError';
     console.log('[ERRO] ' + VERSAO + ' | ' + seg + 's | ' + (abortou ? 'corte local' : err.message));
-    return json({
-      error: {
-        message: '[' + VERSAO + '] ' + (abortou
-          ? 'A geração passou de ' + (TIMEOUT_MS / 1000) + 's e foi cancelada.'
-          : err.message)
-      }
-    }, abortou ? 504 : 500);
+    return {
+      statusCode: abortou ? 504 : 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: {
+          message: '[' + VERSAO + '] ' + (abortou
+            ? 'A geração passou de ' + (TIMEOUT_MS / 1000) + 's e foi cancelada.'
+            : err.message)
+        }
+      })
+    };
   } finally {
     clearTimeout(corte);
   }
