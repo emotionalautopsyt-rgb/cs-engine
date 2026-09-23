@@ -2946,6 +2946,12 @@ function classificarPerfilJogo(fav, over, btts) {
 
 var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
                            // Faixa empírica em futebol europeu: -0.18 a -0.08.
+// ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
+// Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
+// sem precisar rodar análise nenhuma.
+var VERSAO_INDEX = 'v6.3';
+window.VERSAO_INDEX = VERSAO_INDEX;
+
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
 
 function _poisPMF(lam, k) {
@@ -12481,7 +12487,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const t=new Date(), y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
     const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     const ls=document.getElementById('logo-sub');
-    if(ls) ls.textContent=dn[t.getDay()]+' '+d+'/'+mo+'/'+y+' — v6.0';
+    // A VERSÃO FICA NA TELA. Passamos dias discutindo bug que era arquivo
+    // antigo ainda publicado — aqui e na function do Netlify. Agora dá para
+    // ver, em um segundo, qual index está no ar.
+    if(ls) ls.textContent=dn[t.getDay()]+' '+d+'/'+mo+'/'+y+' — '+VERSAO_INDEX;
+    console.log('%c[GÊNIO] index '+VERSAO_INDEX, 'font-weight:bold;color:#00d4ff');
     document.title='Gênio dos Placares — '+dn[t.getDay()]+' '+d+'/'+mo+'/'+y;
     const rd=document.getElementById('r-d'); if(rd) rd.value=y+'-'+mo+'-'+d;
     const gs=document.getElementById('g-stake'); if(gs) gs.value=S.stake;
