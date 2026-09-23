@@ -2461,6 +2461,24 @@ function extrairAcademia(texto) {
     }
     if(!orientou) out._avisos.push('H2H não orientado: não identifiquei o mandante de hoje nas linhas do confronto direto');
 
+    // ── SANIDADE: ISSO É PLACAR DE FUTEBOL OU DATA? ───────────────────
+    // Com o texto colado em um formato um pouco diferente, o leitor pegou
+    // "2025-11-09" e entendeu "25-11" como placar. Saíram números
+    // impossíveis — média de 300 gols por jogo, ambas marcam em 100%,
+    // placar mais frequente "26-8" — e NADA reclamou: o percalço passou a
+    // ler o jogo como festival de gols. Agora, linha com mais de 9 gols de
+    // um lado é descartada e o robô diz que descartou.
+    var _absurdos = jogos.filter(function(j){ return j.gc > 9 || j.gf > 9; });
+    if(_absurdos.length) {
+      jogos = jogos.filter(function(j){ return j.gc <= 9 && j.gf <= 9; });
+      out._avisos.push('H2H: ' + _absurdos.length + ' linha(s) descartada(s) por não serem placar de futebol ('+
+        _absurdos.slice(0,3).map(function(j){ return j.gc+'-'+j.gf; }).join(', ')+') — provavelmente data lida como placar');
+      console.warn('[PARSER] H2H — descartei ' + _absurdos.length + ' linha(s) com placar impossível: ' +
+        _absurdos.map(function(j){ return j.gc+'-'+j.gf; }).join(', '));
+    }
+    if(!jogos.length) { out.h2h = null; }
+    else {
+
     var n = jogos.length, btts=0, over=0, gols=0, emp=0, visMarca=0, mandMarca=0, freq={};
     var orientados = [];
     jogos.forEach(function(j){
@@ -2495,7 +2513,142 @@ function extrairAcademia(texto) {
       _freq: freq, _empatados: empatados.length > 1 ? empatados : null,
       _jogos: jogos.map(function(j, ij){ return j.data+' '+j.casa+' '+j.gc+'-'+j.gf+' '+j.fora +
         ' [mando de hoje: ' + orientados[ij].gm + '-' + orientados[ij].gv + ']'; }) };
+
+    // segunda trava: número derivado impossível invalida o bloco inteiro
+    if(out.h2h.media_gols > 8 || out.h2h.btts_pct > 100 || out.h2h.over25_pct > 100) {
+      console.warn('[PARSER] H2H descartado por número impossível — média de ' +
+        out.h2h.media_gols + ' gols por jogo. Melhor não ter leitura de H2H do que ter uma inventada.');
+      out._avisos.push('H2H descartado: média de ' + out.h2h.media_gols + ' gols por jogo é impossível');
+      out.h2h = null;
+    }
+    }
   }
+
+  // ─────────── ÚLTIMOS 10 JOGOS, PLACAR A PLACAR ───────────
+  // Até aqui o robô lia a TABELA DE MÉDIAS da Academia e deduzia o resto:
+  // a distribuição de gols de cada time (quantas vezes zera, faz um, faz
+  // dois ou mais) era MODELADA a partir da média e do percentual de jogos
+  // em que marcou, com uma Poisson truncada. Só que a lista dos dez placares
+  // está na mesma colagem — dá para CONTAR em vez de supor.
+  // Diferença medida no Santa Rosa: contado 30% zero / 40% um / 30% dois+;
+  // modelado com o recorte de fora, 33% / 47% / 20%. Dez pontos a menos em
+  // "faz dois ou mais" — que é justamente o número que decide se o cluster
+  // cobre 1-2 e 2-2 ou para no 0-1.
+  // O que sai daqui NÃO substitui as médias de casa/fora (essas continuam
+  // vindo da tabela, e o recorte por mando é informação boa). Sai um campo
+  // novo, _contagem, com a distribuição real e o tamanho da amostra.
+  (function contarUltimosJogos(){
+    var parts = T.split(/Últimos 10 jogos em todas as competi[^\n]*\n/i);
+    if(parts.length < 2) return;
+    var bloco = parts[1];
+    // corta antes das tabelas de estatística, que também têm números
+    bloco = bloco.split(/\n\s*(?:Percurso|Gols\s*\n|Resultado\s*\n)/i)[0] || bloco;
+
+    // nomes dos times: a linha logo antes de cada cabeçalho "Data".
+    // Guardo TAMBÉM a posição, porque o nome do título e o nome dentro da
+    // lista de jogos muitas vezes são diferentes ("Deportivo Cali" no título,
+    // "Cali" nos jogos; "SC Internacional" x "Inter"; "Clube do Remo" x
+    // "Remo"). Casar por nome errava em 4 dos 8 textos. A separação dos dois
+    // times passa a ser POSICIONAL — cada bloco tem os jogos de um time — e
+    // o time de cada bloco é descoberto pelo nome que aparece em TODOS os
+    // jogos daquele bloco, o que não depende de como o site o escreveu.
+    var nomes = [], cortes = [], mn, reNome = /\n?\s*([^\n]{3,45}?)\s*\n\s*Data\b/g;
+    while((mn = reNome.exec(bloco)) !== null) {
+      nomes.push(mn[1].trim());
+      cortes.push(mn.index + mn[0].length);
+    }
+    if(nomes.length < 2) return;
+
+    function _n(s){ return String(s||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+    function _bate(a, b){
+      a = _n(a); b = _n(b);
+      if(!a || !b) return false;
+      if(a === b || a.indexOf(b) === 0 || b.indexOf(a) === 0) return true;
+      var pa = a.split(' ')[0], pb = b.split(' ')[0];
+      return pa.length >= 4 && pa === pb;
+    }
+
+    function jogosDe(ini, fim){
+      var trecho = bloco.slice(ini, fim);
+      var reJ = /(\d{4}-\d{2}-\d{2})[\s\S]{0,40}?\n\s*([A-Za-zÀ-ÿ0-9 .'\-]+?)\s*\n?\s*(\d+)-(\d+)\s*\n?\s*([A-Za-zÀ-ÿ0-9 .'\-]+?)\s*(?=\n|$)/g;
+      var lst = [], mj;
+      while((mj = reJ.exec(trecho)) !== null) {
+        if(+mj[3] > 9 || +mj[4] > 9) continue;        // data lida como placar
+        lst.push({ casa:mj[2].trim(), gc:+mj[3], gf:+mj[4], fora:mj[5].trim() });
+      }
+      return lst;
+    }
+    var blocoA = jogosDe(cortes[0], cortes[1] !== undefined ? nomes.length > 1 ? bloco.lastIndexOf(nomes[1], cortes[1]) : cortes[1] : bloco.length);
+    var blocoB = jogosDe(cortes[1], bloco.length);
+    var todos = blocoA.concat(blocoB);
+    if(todos.length < 4) return;
+
+    // quem é o time DESTE bloco: o nome que aparece em todos (ou quase todos)
+    // os jogos dele. Não depende de como o título escreveu o nome.
+    function sujeito(lst){
+      var cont = {};
+      lst.forEach(function(j){
+        cont[_n(j.casa)] = (cont[_n(j.casa)]||0) + 1;
+        cont[_n(j.fora)] = (cont[_n(j.fora)]||0) + 1;
+      });
+      var melhor = null, qtd = 0;
+      Object.keys(cont).forEach(function(k){ if(cont[k] > qtd) { qtd = cont[k]; melhor = k; } });
+      return (qtd >= Math.max(3, Math.ceil(lst.length * 0.7))) ? melhor : null;
+    }
+
+    function resumo(lst, nomeTitulo){
+      if(!lst || lst.length < 4) return null;
+      var suj = sujeito(lst);
+      if(!suj) return null;
+      var meus = [];
+      lst.forEach(function(j){
+        if(_n(j.casa) === suj)      meus.push({ marc:j.gc, sofr:j.gf, mandante:true });
+        else if(_n(j.fora) === suj) meus.push({ marc:j.gf, sofr:j.gc, mandante:false });
+      });
+      if(meus.length < 4) return null;
+      function stats(lista, rotulo){
+        var n = lista.length; if(!n) return null;
+        var marc = 0, sofr = 0, zero = 0, um = 0, doisMais = 0,
+            cs = 0, btts = 0, over = 0, goleadas = 0, freq = {};
+        lista.forEach(function(g){
+          marc += g.marc; sofr += g.sofr;
+          if(g.marc === 0) zero++; else if(g.marc === 1) um++; else doisMais++;
+          if(g.sofr === 0) cs++;
+          if(g.marc > 0 && g.sofr > 0) btts++;
+          if(g.marc + g.sofr > 2.5) over++;
+          if(g.marc - g.sofr >= 3) goleadas++;
+          var k = g.marc + '-' + g.sofr; freq[k] = (freq[k]||0) + 1;
+        });
+        var mx = Math.max.apply(null, Object.keys(freq).map(function(k){ return freq[k]; }));
+        var maisFreq = Object.keys(freq).filter(function(k){ return freq[k] === mx; })[0];
+        return { recorte:rotulo, amostra:n,
+          media_marcados:+(marc/n).toFixed(2), media_sofridos:+(sofr/n).toFixed(2),
+          pct_zero:+(100*zero/n).toFixed(0), pct_um:+(100*um/n).toFixed(0),
+          pct_dois_mais:+(100*doisMais/n).toFixed(0),
+          clean_sheet_pct:+(100*cs/n).toFixed(0), marca_pct:+(100*(n-zero)/n).toFixed(0),
+          btts_pct:+(100*btts/n).toFixed(0), over25_pct:+(100*over/n).toFixed(0),
+          goleadas:goleadas, teve_goleada: goleadas > 0,
+          placar_mais_freq:maisFreq, placares:lista.map(function(g){ return g.marc+'-'+g.sofr; }) };
+      }
+      return { time: nomeTitulo,
+               geral: stats(meus, 'todos os jogos'),
+               casa:  stats(meus.filter(function(g){ return g.mandante; }),  'só em casa'),
+               fora:  stats(meus.filter(function(g){ return !g.mandante; }), 'só fora') };
+    }
+
+    var rc = resumo(blocoA, nomes[0]), rf = resumo(blocoB, nomes[1]);
+    if(!rc && !rf) return;
+    out._contagem = { time_casa:nomes[0], time_fora:nomes[1], casa:rc, fora:rf,
+                      jogos_lidos:todos.length };
+    console.log('[CONTAGEM] ' + nomes[0] + ' e ' + nomes[1] + ' — ' + todos.length +
+      ' jogos lidos placar a placar.' +
+      (rc && rc.geral ? ' ' + nomes[0] + ': ' + rc.geral.pct_zero + '% zero / ' +
+        rc.geral.pct_um + '% um / ' + rc.geral.pct_dois_mais + '% dois+.' : '') +
+      (rf && rf.geral ? ' ' + nomes[1] + ': ' + rf.geral.pct_zero + '% zero / ' +
+        rf.geral.pct_um + '% um / ' + rf.geral.pct_dois_mais + '% dois+.' : ''));
+  })();
 
   // ─────────────── blocos de GOLS (casa / fora / global) ───────────────
   // "Média de gols marcados por jogo\t1.33\t1\t1.14"
@@ -2615,6 +2768,40 @@ function extrairAcademia(texto) {
     if(tot) f.btts_pct = +(100*amb/tot).toFixed(0);
   });
 
+  // ── LIGA A CONTAGEM REAL À FORMA DE CADA TIME ─────────────────────
+  // A distribuição 0 / 1 / 2+ passa a vir de CONTAGEM quando há amostra, e
+  // não de modelo. Prioridade: o recorte por mando (mandante conta os jogos
+  // em casa, visitante os de fora) quando tiver 6 jogos ou mais, porque é o
+  // recorte que responde à pergunta certa. Abaixo disso, a amostra geral,
+  // que é maior e mais estável. Abaixo de 4, nada — segue o modelo antigo.
+  if(out._contagem) {
+    [['form_casa', out._contagem.casa, 'casa'], ['form_fora', out._contagem.fora, 'fora']].forEach(function(par){
+      var f = out[par[0]], c = par[1], mando = par[2];
+      if(!f || !c) return;
+      // O recorte por mando só manda com amostra CHEIA (8+). Com 6 jogos, a
+      // cauda vira ruído: o Cúcuta saiu com "0% de fazer 2 gols" em 6 jogos
+      // fora — zero em 6 não é impossibilidade, é amostra curta, e esse zero
+      // tiraria 1-2 e 2-2 do cluster. Abaixo de 8 usa a amostra geral, maior.
+      var porMando = c[mando];
+      var escolhido = (porMando && porMando.amostra >= 8) ? porMando : c.geral;
+      if(!escolhido || escolhido.amostra < 4) return;
+      f._dist = {
+        fonte:'contagem', recorte:escolhido.recorte, amostra:escolhido.amostra,
+        pct_zero:escolhido.pct_zero, pct_um:escolhido.pct_um, pct_dois_mais:escolhido.pct_dois_mais,
+        media_marcados:escolhido.media_marcados, media_sofridos:escolhido.media_sofridos,
+        marca_pct:escolhido.marca_pct, clean_sheet_pct:escolhido.clean_sheet_pct,
+        teve_goleada:escolhido.teve_goleada, goleadas:escolhido.goleadas,
+        placar_mais_freq:escolhido.placar_mais_freq, placares:escolhido.placares
+      };
+      // sinal que o motor já consome e que antes só vinha da IA
+      if(typeof f.teve_goleada_recente === 'undefined') f.teve_goleada_recente = escolhido.teve_goleada;
+      console.log('[CONTAGEM] ' + par[0] + ' (' + escolhido.recorte + ', ' + escolhido.amostra +
+        ' jogos): ' + escolhido.pct_zero + '% zero / ' + escolhido.pct_um + '% um / ' +
+        escolhido.pct_dois_mais + '% dois+ | goleadas ' + escolhido.goleadas +
+        ' | placares ' + escolhido.placares.join(' '));
+    });
+  }
+
   if(!out.h2h) out._avisos.push('H2H não encontrado no texto');
   if(!out.form_casa) out._avisos.push('forma do mandante não encontrada');
   if(!out.form_fora) out._avisos.push('forma do visitante não encontrada');
@@ -2663,6 +2850,38 @@ function perfilGols(form) {
   var pDois = p * condK(2);
   var pTres = Math.max(0, p - pUm - pDois);
 
+  // ── SE EXISTE CONTAGEM REAL, ELA MANDA ────────────────────────────
+  // Tudo acima é MODELO: deduz a distribuição de gols a partir da média e
+  // do percentual de jogos em que o time marcou. Quando os dez placares
+  // estão na colagem, não há motivo para deduzir — dá para contar.
+  // Medido no Santa Rosa: contado 30/40/30, modelado pelo recorte de fora
+  // 33/47/20. Dez pontos a menos em "faz dois ou mais" — e é esse número
+  // que decide se o cluster cobre 1-2 e 2-2 ou para no 0-1.
+  // O modelo continua como rede: amostra pequena demais volta para ele.
+  var _fonte = 'modelo';
+  if(form._dist && form._dist.amostra >= 4 &&
+     (form._dist.pct_zero + form._dist.pct_um + form._dist.pct_dois_mais) > 90) {
+    var d = form._dist;
+    // A contagem MANDA, mas não apaga o modelo: dez jogos é amostra curta
+    // para a cauda, e um "0%" observado não significa impossível. Peso da
+    // contagem = n/(n+4): com 10 jogos ela vale 71% e o modelo entra com 29%
+    // só para suavizar os extremos. Com 4 jogos ela vale 50%.
+    var wC = d.amostra / (d.amostra + 4), wM = 1 - wC;
+    var cZero = d.pct_zero/100, cUm = d.pct_um/100, cDM = d.pct_dois_mais/100;
+    var mDM = pDois + pTres, propDois = mDM > 0 ? pDois/mDM : 0.65;
+    var nZero = wC*cZero + wM*pZero;
+    var nUm   = wC*cUm   + wM*pUm;
+    var nDM   = wC*cDM   + wM*mDM;
+    var soma  = nZero + nUm + nDM;
+    if(soma > 0) { nZero/=soma; nUm/=soma; nDM/=soma; }
+    pZero = nZero; pUm = nUm;
+    pDois = nDM * propDois;
+    pTres = nDM * (1 - propDois);
+    if(typeof d.media_marcados === 'number') m = wC*d.media_marcados + wM*m;
+    _fonte = 'contagem de ' + d.amostra + ' jogos (' + d.recorte + '), peso ' +
+             (100*wC).toFixed(0) + '%';
+  }
+
   // evidência direta dos placares mais frequentes — vale mais que a média
   var direto = [];
   [form.placar_mais_freq, form.placar_quando_btts].forEach(function(pl){
@@ -2687,12 +2906,14 @@ function perfilGols(form) {
   var confianca = Math.min(1, n / 6) * (form.temporadaAnterior ? 0.6 : 1);
 
   return { tipo:tipo, rotulo:rotulo, amostra:n, confianca:+confianca.toFixed(2),
+           fonte:_fonte,
            media:m, marcaPct:+(100*p).toFixed(0), mediaQuandoMarca:+mCond.toFixed(2),
            pZero:+(100*pZero).toFixed(1), pUm:+(100*pUm).toFixed(1),
            pDois:+(100*pDois).toFixed(1), pTresMais:+(100*pTres).toFixed(1),
            placaresDiretos: direto,
            resumo: rotulo + ' (' + (100*pZero).toFixed(0) + '% zero / ' +
-                   (100*pUm).toFixed(0) + '% um / ' + (100*(pDois+pTres)).toFixed(0) + '% dois+)' };
+                   (100*pUm).toFixed(0) + '% um / ' + (100*(pDois+pTres)).toFixed(0) +
+                   '% dois+ — ' + _fonte + ')' };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2944,7 +3165,7 @@ var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
 // ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
 // Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
 // sem precisar rodar análise nenhuma.
-var VERSAO_INDEX = 'v6.5';
+var VERSAO_INDEX = 'v6.9';
 window.VERSAO_INDEX = VERSAO_INDEX;
 
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
@@ -4139,9 +4360,26 @@ function probModeloAnyOther(nomeBalde, csOdds) {
 
 var COMISSAO_BETFAIR = 0.065;   // comissão sobre lucro LÍQUIDO do mercado.
                                 // Ajuste aqui se sua taxa for diferente.
-var EDGE_TILT_K   = 3.0;        // sensibilidade da stake ao edge
-var EDGE_TILT_MIN = 0.55;       // nenhuma perna morre — a gestão ao vivo
-var EDGE_TILT_MAX = 1.80;       // precisa de todos os degraus do caminho
+// ── A INCLINAÇÃO FOI REDUZIDA (23/09) ───────────────────────────────
+// Quando o usuário disse "com 1-0 e 2-2 ainda mantém 58%", ele estava
+// descrevendo o DUTCH DE LUCRO IGUAL líquido de comissão — que naquele
+// cluster dá exatamente +59,3%. É esse o desenho que ele opera, e é o
+// mesmo do trader inglês: "we've ended up with the same profit potential
+// pretty much on a lot of these score lines".
+// Com K=3 e faixa 0,55–1,80 a inclinação abria o leque de +13,6% a +151%
+// no mesmo cluster: quatro pernas pagando quase nada e duas pagando
+// muito. Isso não é cobrir uma faixa, é apostar em duas pernas e carregar
+// as outras. Medido no Cienciano:
+//        K=3,0  [0,55–1,80]  →  pior +13,6%   melhor +151,4%
+//        K=1,0  [0,85–1,20]  →  pior +49,3%   melhor  +88,3%
+//        K=0    (lucro igual) →  todas       +63,4%
+// A inclinação continua existindo porque preço melhor merece um pouco
+// mais de peso, mas agora ela EMPURRA, não decide. O desenho base volta a
+// ser o lucro igual, que é o que sustenta a gestão ao vivo em qualquer
+// degrau do caminho.
+var EDGE_TILT_K   = 1.0;        // sensibilidade da stake ao edge
+var EDGE_TILT_MIN = 0.85;       // nenhuma perna morre — a gestão ao vivo
+var EDGE_TILT_MAX = 1.20;       // precisa de todos os degraus do caminho
 var MIN_SCORES_CLUSTER = 5;     // piso operacional do método: nunca menos de 5
                                 // placares COM STAKE no cluster final
 
@@ -4201,7 +4439,29 @@ function aplicarDutch(valid, stake) {
 // distribuído pelo edge entre as pernas que já estão acima do piso.
 // Se a soma dos mínimos não couber (mercado sem margem), o piso cede até
 // o retorno do Dutch plano — nunca se pede o impossível.
-var PISO_RETORNO_PERNA = 0.05;   // +5% da banca, no mínimo, em cada perna
+// ALVO DO MÉTODO, dito pelo usuário: lucro mínimo de 50% no cluster, e com
+// a gestão ao vivo isso sobe muito mais. Existe uma relação EXATA entre esse
+// alvo e a cobertura de mercado, porque no Dutch de lucro igual
+//        lucro = 1 / Σ(1/odd) − 1
+// então  +50% exige cobertura ≤ 66,7%  e  +100% exige cobertura ≤ 50,0%.
+// Ou seja: "cobrir mais" e "lucrar mais" são o MESMO botão, girado para
+// lados opostos. Não é opinião, é aritmética do mercado.
+// O piso abaixo é por PERNA, aplicado depois da inclinação por edge. Quando
+// a tabela não comporta os 50% (cobertura alta demais), ele cede até o
+// máximo uniforme possível e o robô avisa no log — em vez de fingir.
+// CORREÇÃO (23/09), depois do usuário revisar: 50% fixo estava apertado
+// demais. Ele opera com 45%, 40%, e o que importa é COBRIR o caminho —
+// no Cienciano, incluir 1-0 E 2-2 dava 7 placares com +59% líquido de
+// comissão, e isso é perfeitamente operável. Então o piso deixa de ser um
+// número único e passa a acompanhar o tamanho do cluster, na mesma escala
+// que o motor já usava no retorno mínimo: quanto mais degraus cobertos,
+// menos se exige de cada acerto isolado. É a troca que ele faz de propósito.
+function pisoRetornoPara(nPernas) {
+  if(nPernas <= 4) return 0.50;
+  if(nPernas === 5) return 0.45;
+  if(nPernas === 6) return 0.35;
+  return 0.30;                    // 7 placares — cobertura larga, lucro menor por acerto
+}
 
 function _pisoRetornoPorPerna(pesos) {
   if(!pesos || pesos.length < 2) return;
@@ -4211,7 +4471,18 @@ function _pisoRetornoPorPerna(pesos) {
   });
   if(!ok || !(somaInv > 0)) return;
   var retPlano = 1/somaInv - 1;                 // retorno uniforme máximo possível
-  var piso = Math.min(PISO_RETORNO_PERNA, retPlano);
+  var alvo = pisoRetornoPara(pesos.length);
+  var piso = Math.min(alvo, retPlano);
+  // aviso honesto: a tabela não comporta nem o piso deste tamanho de cluster
+  if(retPlano < alvo && !S._avisouPisoRetorno) {
+    S._avisouPisoRetorno = true;
+    S._retornoMaxCluster = retPlano;
+    console.warn('[RETORNO] '+pesos.length+' placares cobrem '+(100*somaInv).toFixed(1)+
+      '% do mercado, então o máximo que este cluster paga por acerto é +'+
+      (100*retPlano).toFixed(1)+'% (bruto), abaixo do piso de +'+(100*alvo).toFixed(0)+
+      '% para esse tamanho. Cobertura teria de cair para '+(100/(1+alvo)).toFixed(1)+
+      '% ou menos — é a troca entre cobrir mais e ganhar mais por acerto.');
+  }
   if(!(piso > 0)) return;                       // cluster sem margem: nada a garantir
 
   var tot = pesos.reduce(function(a,p){ return a + p.w; }, 0);
@@ -9864,9 +10135,13 @@ function calcStakes(cluster, stake, analysisText) {
     });
     S._oddsSuspeitas = suspeitos.map(function(s){ return { score:s.score, odd:s.odd, motivo:s._oddSuspeita }; });
 
-    // redistribuir entre os que sobraram
+    // Redistribuir entre os que sobraram.
+    // O balde any_other era excluído SÓ aqui (como já acontecia no piso de 5
+    // e no re-Dutch do STEP 5). Quando ele tem stake, a conta estoura: os
+    // outros rateiam a banca inteira e a stake do balde fica por cima —
+    // R$122 numa operação de R$100, pego na varredura de 1188 cenários.
     var restantes = cluster.filter(function(s){
-      return s.score && !String(s.score).startsWith('any_other') && s.odd > 0 &&
+      return s.score && s.odd > 0 &&
              s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
     });
     if(restantes.length) {
@@ -10071,11 +10346,37 @@ function calcStakes(cluster, stake, analysisText) {
   // ambas marcam a @1,75 ou menos. Não implementei o caso simétrico (jogo
   // fechado punindo placar de ambas marcando) porque não tenho caso real
   // medido dele; quando aparecer, a gente olha com número na mão.
+  // ── REVISÃO DO USUÁRIO (23/09): ESTA REGRA SÓ AGE SE O LUCRO NÃO COUBER ──
+  // Eu tinha feito esta poda sair sempre que a perna fosse a pior nos dois
+  // eixos. O usuário revisou e tem razão: no Cienciano, manter o 1-0 JUNTO
+  // com o 2-2 dava 7 placares, 61,2% de cobertura e +59% líquido de
+  // comissão por acerto — perfeitamente operável. Cobrir o caminho vale
+  // mais que concentrar a banca, DESDE QUE o lucro por acerto continue
+  // dentro da faixa que ele opera (45%, 40%, 35% conforme o tamanho).
+  // Então a poda deixa de ser automática: ela só entra quando o cluster
+  // ficou apertado demais, isto é, quando nem o piso do próprio tamanho
+  // cabe. Fora disso, a perna fica.
   var BTTS_SINAL_FORTE = 1.75;
   (function podarIncoerente(){
     var btts = (typeof bttsAtual === 'number' && bttsAtual > 0)
       ? bttsAtual : (parseFloat(document.getElementById('pk-btts')?.value) || 0);
     if(!(btts > 0) || btts > BTTS_SINAL_FORTE) return;
+
+    // o cluster ainda paga o que o método pede? então não mexe.
+    var _comStake = cluster.filter(function(s){
+      return s && s.score && s.odd > 1 && s.stake > 0 &&
+             s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    if(_comStake.length) {
+      var _cob = _comStake.reduce(function(a,s){ return a + 1/s.odd; }, 0);
+      var _ret = _cob > 0 ? (1/_cob - 1) : 0;
+      if(_ret >= pisoRetornoPara(_comStake.length)) {
+        console.log('[COBERTURA x LUCRO] cluster com '+_comStake.length+' placares cobre '+
+          (100*_cob).toFixed(1)+'% e paga +'+(100*_ret).toFixed(1)+'% por acerto — dentro da '+
+          'faixa operável, então nenhuma perna é podada. Cobrir o caminho vem primeiro.');
+        return;
+      }
+    }
 
     function ativos(){
       return cluster.filter(function(s){
