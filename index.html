@@ -2206,21 +2206,22 @@ function avaliarAprovacaoGenio(ctx) {
   // Contexto de alto ruído continua bloqueando, seja qual for o EV.
   const hardBlock = (amistoso || rotacao || semObjetivo);
 
+  // ── O EV SAIU DO CARD, POR DECISÃO DO USUÁRIO ─────────────────────
+  // O objetivo do robô é o CAMINHO que o jogo pode percorrer, não achar
+  // mispricing. Um veredito "sem edge" no topo do card empurra o operador a
+  // desconfiar de um cluster que está certo, e o número que sustenta esse
+  // veredito depende de um modelo que ainda não foi validado contra
+  // resultado real. Então o EV continua sendo calculado e continua indo para
+  // o LOG — para quando formos medir de verdade — mas não dá veredito na
+  // tela. O card fala de perfil e contexto, que é o que ele sabe afirmar.
   let aprovado, baseAprovacao;
-  if(gateEV && gateEV.r && (gateEV.veredito === 'edge_real' || gateEV.veredito === 'edge_marginal'
-                            || gateEV.veredito === 'sem_edge')) {
-    // Temos leitura de EV confiável — ela decide.
-    aprovado = !hardBlock && gateEV.veredito === 'edge_real';
-    baseAprovacao = 'ev';
-    if(gateEV.veredito === 'edge_marginal') motivos.push('EV positivo mas dentro da margem de erro do modelo');
-    if(gateEV.veredito === 'sem_edge')      motivos.push('EV do cluster não positivo após comissão');
-  } else {
-    // Sem leitura de EV (modelo incoerente, sem odds CS, etc): NÃO afirmamos
-    // que há edge. Cai para o critério antigo de faixa, mas marcado como tal.
-    aprovado = !hardBlock && rangeFails <= 1 && (crossScore === null || crossScore >= 3.0);
-    baseAprovacao = 'faixa';
-    motivos.push('sem leitura de EV — veredito baseado apenas na faixa de odds');
+  if(gateEV && gateEV.veredito) {
+    console.log('[EV interno] veredito='+gateEV.veredito+
+      (gateEV.r ? ' | ROI '+gateEV.r.roi+'% | modelo '+gateEV.r.pModelo+'% vs mercado '+gateEV.r.pMercado+'%' : '')+
+      '  — informativo, não aparece no card.');
   }
+  aprovado = !hardBlock && rangeFails <= 1 && (crossScore === null || crossScore >= 3.0);
+  baseAprovacao = 'faixa';
 
   // Montar mensagem contextual de não aprovado
   var motivoPrincipal = '';
@@ -2249,16 +2250,10 @@ function avaliarAprovacaoGenio(ctx) {
     aprovado,
     baseAprovacao,
     status: aprovado ? 'aprovado' : 'nao_aprovado',
-    label: aprovado
-      ? (baseAprovacao === 'ev' ? '🟢 EDGE OPERACIONAL' : '📊 PERFIL PADRÃO')
-      : (baseAprovacao === 'ev' ? '🔴 SEM EDGE OPERACIONAL' : '📊 PERFIL ATÍPICO'),
+    label: aprovado ? '📊 PERFIL PADRÃO' : '📊 PERFIL ATÍPICO',
     resumo: aprovado
-      ? (baseAprovacao === 'ev'
-          ? 'EV do cluster positivo acima da margem de erro do modelo, líquido de comissão.'
-          : 'Odds dentro do range estatístico mais comum — sem leitura de EV disponível.')
-      : (baseAprovacao === 'ev'
-          ? 'O modelo não encontra valor nos placares deste cluster aos preços atuais.'
-          : motivoPrincipal),
+      ? 'Odds dentro do range estatístico mais comum destes jogos.'
+      : motivoPrincipal,
     submensagem: '',
     motivos: aprovado ? positivos.slice(0,3) : motivos.slice(0,4),
     fav, btts, over,
@@ -2949,7 +2944,7 @@ var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
 // ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
 // Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
 // sem precisar rodar análise nenhuma.
-var VERSAO_INDEX = 'v6.3';
+var VERSAO_INDEX = 'v6.5';
 window.VERSAO_INDEX = VERSAO_INDEX;
 
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
@@ -8507,7 +8502,27 @@ REGRAS ABSOLUTAS:
     }
 
   } catch(e) {
-    if(out) out.innerHTML = `<div class="ab ab-r"><div class="ab-title" style="color:var(--red);">ERRO NA ANÁLISE</div><div class="ab-text">${e.message}<br><br>Verifique sua conexão e tente novamente.</div></div>`;
+    // ── O ERRO TEM QUE SER LEGÍVEL NO CARD ────────────────────────────
+    // Antes: o card trocava tudo por "ERRO NA ANÁLISE" + e.message, e o selo
+    // virava ERRO. Quando o erro acontecia DEPOIS da narrativa já estar na
+    // tela, o operador via um selo vermelho e nenhuma pista, e eu não tinha
+    // como diagnosticar pela colagem do card — dias perdidos nisso.
+    // Agora a caixa de erro entra ACIMA do que já foi desenhado, trazendo a
+    // mensagem e as primeiras linhas da pilha. Basta copiar o card.
+    var _det = String((e && (e.stack || e.message)) || 'erro desconhecido');
+    var _esc = function(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var _linhas = _det.split('\n').slice(0, 4).map(function(l){ return _esc(l.trim()); }).join('<br>');
+    console.error('[ANÁLISE] exceção:', e);
+    var _caixa = '<div class="ab ab-r" style="margin-bottom:12px;">'+
+      '<div class="ab-title" style="color:var(--red);">ERRO NA ANÁLISE</div>'+
+      '<div class="ab-text">'+_esc(e && e.message ? e.message : 'erro desconhecido')+
+      '<div style="margin-top:10px;font-family:Space Mono,monospace;font-size:9px;color:var(--txt3);'+
+      'background:rgba(0,0,0,.35);border-radius:6px;padding:8px 10px;line-height:1.6;overflow-x:auto;">'+
+      _linhas+'</div>'+
+      '<div style="margin-top:8px;font-size:11px;color:var(--txt3);">index '+
+      (typeof VERSAO_INDEX !== 'undefined' ? VERSAO_INDEX : '?')+
+      ' — copie este bloco inteiro se for reportar.</div></div></div>';
+    if(out) out.innerHTML = _caixa + (out.innerHTML || '');
     if(badge) badge.innerHTML = '<span class="bdg bdg-r">ERRO</span>';
   }
   S.thinking = false;
@@ -9863,6 +9878,62 @@ function calcStakes(cluster, stake, analysisText) {
     }
   })();
 
+  // ── STEP 6.4a: A ROTA DO OBSTÁCULO TEM QUE ESTAR COBERTA ────────────
+  // Cienciano x Santa Rosa (23/09). O robô leu o obstáculo do jogo como
+  // TROCA DE GOLS com 71% de confiança — "os dois marcam, o jogo abre" — e
+  // a rota que ele mesmo publicou no card foi 1-1 → 2-2 → 2-1. Só que o 2-2
+  // podia sair nos cortes e sair sem que nada reclamasse. Um card que anuncia
+  // um obstáculo e não cobre o caminho desse obstáculo está se contradizendo
+  // na mesma tela: a seção de cima diz por onde o jogo passa, a de baixo não
+  // põe dinheiro lá.
+  // Regra: com o obstáculo identificado acima de 65% de confiança, todo
+  // degrau da rota que seja plausível volta a ter stake. Abaixo disso a
+  // leitura não é firme o bastante para mandar no cluster.
+  var ROTA_CONF_MIN  = 0.65;
+  var ROTA_MKT_MIN   = 4.0;   // % de mercado mínimo do degrau
+  (function coberturaDaRota(){
+    var pc = S._percalco;
+    if(!pc || !(pc.confianca >= ROTA_CONF_MIN)) return;
+    var rota = S._percalcoRota || pc.rota;
+    if(!Array.isArray(rota) || !rota.length) return;
+
+    var temStake = {};
+    cluster.forEach(function(s){
+      if(s && s.score && s.stake > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica')
+        temStake[s.score] = true;
+    });
+    var repostos = [];
+    rota.forEach(function(sc){
+      if(!/^\d-\d$/.test(sc) || temStake[sc]) return;
+      var odd = (S.csOdds || {})[sc];
+      if(!(odd > 1)) return;
+      var mkt = 100 / odd;
+      if(mkt < ROTA_MKT_MIN) return;                 // degrau implausível não entra
+      var jaEstá = cluster.find(function(s){ return s.score === sc; });
+      if(jaEstá && jaEstá._vetado) return;           // veto explícito continua valendo
+      if(jaEstá) { jaEstá.tipo = classificarPlano(sc, cluster); jaEstá._rotaObstaculo = true; }
+      else cluster.push({ score:sc, odd:odd, prob:+mkt.toFixed(1),
+             tipo: classificarPlano(sc, cluster), stake:0, lucro:0,
+             oddPG:+(odd/2).toFixed(1), _rotaObstaculo:true });
+      repostos.push(sc + ' @' + odd);
+    });
+    if(repostos.length) {
+      console.log('[ROTA] obstáculo ' + pc.tipo + ' (' + Math.round(100*pc.confianca) +
+        '% de confiança) tem rota ' + rota.join(' → ') + ' e ' + repostos.join(', ') +
+        ' estava(m) sem dinheiro — degrau reposto. O card não pode anunciar um caminho e não cobrir ele.');
+      var todos = cluster.filter(function(s){
+        return s.score && s.odd > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+      });
+      if(todos.length) {
+        aplicarDutch(todos, stake);
+        todos.forEach(function(s){
+          s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+          s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+        });
+      }
+    }
+  })();
+
   // ── STEP 6.4b: NENHUMA FAMÍLIA DE RESULTADO FICA SEM COBERTURA ──────
   // Achado em Santa Fe x Cali (21/09), com dinheiro real perdido: o cluster
   // saiu 1-0, 2-0, 2-1, 1-1, 0-0 — cinco placares, 58% de cobertura de
@@ -9979,6 +10050,94 @@ function calcStakes(cluster, stake, analysisText) {
         });
       }
     });
+  })();
+
+  // ── STEP 6.4c: PERNA INCOERENTE COM A LEITURA DO JOGO ───────────────
+  // Mesmo jogo, outro lado do problema. O cluster saiu com 7 placares e o
+  // sétimo era o 1-0 — Cienciano vencendo SEM O SANTA ROSA MARCAR — num
+  // jogo em que o mercado paga @1,70 para ambos marcarem. Números do 1-0:
+  // 5,57% pelo modelo (o MENOR do cluster) e edge -22% (o PIOR do cluster).
+  // Ele não entrou por mérito: entrou porque cabia no teto de 7.
+  //
+  // "Caber no teto" não é razão para ocupar uma vaga. Se uma perna perde
+  // nos DOIS eixos — probabilidade e preço — e ainda contradiz o sinal mais
+  // forte que o mercado está dando neste jogo, ela sai e a banca se
+  // concentra nas que representam o caminho de verdade.
+  //
+  // Limites de propósito, para a regra não virar tesoura: só age acima do
+  // piso de 5; corta no máximo UMA perna; nunca corta o degrau de entrada,
+  // a âncora, um degrau da rota do obstáculo, nem a única perna de uma
+  // família de resultado. E só vale quando o sinal de mercado é forte —
+  // ambas marcam a @1,75 ou menos. Não implementei o caso simétrico (jogo
+  // fechado punindo placar de ambas marcando) porque não tenho caso real
+  // medido dele; quando aparecer, a gente olha com número na mão.
+  var BTTS_SINAL_FORTE = 1.75;
+  (function podarIncoerente(){
+    var btts = (typeof bttsAtual === 'number' && bttsAtual > 0)
+      ? bttsAtual : (parseFloat(document.getElementById('pk-btts')?.value) || 0);
+    if(!(btts > 0) || btts > BTTS_SINAL_FORTE) return;
+
+    function ativos(){
+      return cluster.filter(function(s){
+        return s && s.score && /^\d-\d$/.test(s.score) && s.odd > 0 && s.stake > 0 &&
+               s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+      });
+    }
+    var vivos = ativos();
+    if(vivos.length <= MIN_SCORES_CLUSTER) return;
+
+    function pmDe(s){
+      var p = (typeof s._modelProb === 'number' && s._modelProb > 0)
+        ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+      return (p > 0) ? p : (s.prob || 0);
+    }
+    // contradiz "ambas marcam" = algum dos dois não marca
+    function semAmbos(sc){ var p = sc.split('-').map(Number); return p[0] === 0 || p[1] === 0; }
+
+    var ordProb = vivos.slice().sort(function(a,b){ return pmDe(a) - pmDe(b); });
+    var ordEdge = vivos.slice().sort(function(a,b){
+      return (edgeDoScore(pmDe(a), a.odd) || -9) - (edgeDoScore(pmDe(b), b.odd) || -9);
+    });
+    var alvo = ordProb[0];
+    if(!alvo || alvo !== ordEdge[0]) return;          // tem que ser o pior nos DOIS eixos
+    if(!semAmbos(alvo.score)) return;
+    if(alvo.tipo === 'caminho' || alvo._rotaObstaculo || alvo._coberturaFamilia) return;
+    if(S.currentGame && alvo.score === S.currentGame.lastAncora) return;
+    if(S._percalcoRota && S._percalcoRota.indexOf(alvo.score) >= 0) return;
+
+    // não pode ser a última perna da família dela
+    var fam = classificarPlano(alvo.score, cluster);
+    var mesmaFam = vivos.filter(function(s){
+      return s !== alvo && classificarPlano(s.score, cluster) === fam;
+    });
+    var p0 = alvo.score.split('-').map(Number);
+    var resultadoAlvo = p0[0] > p0[1] ? 'casa' : (p0[0] === p0[1] ? 'empate' : 'fora');
+    var mesmoResultado = vivos.filter(function(s){
+      if(s === alvo) return false;
+      var p = s.score.split('-').map(Number);
+      var r = p[0] > p[1] ? 'casa' : (p[0] === p[1] ? 'empate' : 'fora');
+      return r === resultadoAlvo;
+    });
+    if(!mesmaFam.length || !mesmoResultado.length) return;
+
+    var e = edgeDoScore(pmDe(alvo), alvo.odd);
+    console.log('[INCOERENTE] ' + alvo.score + ' @' + alvo.odd + ' sai do Dutch — é o MENOS provável ('+
+      pmDe(alvo).toFixed(2) + '%) E o de PIOR preço (edge ' + (100*(e||0)).toFixed(0) +
+      '%) do cluster, e precisa que um dos times não marque num jogo com ambas @' + btts +
+      '. Cobertura do resultado "' + resultadoAlvo + '" continua via ' +
+      mesmoResultado.map(function(s){ return s.score; }).join(', ') + '.');
+    alvo.tipo = 'expansao'; alvo.stake = 0; alvo.lucro = 0;
+
+    var restantes = cluster.filter(function(s){
+      return s.score && s.odd > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    if(restantes.length) {
+      aplicarDutch(restantes, stake);
+      restantes.forEach(function(s){
+        s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+        s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+      });
+    }
   })();
 
   // ── STEP 6.5: PISO DE 5 PLACARES — garantia final ───────────────────
