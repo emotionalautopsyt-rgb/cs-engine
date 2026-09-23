@@ -8785,6 +8785,30 @@ function favoritoEhMandante(cluster) {
 function caminhoDoFavorito(cluster) { return favoritoEhMandante(cluster) ? '1-0' : '0-1'; }
 function vitoriaDaZebraPor1(cluster) { return favoritoEhMandante(cluster) ? '0-1' : '1-0'; }
 
+// ── PLANO A x PLANO B — PONTO ÚNICO ──────────────────────────────────
+// A regra do método é uma só: PLANO A é vitória DO FAVORITO (o 'caminho' é
+// o primeiro degrau dele, os 'destino' são os degraus seguintes); PLANO B é
+// empate ou vitória da ZEBRA. Essa classificação estava reescrita em sete
+// lugares do arquivo, e dois deles criavam placar já com um rótulo fixo
+// ('planb') sem olhar de quem era a vitória — então um placar do favorito
+// reposto pelo piso, ou trazido pela cobertura de família, aparecia no card
+// como Plano B. O cluster ficava certo; a leitura da tela, errada.
+function classificarPlano(score, cluster) {
+  var s = String(score || '').toLowerCase();
+  if(!s) return 'planb';
+  var favCasa = favoritoEhMandante(cluster);
+  if(s.indexOf('any_other') === 0) {
+    if(s.indexOf('draw') >= 0) return 'planb';                 // empate raro
+    var baldeDaCasa = s.indexOf('home') >= 0;
+    return (baldeDaCasa === favCasa) ? 'destino' : 'planb';    // goleada do favorito?
+  }
+  if(!/^\d+-\d+$/.test(s)) return 'planb';
+  var p = s.split('-').map(Number);
+  if(p[0] === p[1]) return 'planb';                            // empate = sempre Plano B
+  var venceFav = favCasa ? (p[0] > p[1]) : (p[1] > p[0]);
+  return venceFav ? 'destino' : 'planb';
+}
+
 function calcStakes(cluster, stake, analysisText) {
   if(!cluster || cluster.length === 0) return;
 
@@ -9833,6 +9857,124 @@ function calcStakes(cluster, stake, analysisText) {
     }
   })();
 
+  // ── STEP 6.4b: NENHUMA FAMÍLIA DE RESULTADO FICA SEM COBERTURA ──────
+  // Achado em Santa Fe x Cali (21/09), com dinheiro real perdido: o cluster
+  // saiu 1-0, 2-0, 2-1, 1-1, 0-0 — cinco placares, 58% de cobertura de
+  // mercado, e NENHUM deles cobria vitória do visitante. O modelo dava 24%
+  // à vitória do Cali e o mercado precificava 23,8% da tabela nessa família.
+  // Quase um quarto do jogo sem um centavo em cima. O jogo terminou com o
+  // visitante na frente.
+  //
+  // Como aconteceu: o 0-1 ESTAVA no plano B do motor e foi removido pelo
+  // CORTE EV — edge -16,4%, abaixo do limite de -12%. O 1-0, com edge
+  // -17,7% (PIOR), ficou, porque é âncora e âncora é protegida. Ou seja: o
+  // corte por preço derrubou o único representante de um ramo inteiro da
+  // árvore, enquanto mantinha um placar de preço ainda pior do outro ramo.
+  //
+  // O método é cobrir a FAIXA de resultados plausíveis. Um cluster que
+  // ignora "o visitante vence" não é uma faixa, é uma aposta direcional.
+  // Regra: se uma família (casa vence / empate / visitante vence) tem
+  // probabilidade relevante no modelo e ZERO pernas com stake, o placar mais
+  // provável daquela família volta — desde que ele próprio seja plausível.
+  // O piso de mercado evita forçar cobertura em favorito curtíssimo, onde a
+  // vitória da zebra existe mas placar nenhum dela passa de 3-4%.
+  var FAMILIA_PROB_MIN   = 12.0;  // % do modelo para a família exigir cobertura
+  var FAMILIA_CAND_MIN   = 5.0;   // % de mercado mínimo do placar que vai cobrir
+  (function coberturaDeFamilia(){
+    if(!S._lamFav || !S._lamZeb || S._lamFav <= 0 || S._lamZeb <= 0) return;
+
+    function familiaDoPlacar(sc){
+      if(!sc) return null;
+      var s = String(sc).toLowerCase();
+      if(s.indexOf('any_other') === 0) {
+        if(s.indexOf('home') >= 0) return 'casa';
+        if(s.indexOf('away') >= 0) return 'fora';
+        return 'empate';
+      }
+      if(!/^\d-\d$/.test(s)) return null;
+      var p = s.split('-').map(Number);
+      return p[0] > p[1] ? 'casa' : (p[0] === p[1] ? 'empate' : 'fora');
+    }
+
+    // probabilidade de cada família pelo MODELO (grade Dixon-Coles)
+    var g = csGrid(S._lamFav, S._lamZeb, S._dcRho);
+    var probFam = { casa:0, empate:0, fora:0 };
+    for(var f = 0; f <= CS_GRID_MAX; f++) for(var z = 0; z <= CS_GRID_MAX; z++) {
+      var gc = S._favEhVisitante ? z : f;
+      var gf = S._favEhVisitante ? f : z;
+      probFam[gc > gf ? 'casa' : (gc === gf ? 'empate' : 'fora')] += g[f][z] * 100;
+    }
+
+    var comStake = cluster.filter(function(s){
+      return s && s.odd > 0 && s.stake > 0 &&
+             s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    var cobertas = {};
+    comStake.forEach(function(s){ var fam = familiaDoPlacar(s.score); if(fam) cobertas[fam] = true; });
+
+    ['casa','empate','fora'].forEach(function(fam){
+      if(cobertas[fam]) return;
+      if(probFam[fam] < FAMILIA_PROB_MIN) return;
+
+      // candidatos dessa família: o que está zerado no cluster + o que está
+      // na tabela e não entrou. Veto explícito continua valendo.
+      var jaNoCluster = {};
+      cluster.forEach(function(s){ if(s.score) jaNoCluster[s.score] = true; });
+      var cands = cluster.filter(function(s){
+        return s.score && s.odd > 0 && !(s.stake > 0) && !s._vetado &&
+               s.tipo !== 'expansao_especifica' && familiaDoPlacar(s.score) === fam;
+      });
+      Object.keys(S.csOdds || {}).forEach(function(sc){
+        if(!/^\d-\d$/.test(sc) || jaNoCluster[sc] || !(S.csOdds[sc] > 1)) return;
+        if(familiaDoPlacar(sc) !== fam) return;
+        cands.push({ score:sc, odd:S.csOdds[sc], prob:+(100/S.csOdds[sc]).toFixed(1),
+                     tipo:'planb', stake:0, lucro:0, oddPG:+(S.csOdds[sc]/2).toFixed(1),
+                     _reposto:true });
+      });
+      if(!cands.length) return;
+
+      function pmDe(s){
+        var p = (typeof s._modelProb === 'number' && s._modelProb > 0)
+          ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+        return (p > 0) ? p : (s.prob || 0);
+      }
+      var plausiveis = cands.filter(function(s){ return (s.prob || 0) >= FAMILIA_CAND_MIN; });
+      if(!plausiveis.length) {
+        console.log('[COBERTURA] família "'+fam+'" tem '+probFam[fam].toFixed(1)+
+          '% pelo modelo e nenhuma perna, mas nenhum placar dela chega a '+
+          FAMILIA_CAND_MIN+'% de mercado — não forço cobertura em placar implausível.');
+        return;
+      }
+      // entra o mais provável pelo modelo; preço desempata entre parecidos
+      plausiveis.sort(function(a,b){
+        var pa = pmDe(a), pb = pmDe(b);
+        if(Math.abs(pa - pb) > 0.3) return pb - pa;
+        return (edgeDoScore(pmDe(b), b.odd) || -9) - (edgeDoScore(pmDe(a), a.odd) || -9);
+      });
+      var escolhido = plausiveis[0];
+      if(escolhido._reposto) cluster.push(escolhido);
+      // Plano A ou B pelo ponto único — não por rótulo fixo. Se a família
+      // sem cobertura for a do próprio favorito, o placar é 'destino'.
+      escolhido.tipo = classificarPlano(escolhido.score, cluster);
+      escolhido._coberturaFamilia = fam;
+      console.log('[COBERTURA] "'+fam+'" valia '+probFam[fam].toFixed(1)+
+        '% pelo modelo e estava com ZERO pernas — '+escolhido.score+' @'+escolhido.odd+
+        ' entra ('+pmDe(escolhido).toFixed(1)+'% pelo modelo, '+(escolhido.prob||0).toFixed(1)+
+        '% de mercado). Cobrir a faixa vem antes de cortar por preço.');
+
+      var todos = cluster.filter(function(s){
+        return s.score && s.odd > 0 && s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+      });
+      if(todos.length) {
+        aplicarDutch(todos, stake);
+        todos.forEach(function(s){
+          s.lucro = parseFloat((s.stake * s.odd - stake).toFixed(2));
+          s.oddPG = parseFloat((s.odd * 0.5).toFixed(1));
+        });
+      }
+    });
+  })();
+
   // ── STEP 6.5: PISO DE 5 PLACARES — garantia final ───────────────────
   // Depois de todos os estágios de corte (máximo de scores, retorno mínimo,
   // threshold dinâmico, edge), conferir que sobraram pelo menos 5 placares
@@ -9933,14 +10075,10 @@ function calcStakes(cluster, stake, analysisText) {
 
     candidatos.slice(0, faltam).forEach(function(s){
       if(s._reposto) cluster.push(s);
-      if(s.tipo === 'expansao') {
-        // destino = vitória DO FAVORITO. Estava escrito como "vitória do
-        // mandante", o que rotulava a vitória da zebra como destino sempre
-        // que o favorito era visitante.
-        var pts = s.score.split('-').map(Number);
-        var venceFav = favoritoEhMandante(cluster) ? (pts[0] > pts[1]) : (pts[1] > pts[0]);
-        s.tipo = venceFav ? 'destino' : 'planb';
-      }
+      // TODO placar reposto é reclassificado, não só os que estavam em
+      // 'expansao': o candidato vindo da tabela era criado com 'planb' fixo
+      // e, se fosse vitória do favorito, entrava no card como Plano B.
+      if(s.tipo !== 'caminho') s.tipo = classificarPlano(s.score, cluster);
       console.log('[PISO 5] '+s.score+' @'+s.odd+' entra no Dutch'+
         (s._reposto ? ' (veio da tabela CS)' : ' (estava zerado no cluster)')+
         '  — critério: '+_pmDe(s).toFixed(1)+'% pelo modelo'+
@@ -9964,6 +10102,74 @@ function calcStakes(cluster, stake, analysisText) {
       });
     }
     console.log('[PISO 5] cluster final com '+ativosComStake().length+' placares cobertos.');
+  })();
+
+  // ── STEP 7: RÓTULO FINAL DE PLANO A / PLANO B — PASSAGEM ÚNICA ──────
+  // A regra do método é uma só e ela vale no CARD, que é o que o operador lê:
+  //   caminho + destino = vitória DO FAVORITO   (Plano A)
+  //   planb             = empate ou vitória da ZEBRA (Plano B)
+  // Auditoria em 924 cenários: a classificação estava certa em quase tudo,
+  // mas três clusters entregavam uma perna COM DINHEIRO rotulada do lado
+  // errado (um 1-1 marcado como destino, por exemplo) — sobra de um rótulo
+  // atribuído lá atrás e nunca revisto depois dos cortes. E, mais frequente,
+  // 181 dos 924 terminavam SEM NENHUM 'caminho' entre as pernas com stake:
+  // o degrau de entrada do jogo sumia do card porque o placar que tinha esse
+  // papel acabou zerado por algum corte, e ninguém reatribuía o papel.
+  // Esta passagem roda depois de TODOS os cortes e reposições.
+  (function normalizarPlanos(){
+    var comStake = cluster.filter(function(s){
+      return s && s.score && s.odd > 0 && s.stake > 0 &&
+             s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica';
+    });
+    if(!comStake.length) return;
+
+    // 1) todo placar com dinheiro recebe o rótulo que a regra manda
+    comStake.forEach(function(s){
+      if(s.tipo === 'caminho') return;             // o papel de entrada é tratado abaixo
+      var plano = classificarPlano(s.score, cluster);
+      if(s.tipo !== plano) {
+        console.log('[PLANO] '+s.score+' estava como '+s.tipo+' e é '+
+          (plano === 'destino' ? 'vitória do favorito (Plano A)' : 'empate ou vitória da zebra (Plano B)')+
+          ' — rótulo corrigido.');
+        s.tipo = plano;
+      }
+    });
+
+    // 2) exatamente um 'caminho', e ele tem que ser Plano A com dinheiro
+    var caminhos = comStake.filter(function(s){ return s.tipo === 'caminho'; });
+    caminhos.slice(1).forEach(function(s){ s.tipo = classificarPlano(s.score, cluster); });
+    var atual = caminhos[0];
+    if(atual && classificarPlano(atual.score, cluster) !== 'destino') {
+      console.log('[CAMINHO] '+atual.score+' não é vitória do favorito — não pode ser o degrau de entrada.');
+      atual.tipo = classificarPlano(atual.score, cluster);
+      atual = null;
+    }
+    if(!atual) {
+      // o caminho é o PRIMEIRO degrau: menos gols no total; empate de gols
+      // decide pela maior probabilidade do modelo.
+      var planoA = comStake.filter(function(s){
+        return /^\d+-\d+$/.test(s.score) && classificarPlano(s.score, cluster) === 'destino';
+      });
+      if(!planoA.length) {
+        console.log('[CAMINHO] nenhuma perna de vitória do favorito tem stake — '+
+          'o cluster está inteiro em empate/zebra. Card fica sem degrau de entrada.');
+        return;
+      }
+      function pmDe(s){
+        var p = (typeof s._modelProb === 'number' && s._modelProb > 0)
+          ? s._modelProb : (typeof calcModelProb === 'function' ? calcModelProb(s.score) : null);
+        return (p > 0) ? p : (s.prob || 0);
+      }
+      planoA.sort(function(a,b){
+        var ga = a.score.split('-').reduce(function(x,y){ return x + Number(y); }, 0);
+        var gb = b.score.split('-').reduce(function(x,y){ return x + Number(y); }, 0);
+        if(ga !== gb) return ga - gb;
+        return pmDe(b) - pmDe(a);
+      });
+      planoA[0].tipo = 'caminho';
+      console.log('[CAMINHO] o cluster tinha ficado sem degrau de entrada — '+
+        planoA[0].score+' assume (menos gols entre as vitórias do favorito com stake).');
+    }
   })();
 
 }
@@ -13324,15 +13530,25 @@ PATCH FINAL — Sincronização narrativa + Plano B contextual
       return null;
     }
 
-    const planoA = cluster
-      .filter(s => !isPlanB(s))
-      .map(s => s.score);
+    // ── SÓ PLACAR COM DINHEIRO ENTRA NA NARRATIVA ─────────────────────
+    // Visto no card de Santa Fe x Cali (21/09): o texto anunciou
+    // "Plano A (1-0, 2-0, 2-1, 3-1)" e o 3-1 estava com R$0, marcado como
+    // expansão nos cards logo abaixo. A lista de "minha fórmula de placares"
+    // trazia any_other_home, que também não tinha stake. Quem lê o card não
+    // tem como saber que dois daqueles placares não estão cobertos.
+    // Plano A e Plano B aqui saem da MESMA regra do resto do arquivo
+    // (classificarPlano), não do rótulo que a perna carrega.
+    const operando = cluster.filter(s => s && s.score && s.stake > 0 &&
+      s.tipo !== 'expansao' && s.tipo !== 'expansao_especifica');
+    const base = operando.length ? operando : cluster.filter(s => s && s.score);
 
-    const planoB = cluster
-      .filter(s => isPlanB(s))
-      .map(s => s.score);
+    const ehPlanB = s => (typeof classificarPlano === 'function')
+      ? classificarPlano(s.score, cluster) === 'planb'
+      : isPlanB(s);
 
-    const rota = cluster.map(s => s.score);
+    const planoA = base.filter(s => !ehPlanB(s)).map(s => s.score);
+    const planoB = base.filter(s =>  ehPlanB(s)).map(s => s.score);
+    const rota   = base.map(s => s.score);
 
     return {
       planoA,
