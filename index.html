@@ -1910,6 +1910,11 @@ function confirmarEncerrar(id) {
       placarNoCluster: placarNoCluster,
       placarNaAncora: placarNaAncora,
       totalScores: clusterSalvo.length,
+      // tabela CS completa + lado do favorito: é o que permite reprocessar
+      // este jogo contra uma versão futura do motor
+      csOdds: g.savedCsOdds || null,
+      favEhVisitante: (typeof g.savedFavEhVisitante === 'boolean') ? g.savedFavEhVisitante : null,
+      versaoIndex: (typeof VERSAO_INDEX !== 'undefined' ? VERSAO_INDEX : ''),
     });
     save();
   }
@@ -3165,7 +3170,7 @@ var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
 // ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
 // Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
 // sem precisar rodar análise nenhuma.
-var VERSAO_INDEX = 'v6.9';
+var VERSAO_INDEX = 'v7.0';
 window.VERSAO_INDEX = VERSAO_INDEX;
 
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
@@ -8643,6 +8648,20 @@ REGRAS ABSOLUTAS:
         // Salvar perfil e ancora para backtest
         S.currentGame.savedPerfil = engineFinal ? engineFinal.profileId : '';
         S.currentGame.savedAncora = engineFinal ? engineFinal.ancora : '';
+        // ── TABELA CS COMPLETA, PARA O JOGO PODER SER REPROCESSADO ────
+        // O histórico guardava as odds do favorito, over e ambas, mas NÃO a
+        // tabela de correct score. Sem os 16 preços não dá para rodar o
+        // motor de novo em cima de um jogo antigo — só dá para conferir se o
+        // placar caiu no cluster daquele dia. Os 428 jogos já salvos ficam
+        // com essa limitação; a partir daqui, todo jogo vira reprocessável.
+        try {
+          var _csSnap = {};
+          Object.keys(S.csOdds || {}).forEach(function(k){
+            if(S.csOdds[k] > 1) _csSnap[k] = S.csOdds[k];
+          });
+          if(Object.keys(_csSnap).length >= 8) S.currentGame.savedCsOdds = _csSnap;
+          S.currentGame.savedFavEhVisitante = !!S._favEhVisitante;
+        } catch(eCs) {}
         // Save ancora from JSON for PLACAR PROJETADO highlight
         // Âncora vem do engineFinal (soberano) — não do JSON da IA
         S.currentGame.lastAncora = engineFinal ? engineFinal.ancora : null;
@@ -11756,7 +11775,12 @@ function regRapido() {
     ancora: S.currentGame?.savedAncora || '',
     placarNoCluster: calcPlacarNoCluster(S.currentGame?.placar||'', S.currentGame?.cluster||[]),
     placarNaAncora: !!(S.currentGame?.placar && S.currentGame?.savedAncora && S.currentGame.savedAncora === S.currentGame.placar),
-    totalScores: (S.currentGame?.cluster||[]).length
+    totalScores: (S.currentGame?.cluster||[]).length,
+    csOdds: S.currentGame?.savedCsOdds || null,
+    favEhVisitante: (typeof S.currentGame?.savedFavEhVisitante === 'boolean') ? S.currentGame.savedFavEhVisitante : null,
+    versaoIndex: (typeof VERSAO_INDEX !== 'undefined' ? VERSAO_INDEX : ''),
+    cluster: (S.currentGame?.cluster||[]).map(function(c){
+      return { score:c.score, odd:c.odd, stake:c.stake, tipo:c.tipo }; })
   });
   save();
   const rv = document.getElementById('l-rv');
