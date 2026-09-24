@@ -3170,7 +3170,7 @@ var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
 // ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
 // Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
 // sem precisar rodar análise nenhuma.
-var VERSAO_INDEX = 'v7.0';
+var VERSAO_INDEX = 'v7.1';
 window.VERSAO_INDEX = VERSAO_INDEX;
 
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
@@ -7293,10 +7293,19 @@ async function chamarIA(opts) {
         : opts.system,
       messages: opts.messages
     };
-    var r = await fetch('/.netlify/functions/analyze', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo)
-    });
-    var d = await r.json().catch(function(){ return {}; });
+    // A rede caindo no meio (Wi-Fi, 4G, aba em segundo plano) faz o fetch
+    // REJEITAR, não devolver resposta. Antes essa exceção subia e derrubava
+    // analisarJogo() inteiro, levando junto um cluster que já estava pronto.
+    // Aqui ela vira uma resposta de falha normal, tratada como qualquer outra.
+    var r, d;
+    try {
+      r = await fetch('/.netlify/functions/analyze', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo)
+      });
+    } catch(eRede) {
+      return { ok:false, status:0, data:{ error:{ message:'sem conexão com o servidor ('+(eRede && eRede.message || 'rede')+')' } } };
+    }
+    d = await r.json().catch(function(){ return {}; });
     return { ok: r.ok, status: r.status, data: d };
   }
 
@@ -8320,12 +8329,23 @@ REGRAS ABSOLUTAS:
       messages: [{ role:'user', content: promptFinal }]
     });
 
+    // ── A NARRATIVA NÃO PODE MAIS DERRUBAR A ANÁLISE ──────────────────
+    // O cluster já está pronto muito antes desta linha: analyzeCSGame()
+    // roda lá em cima, em JavaScript puro, sem tocar em API nenhuma. A
+    // chamada acima serve só para ESCREVER o texto do card.
+    // Antes existia um `throw` aqui. Ele matava tudo o que vinha depois —
+    // calcStakes, renderCluster, caixa financeira — e o usuário perdia
+    // placares que já estavam calculados na memória só porque o redator
+    // falhou. Caso real: Noruega x Dinamarca, 24/09/2026, HTTP 504 do
+    // gateway do Netlify; os seis placares existiam e foram descartados.
+    // Agora a falha vira aviso e a análise segue sem o texto.
+    let narrativaFalhou = null;
     if(!resp.ok) {
-      const errMsg = resp.data?.error?.message || 'HTTP '+resp.status;
-      throw new Error(errMsg);
+      narrativaFalhou = (resp.data && resp.data.error && resp.data.error.message) || ('HTTP ' + resp.status);
+      console.warn('[NARRATIVA] falhou ('+narrativaFalhou+') — seguindo com o cluster calculado localmente.');
     }
-    const data = resp.data;
-    let reply = data.content?.[0]?.text || 'Erro.';
+    const data = resp.ok ? resp.data : {};
+    let reply = (resp.ok && data.content && data.content[0] && data.content[0].text) || '';
 
 
 
@@ -8356,8 +8376,30 @@ REGRAS ABSOLUTAS:
         '</div>';
     }
 
-    if(out) out.innerHTML = seloMandante + fmt;
-    if(badge) badge.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
+    // Aviso de narrativa indisponível. Só o TEXTO falhou; o cluster, os
+    // valores e a caixa financeira abaixo são calculados aqui no navegador
+    // e continuam válidos. O aviso diz isso de forma explícita para o
+    // usuário não achar que a análise inteira se perdeu.
+    var avisoNarrativa = '';
+    if(narrativaFalhou) {
+      avisoNarrativa =
+        '<div class="ab" style="background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.45);'+
+        'margin-bottom:10px;padding:12px 14px;">'+
+        '<div style="font-family:\'Space Mono\',monospace;font-size:10px;color:var(--ylw);letter-spacing:1px;">'+
+        '⚠️ NARRATIVA INDISPONÍVEL — CLUSTER CALCULADO NORMALMENTE</div>'+
+        '<div style="font-size:12px;color:var(--txt2);margin-top:6px;line-height:1.5;">'+
+        'O texto de análise não foi gerado ('+String(narrativaFalhou).replace(/</g,'&lt;')+'). '+
+        'Isso afeta <strong>apenas o texto</strong>: os placares, os valores de entrada e o resultado '+
+        'financeiro abaixo vêm do motor que roda aqui no navegador e estão corretos. '+
+        'Pode operar com eles.</div>'+
+        '<div style="font-size:10px;color:var(--txt3);margin-top:6px;">'+VERSAO_INDEX+'</div>'+
+        '</div>';
+    }
+
+    if(out) out.innerHTML = avisoNarrativa + seloMandante + fmt;
+    if(badge) badge.innerHTML = narrativaFalhou
+      ? '<span class="bdg" style="background:rgba(255,176,32,.15);color:var(--ylw);border:1px solid rgba(255,176,32,.4);">⚠️ CLUSTER OK — SEM NARRATIVA</span>'
+      : '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
 
     // Check if filter RECUSADO before extracting cluster
     const isRecusado = /FILTRO:\s*RECUSADO|ANÁLISE ENCERRADA|GÊNIO NÃO APROVOU.*CRITÉRIOS|2\s*CRITÉRIOS.*RECUSADO/i.test(reply);
@@ -8429,7 +8471,13 @@ REGRAS ABSOLUTAS:
     }
 
     // Validação cruzada — block if BAIXA confidence (0-1/5)
-    if(isLowConf && crossScore < 1.5) {
+    // IMPORTANTE: os cinco indicadores são extraídos por regex do TEXTO da
+    // narrativa. Se a narrativa não foi gerada, o texto está vazio e todos
+    // os indicadores dão negativo — não porque o jogo é ruim, mas porque não
+    // há o que ler. Antes disso, esse bloco sobrescrevia a tela inteira com
+    // "GÊNIO NÃO APROVOU" sempre que a IA caía, escondendo o cluster que
+    // estava correto. Sem narrativa, esta verificação não se aplica.
+    if(isLowConf && crossScore < 1.5 && !narrativaFalhou) {
       if(badge) badge.innerHTML = `<span class="bdg" style="background:rgba(255,59,59,.15);color:var(--red);border:1px solid rgba(255,59,59,.3);">🔴 CONFIANÇA BAIXA ${crossScore.toFixed(1)}/5</span>`;
       if(out) out.innerHTML = `<div class="ab ab-r" style="border-color:rgba(255,59,59,.3);">
         <div class="ab-title" style="color:var(--red);font-size:14px;">🔴 VALIDAÇÃO CRUZADA — GÊNIO NÃO APROVOU</div>
@@ -8684,7 +8732,15 @@ REGRAS ABSOLUTAS:
         .replace(/(-\s*Gestão ao vivo[^<]*<br>)/gi, '<span style="color:var(--grn);">$1</span>')
         .replace(/(⚠️[^<]*)/gi, '<span style="color:var(--ylw);">$1</span>');
       var narrativaHtml = '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;"><p style="margin-bottom:14px;">'+narrativaFmt+'</p></div>';
-      if(out) typeWriter(out, narrativaHtml + contextWarnings, 1);
+      // O typeWriter limpa o elemento e digita o conteúdo letra a letra. Sem
+      // narrativa, ele limpava a tela e digitava nada — apagando o aviso de
+      // "narrativa indisponível" que tinha acabado de ser escrito ali. Era o
+      // motivo de a área de análise terminar VAZIA quando a IA caía.
+      // Sem narrativa não há o que animar: escreve o aviso direto e pronto.
+      if(out) {
+        if(narrativaFalhou) out.innerHTML = avisoNarrativa + contextWarnings;
+        else typeWriter(out, narrativaHtml + contextWarnings, 1);
+      }
       // ── ÍNDICE DE ENTRADA — removido como card separado ──
       // Já unificado no card "GÊNIO APROVOU/CAUTELA" que aparece
       // ao preencher as odds (checkPackball), evitando duplicação visual
