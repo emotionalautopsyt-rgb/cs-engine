@@ -3170,7 +3170,40 @@ var DC_RHO = -0.13;        // Dixon-Coles: dependência nos placares baixos.
 // ── VERSÃO DO INDEX — aparece embaixo do nome, no canto superior ─────
 // Trocar a cada entrega. É o que responde "o arquivo novo subiu ou não?"
 // sem precisar rodar análise nenhuma.
-var VERSAO_INDEX = 'v7.1';
+var VERSAO_INDEX = 'v7.2';
+
+// ===== QUAL MODELO ESCREVE A NARRATIVA ==============================
+// O motor de placares é JavaScript puro e não usa modelo nenhum. O modelo
+// só REDIGE o texto do card. E era ele a causa do HTTP 504: gerar ~1000
+// tokens no Sonnet leva uns 25 a 35 segundos, e existe um corte na frente
+// da função do Netlify que mata a requisição antes disso. (A documentação
+// do Netlify diz 60s para função síncrona e diz que isso NÃO depende do
+// formato do arquivo — conferido em 24/09/2026. Então trocar o formato do
+// analyze.js, que era o que eu ia fazer, não resolveria nada. O corte vem
+// de uma camada na frente, e os fóruns do Netlify estão cheios de gente
+// pedindo para subir de 10 para 26 segundos, o que indica teto bem menor
+// que o documentado em muitas contas.)
+// A correção é não depender de saber o teto: escrever rápido o bastante
+// para caber em qualquer um deles. O Haiku redige o mesmo texto numa
+// fração do tempo — a tarefa aqui é escrever a partir de dados que o motor
+// JÁ calculou, não raciocinar sobre o jogo.
+var MODELO_NARRATIVA_RAPIDO   = 'claude-haiku-4-5-20251001';
+var MODELO_NARRATIVA_COMPLETO = 'claude-sonnet-4-6';
+
+function modeloNarrativa() {
+  try {
+    var v = localStorage.getItem('cs_modelo_narrativa');
+    if(v === 'completo') return MODELO_NARRATIVA_COMPLETO;
+  } catch(e) {}
+  return MODELO_NARRATIVA_RAPIDO;
+}
+function definirModeloNarrativa(qual) {
+  try { localStorage.setItem('cs_modelo_narrativa', qual === 'completo' ? 'completo' : 'rapido'); } catch(e) {}
+  var b = document.getElementById('btn-modelo-narrativa');
+  if(b) b.textContent = (modeloNarrativa() === MODELO_NARRATIVA_RAPIDO) ? '⚡ rápido' : '🐢 completo';
+}
+window.modeloNarrativa = modeloNarrativa;
+window.definirModeloNarrativa = definirModeloNarrativa;
 window.VERSAO_INDEX = VERSAO_INDEX;
 
 var CS_GRID_MAX = 10;      // gols máximos por lado ao normalizar a grade
@@ -7331,9 +7364,61 @@ async function chamarIA(opts) {
     console.warn('[IA] falha HTTP '+res.status+' ('+(_msgErro||'sem mensagem')+
       ') — NÃO vou repetir: repetir aqui não aumenta a chance de sucesso e cobra de novo.');
   }
+
+  // ── REDE DE PROTEÇÃO DA TROCA DE MODELO ───────────────────────────
+  // A v7.2 passou a redigir a narrativa com um modelo mais rápido, para o
+  // texto caber no tempo que o Netlify concede. Se esse identificador não
+  // existir ou não estiver liberado nesta conta, a API responde com erro
+  // explícito de modelo — e aí, e SÓ aí, vale refazer com o modelo antigo.
+  // Uma tentativa, condição estreita: não é o retry cego que existia antes
+  // (aquele repetia até em timeout e cobrava duas gerações por nada).
+  var _msg2 = (res.data && res.data.error && res.data.error.message) || '';
+  var _modeloRecusado = !res.ok && (res.status === 400 || res.status === 404) &&
+                        /model/i.test(_msg2) &&
+                        /not_found|not found|invalid|unknown|does not exist|unsupported/i.test(_msg2);
+  if(_modeloRecusado && !opts._jaTrocouModelo) {
+    var _alternativo = (opts.model === MODELO_NARRATIVA_RAPIDO)
+                     ? MODELO_NARRATIVA_COMPLETO : MODELO_NARRATIVA_RAPIDO;
+    console.warn('[MODELO] "'+opts.model+'" recusado ('+_msg2+') — refazendo com "'+_alternativo+'".');
+    return await chamarIA(Object.assign({}, opts, { model:_alternativo, _jaTrocouModelo:true }));
+  }
+
   if(res.ok) _contabiliza(res.data && res.data.usage);
   return res;
 }
+
+// Regera SOMENTE a narrativa, reaproveitando o pedido já montado. Não
+// recalcula cluster, não mexe em stake, não gasta uma análise inteira.
+async function regerarNarrativa() {
+  if(!S._pedidoNarrativa) { notify('NADA A REGERAR', 'analise um jogo primeiro', 'var(--ylw)'); return; }
+  var alvo = document.getElementById('resultado-out');
+  var btn  = document.getElementById('btn-regerar-narrativa');
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ gerando...'; }
+  try {
+    var r = await chamarIA(Object.assign({ model: modeloNarrativa() }, S._pedidoNarrativa));
+    var txt = (r.ok && r.data && r.data.content && r.data.content[0] && r.data.content[0].text) || '';
+    if(!txt) {
+      var m = (r.data && r.data.error && r.data.error.message) || ('HTTP '+r.status);
+      if(btn) { btn.disabled = false; btn.textContent = '↻ tentar narrativa de novo'; }
+      notify('NARRATIVA FALHOU', String(m).slice(0,60), 'var(--red)');
+      return;
+    }
+    var limpo = txt.replace(/##JSON_START##[\s\S]*?##JSON_END##\s*/g,'')
+                   .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>')
+                   .replace(/\n\n/g,'</p><p style="margin-bottom:14px;">')
+                   .replace(/\n/g,'<br>').trim();
+    if(alvo) alvo.innerHTML =
+      '<div style="font-size:13px;line-height:1.9;color:var(--txt);letter-spacing:.15px;">'+
+      '<p style="margin-bottom:14px;">'+limpo+'</p></div>';
+    var bdg = document.getElementById('an-badge');
+    if(bdg) bdg.innerHTML = '<span class="bdg bdg-g">✅ ANÁLISE COMPLETA</span>';
+    notify('NARRATIVA GERADA', '', 'var(--grn)');
+  } catch(e) {
+    if(btn) { btn.disabled = false; btn.textContent = '↻ tentar narrativa de novo'; }
+    notify('NARRATIVA FALHOU', String(e.message||e).slice(0,60), 'var(--red)');
+  }
+}
+window.regerarNarrativa = regerarNarrativa;
 
 async function analisarJogo() {
   if(S.thinking) return;
@@ -8321,13 +8406,19 @@ REGRAS ABSOLUTAS:
     // diminuindo o risco de estourar o timeout da função do Netlify
     // (que pode gerar cobrança "fantasma" — a Anthropic processa e
     // cobra mesmo quando o Netlify desiste e devolve 504 pro usuário).
-    const resp = await chamarIA({
-      max_tokens: 1500,
+    // Guardado para o botão "tentar de novo" do aviso de narrativa: permite
+    // regerar SÓ o texto, sem refazer a análise inteira nem recalcular nada.
+    S._pedidoNarrativa = {
+      max_tokens: 1200,
       temperature: 0.3,
       cache: true,          // o system tem ~26k caracteres e não muda entre jogos
       system: SP,
       messages: [{ role:'user', content: promptFinal }]
-    });
+    };
+    // max_tokens 1200: as narrativas reais usam 600-1000 tokens, então não
+    // corta no meio, e limita o tempo máximo de geração. Com o modelo rápido
+    // isso fica na casa de 7 a 9 segundos, dentro de qualquer teto plausível.
+    const resp = await chamarIA(Object.assign({ model: modeloNarrativa() }, S._pedidoNarrativa));
 
     // ── A NARRATIVA NÃO PODE MAIS DERRUBAR A ANÁLISE ──────────────────
     // O cluster já está pronto muito antes desta linha: analyzeCSGame()
@@ -8392,7 +8483,19 @@ REGRAS ABSOLUTAS:
         'Isso afeta <strong>apenas o texto</strong>: os placares, os valores de entrada e o resultado '+
         'financeiro abaixo vêm do motor que roda aqui no navegador e estão corretos. '+
         'Pode operar com eles.</div>'+
-        '<div style="font-size:10px;color:var(--txt3);margin-top:6px;">'+VERSAO_INDEX+'</div>'+
+        '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+        '<button id="btn-regerar-narrativa" onclick="regerarNarrativa()" '+
+        'style="background:rgba(255,176,32,.18);color:var(--ylw);border:1px solid rgba(255,176,32,.5);'+
+        'border-radius:6px;padding:6px 12px;font-family:\'Space Mono\',monospace;font-size:11px;cursor:pointer;">'+
+        '↻ tentar narrativa de novo</button>'+
+        '<span style="font-size:10px;color:var(--txt3);">modo:</span>'+
+        '<button id="btn-modelo-narrativa" onclick="definirModeloNarrativa(modeloNarrativa()===MODELO_NARRATIVA_RAPIDO?\'completo\':\'rapido\')" '+
+        'style="background:rgba(255,255,255,.06);color:var(--txt2);border:1px solid rgba(255,255,255,.15);'+
+        'border-radius:6px;padding:6px 10px;font-family:\'Space Mono\',monospace;font-size:11px;cursor:pointer;">'+
+        (modeloNarrativa()===MODELO_NARRATIVA_RAPIDO?'⚡ rápido':'🐢 completo')+'</button>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--txt3);margin-top:8px;">'+VERSAO_INDEX+
+        ' · redator: '+modeloNarrativa()+'</div>'+
         '</div>';
     }
 
